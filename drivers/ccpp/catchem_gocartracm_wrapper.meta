@@ -1,21 +1,21 @@
 [ccpp-table-properties]
-  name = catchem_drydep_wrapper
+  name = catchem_gocartracm_wrapper
   type = scheme
-  dependencies = ../../parameters/catchem_config.F90,../../parameters/catchem_constants.F90,../../src/dep_vertmx_mod.F90,../../src/drydep_gocart_mod.F90,../../src/drydep_wesely_mod.F90
+  dependencies = ../../parameters/catchem_config.F90,../../parameters/catchem_constants.F90,../../parameters/dust_data_mod.F90,../../src/gocart_diag_mod.F90,../../src/gocart_aerosols_mod.F90,../../src/gocart_chem_mod.F90,../../src/mechanisms/gocartracm/module_chemvars.F90,../../src/mechanisms/gocartracm/module_gocartracm_driver.F90,../../src/mechanisms/gocartracm/module_kpp_gocartracm_Integr.F90,../../src/mechanisms/gocartracm/module_kpp_gocartracm_Jacobian.F90,../../src/mechanisms/gocartracm/module_kpp_gocartracm_JacobianSP.F90,../../src/mechanisms/gocartracm/module_kpp_gocartracm_Parameters.F90,../../src/mechanisms/gocartracm/module_kpp_gocartracm_Precision.F90,../../src/mechanisms/gocartracm/module_kpp_gocartracm_Update_Rconst.F90,../../src/mechanisms/gocartracm/module_phot_mad.F90,../../src/mechanisms/gocartracm/phot_data_mod.F90
 
 ########################################################################
 [ccpp-arg-table]
-  name = catchem_drydep_wrapper_init
-  type = scheme
-
-########################################################################
-[ccpp-arg-table]
-  name = catchem_drydep_wrapper_finalize
+  name = catchem_gocartracm_wrapper_init
   type = scheme
 
 ########################################################################
 [ccpp-arg-table]
-  name = catchem_drydep_wrapper_run
+  name = catchem_gocartracm_wrapper_finalize
+  type = scheme
+
+########################################################################
+[ccpp-arg-table]
+  name = catchem_gocartracm_wrapper_run
   type = scheme
 [im]
   standard_name = horizontal_loop_extent
@@ -53,17 +53,10 @@
   type = real
   kind = kind_phys
   intent = in
-[land]
-  standard_name = sea_land_ice_mask
-  long_name = landmask: sea/land/ice=0/1/2
-  units = flag
-  dimensions = (horizontal_loop_extent)
-  type = integer
-  intent = in
-[ustar]
-  standard_name = surface_friction_velocity
-  long_name = boundary layer parameter
-  units = m s-1
+[garea]
+  standard_name = cell_area
+  long_name = grid cell area
+  units = m2
   dimensions = (horizontal_loop_extent)
   type = real
   kind = kind_phys
@@ -84,14 +77,6 @@
   type = real
   kind = kind_phys
   intent = in
-[tskin]
-  standard_name = surface_skin_temperature
-  long_name = surface skin temperature
-  units = K
-  dimensions = (horizontal_loop_extent)
-  type = real
-  kind = kind_phys
-  intent = in
 [julian]
   standard_name = forecast_julian_day
   long_name = julian day
@@ -100,26 +85,10 @@
   type = real
   kind = kind_phys
   intent = in
-[rainc_cpl]
-  standard_name = cumulative_lwe_thickness_of_convective_precipitation_amount_for_coupling
-  long_name = total convective precipitation
-  units = m
-  dimensions = (horizontal_loop_extent)
-  type = real
-  kind = kind_phys
-  intent = in
-[hf2d]
-  standard_name = instantaneous_surface_upward_sensible_heat_flux
-  long_name = surface upward sensible heat flux valid for current call
-  units = W m-2
-  dimensions = (horizontal_loop_extent)
-  type = real
-  kind = kind_phys
-  intent = in
-[pb2d]
-  standard_name = atmosphere_boundary_layer_thickness
-  long_name = PBL thickness
-  units = m
+[xcosz]
+  standard_name = instantaneous_cosine_of_zenith_angle
+  long_name = cosine of zenith angle at current time
+  units = none
   dimensions = (horizontal_loop_extent)
   type = real
   kind = kind_phys
@@ -137,14 +106,6 @@
   long_name = geopotential at model layer interfaces
   units = m2 s-2
   dimensions = (horizontal_loop_extent,vertical_interface_dimension)
-  type = real
-  kind = kind_phys
-  intent = in
-[phl3d]
-  standard_name = geopotential
-  long_name = geopotential at model layer centers
-  units = m2 s-2
-  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
   intent = in
@@ -172,36 +133,6 @@
   type = real
   kind = kind_phys
   intent = in
-[exch]
-  standard_name = atmosphere_heat_diffusivity
-  long_name = diffusivity for heat
-  units = m2 s-1
-  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
-  type = real
-  kind = kind_phys
-  intent = in
-[vegtype]
-  standard_name = vegetation_type_classification
-  long_name = vegetation type at each grid cell
-  units = index
-  dimensions = (horizontal_loop_extent)
-  type = integer
-  intent = in
-[sigmaf]
-  standard_name = bounded_vegetation_area_fraction
-  long_name = areal fractional cover of green vegetation bounded on the bottom
-  units = frac
-  dimensions = (horizontal_loop_extent)
-  type = real
-  kind = kind_phys
-  intent = in
-[jdate]
-  standard_name = date_and_time_of_forecast_in_united_states_order
-  long_name = current forecast date and time
-  units = none
-  dimensions = (8)
-  type = integer
-  intent = in
 [idat]
   standard_name = date_and_time_at_model_initialization_in_iso_order
   long_name = initialization date and time
@@ -209,27 +140,11 @@
   dimensions = (8)
   type = integer
   intent = in
-[dswsfc]
-  standard_name = surface_downwelling_shortwave_flux
-  long_name = surface downwelling shortwave flux at current time
-  units = W m-2
-  dimensions = (horizontal_loop_extent)
-  type = real
-  kind = kind_phys
-  intent = in
-[zorl]
-  standard_name = surface_roughness_length
-  long_name = surface roughness length in cm
-  units = cm
-  dimensions = (horizontal_loop_extent)
-  type = real
-  kind = kind_phys
-  intent = in
-[snow_cplchm]
-  standard_name = lwe_thickness_of_snow_amount_for_chemcoupling
-  long_name = total snow precipitation chem
-  units = m
-  dimensions = (horizontal_loop_extent)
+[emi2_in]
+  standard_name = anthropogenic_background_3d_input
+  long_name = anthropogenic background 3d input
+  units = various
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension,3)
   type = real
   kind = kind_phys
   intent = in
@@ -303,79 +218,16 @@
   dimensions = ()
   type = integer
   intent = in
-[ntss1]
-  standard_name = index_for_seasalt_bin1
-  long_name = index for seasalt bin1
-  units = index
-  dimensions = ()
-  type = integer
-  intent = in
-[ntss2]
-  standard_name = index_for_seasalt_bin2
-  long_name = index for seasalt bin2
-  units = index
-  dimensions = ()
-  type = integer
-  intent = in
-[ntss3]
-  standard_name = index_for_seasalt_bin3
-  long_name = index for seasalt bin3
-  units = index
-  dimensions = ()
-  type = integer
-  intent = in
-[ntss4]
-  standard_name = index_for_seasalt_bin4
-  long_name = index for seasalt bin4
-  units = index
-  dimensions = ()
-  type = integer
-  intent = in
-[ntss5]
-  standard_name = index_for_seasalt_bin5
-  long_name = index for seasalt bin5
-  units = index
-  dimensions = ()
-  type = integer
-  intent = in
-[ntdust1]
-  standard_name = index_for_dust_bin1
-  long_name = index for dust bin1
-  units = index
-  dimensions = ()
-  type = integer
-  intent = in
-[ntdust2]
-  standard_name = index_for_dust_bin2
-  long_name = index for dust bin2
-  units = index
-  dimensions = ()
-  type = integer
-  intent = in
-[ntdust3]
-  standard_name = index_for_dust_bin3
-  long_name = index for dust bin3
-  units = index
-  dimensions = ()
-  type = integer
-  intent = in
-[ntdust4]
-  standard_name = index_for_dust_bin4
-  long_name = index for dust bin4
-  units = index
-  dimensions = ()
-  type = integer
-  intent = in
-[ntdust5]
-  standard_name = index_for_dust_bin5
-  long_name = index for dust bin5
-  units = index
-  dimensions = ()
-  type = integer
-  intent = in
 [ntpp10]
   standard_name = index_for_pp10
   long_name = tracer index for pp10
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntoz]
+  standard_name = index_of_ozone_mixing_ratio_in_tracer_concentration_array
+  long_name = tracer index for ozone mixing ratio
   units = index
   dimensions = ()
   type = integer
@@ -562,14 +414,14 @@
   dimensions = ()
   type = integer
   intent = in
-[ntaco3]
+[ntaco3] 
   standard_name = index_for_aco3
   long_name = index for aco3
   units = index
   dimensions = ()
   type = integer
   intent = in
-[nttpan]
+[nttpan] 
   standard_name = index_for_tpan
   long_name = index for tpan
   units = index
@@ -709,10 +561,10 @@
   dimensions = ()
   type = integer
   intent = in
-[ntchmdiag]
-  standard_name = number_of_chemical_tracers_for_diagnostics
-  long_name = number of chemical tracers for diagnostic output
-  units = count
+[chem_in_opt]
+  standard_name = catchem_in_opt
+  long_name = catchem coldstart or restart option
+  units = index
   dimensions = ()
   type = integer
   intent = in
@@ -732,24 +584,30 @@
   type = real
   kind = kind_phys
   intent = inout
-[drydep]
-  standard_name = instantaneous_dry_deposition
-  long_name = instantaneous dry deposition
-  units = kg m-2 s-1
-  dimensions = (horizontal_loop_extent,number_of_chemical_tracers_for_diagnostics)
-  type = real
-  kind = kind_phys
-  intent = inout
-[chem_conv_tr_in]
-  standard_name = catchem_conv_tr
-  long_name = catchem convective transport option
-  units = index
+[tile_num]
+  standard_name = index_of_cubed_sphere_tile
+  long_name = tile number
+  units = none
   dimensions = ()
   type = integer
   intent = in
 [chem_opt_in]
   standard_name = catchem_option
   long_name = catchem option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[phot_opt_in]
+  standard_name = catchem_phot_opt
+  long_name = catchem phot option not used
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[aer_ra_frq_in]
+  standard_name = catchem_aer_ra_frq
+  long_name = catchem aer radiation frequency
   units = index
   dimensions = ()
   type = integer

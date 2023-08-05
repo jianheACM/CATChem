@@ -132,7 +132,7 @@ SUBROUTINE wesely_driver( current_month, julday, &
 !      chem_opt = chem_opt
 
       dep_vap  = depo_fact
-      print*,'hli simple chem_opt',chem_opt
+      !print*,'hli simple chem_opt',chem_opt
 
 !      CALL wrf_debug(15,'in dry_dep_wesely')
 
@@ -371,18 +371,15 @@ SUBROUTINE wesely_driver( current_month, julday, &
 
 ! For gocartracm,radm
 !-----------------------------------------------------------
+!JianHe: 08/2023, set for GOCARTRACM for now????
       if  ((chem_opt == GOCARTRACM_KPP)  .OR.     &
            (chem_opt == GOCARTRADM2))   then
-!         do j=jts,jte
-!            do i=its,ite
-!               ddvel(i,j,p_sulf)        = 0.
-!               ddvel(i,j,p_dms)         = 0.
-!               ddvel(i,j,p_msa)         = ddvel(i,j,p_hno3)
+               ddvel(p_sulf)        = 0.
+               ddvel(p_dms)         = 0.
+               ddvel(p_msa)         = ddvel(p_hno3)
                if( chem_opt == GOCARTRADM2 ) then
 !               ddvel(i,j,p_hcl)         = ddvel(i,j,p_hno3)
                end if
-!            end do
-!         end do
       end if
 !-----------------------------------------------------------
 ! For gocartsimple : need msa. On the other hand sulf comes from aerosol routine
@@ -1576,7 +1573,7 @@ is_nh3: if( p_nh3 > 1 ) then
           chem_opt == MOZCART_KPP .or. &
           chem_opt == MOZART_MOSAIC_4BIN_KPP .or. &
           chem_opt == MOZART_MOSAIC_4BIN_AQ_KPP ) then
-         print *, 'dep_init: mozart,mozcart chem option requires netcdf' 
+         !print *, 'dep_init: mozart,mozcart chem option requires netcdf' 
          stop
       end if
 
@@ -1859,7 +1856,7 @@ is_cbm4_kpp : &
                chem_opt == MOZCART_KPP .or. &
                chem_opt == MOZART_MOSAIC_4BIN_KPP .or. &
                chem_opt == MOZART_MOSAIC_4BIN_AQ_KPP ) then
-              hstar(p_o3)      = 1.15E-2
+!              hstar(p_o3)      = 1.15E-2
 !              hstar(p_co)      = 1.e-3
 !              hstar(p_h2o2)    = 8.33E+4
 !              hstar(p_hcho)    = 6.3e3
@@ -1895,17 +1892,17 @@ is_cbm4_kpp : &
 !               hstar(p_cvasoa2) = 1.84E+07
 !               hstar(p_cvasoa3) = 3.18E+06
 !               hstar(p_cvasoa4) = 5.50E+05
-!!               hstar(p_cvbsoaX) = 0.0
- !              hstar(p_cvbsoa1) = 5.25E+09
- !              hstar(p_cvbsoa2) = 7.00E+08
- !              hstar(p_cvbsoa3) = 9.33E+07
- !              hstar(p_cvbsoa4) = 1.24E+07
+!               hstar(p_cvbsoaX) = 0.0
+!               hstar(p_cvbsoa1) = 5.25E+09
+!               hstar(p_cvbsoa2) = 7.00E+08
+!               hstar(p_cvbsoa3) = 9.33E+07
+!               hstar(p_cvbsoa4) = 1.24E+07
               endif
               
      else if( chem_opt == crimech_kpp .or. &
           chem_opt == cri_mosaic_8bin_aq_kpp .or. &
           chem_opt == cri_mosaic_4bin_aq_kpp )   then
-              hstar(p_o3)      = 1.15E-2
+!              hstar(p_o3)      = 1.15E-2
 !              hstar(p_co)      = 1.e-3
 !              hstar(p_h2o2)    = 8.33E+4
 !              hstar(p_hcho)    = 6.3e3
@@ -1916,7 +1913,7 @@ is_cbm4_kpp : &
 !              hstar(p_paa)     = 837.
 !               hstar(p_c2h5co3h)    = 837.
 !               hstar(p_hoch2co3h)    = 837.               
-!              hstar(p_c3h6ooh) = 220.
+!!              hstar(p_c3h6ooh) = 220.
 !              hstar(p_pan)     = 5.
 !              hstar(p_mpan)    = 1.15e-2
 !              hstar(p_ru12pan)    = 1.15e-2
@@ -1925,13 +1922,13 @@ is_cbm4_kpp : &
 !               hstar(p_ppn)    = 1.15e-2 
 !              hstar(p_c2h5oh)  = 200.
 !              hstar(p_c2h5ooh)   = 336.
-!              hstar(p_ic3h7ooh)   = 336.
-!              hstar(p_acetp)   = 336.
-!              hstar(p_onit)    = 1.e3
+!!              hstar(p_ic3h7ooh)   = 336.
+!!              hstar(p_acetp)   = 336.
+!!              hstar(p_onit)    = 1.e3
 !!              hstar(p_onitr)   = 7.51e3
-!              hstar(p_acetol)  = 6.3e3
-!              hstar(p_glyald)  = 4.14e4
-!              hstar(p_hydrald) = 70.
+!!              hstar(p_acetol)  = 6.3e3
+!!              hstar(p_glyald)  = 4.14e4
+!!              hstar(p_hydrald) = 70.
 !               hstar(p_hcooh) = 311. 
 !               hstar(p_prooh) = 311. 
 !               hstar(p_hoc2h4ooh) = 311. 
@@ -2027,93 +2024,93 @@ is_cbm4_kpp : &
 !               hstar(p_tncarb12)    = 1.14E+1 
 !               hstar(p_tncarb11)    = 1.14E+1 
 !               hstar(p_udcarb17)    = 1.14E+1 
-!        
+        
            else
-!              hstar(p_o3)   = 1.13E-2
-!              hstar(p_co)   = 8.20E-3
-!              hstar(p_h2o2) = 7.45E+4
-!              hstar(p_hcho) = 2.97E+3
-!              hstar(p_pan)  = 2.97
-!              hstar(p_paa)  = 473.
-!              hstar(p_onit) = 1.13
+              hstar(p_o3)   = 1.13E-2
+              hstar(p_co)   = 8.20E-3
+              hstar(p_h2o2) = 7.45E+4
+              hstar(p_hcho) = 2.97E+3
+              hstar(p_pan)  = 2.97
+              hstar(p_paa)  = 473.
+              hstar(p_onit) = 1.13
            end if
-!        hstar(p_no2)  = 6.40E-3
-!        hstar(p_no)   = 1.90E-3
-!        hstar(p_aco3) = 1.14E+1
-!        hstar(p_tpan) = 2.97E+0
-!        hstar(p_hono) = 3.47E+5
-!        hstar(p_no3)  = 1.50E+1
-!        hstar(p_hno4) = 2.00E+13
-!        hstar(p_ald) = 1.14E+1
-!        hstar(p_op1) = 2.21E+2
-!        hstar(p_op2) = 1.68E+6
-!        hstar(p_ket) = 3.30E+1
-!        hstar(p_gly) = 1.40E+6
-!        hstar(p_mgly) = 3.71E+3
-!        hstar(p_dcb)  = 1.40E+6
-!        hstar(p_so2) = 2.53E+5
-!        hstar(p_eth) = 2.00E-3
-!        hstar(p_hc3) = 1.42E-3
-!        hstar(p_hc5) = 1.13E-3
-!        hstar(p_hc8) = 1.42E-3
-!        hstar(p_olt) = 4.76E-3
-!        hstar(p_oli) = 1.35E-3
-!        hstar(p_tol) = 1.51E-1
-!        hstar(p_csl) = 4.00E+5
-!        hstar(p_xyl) = 1.45E-1
-!        hstar(p_iso) = 4.76E-3
-!        hstar(p_hno3) = 2.69E+13
-!        hstar(p_ora1) = 9.85E+6
-!        hstar(p_ora2) = 9.63E+5
-!        hstar(p_nh3)  = 1.04E+4
-!        hstar(p_n2o5) = 1.00E+10
-!        if(p_ol2 > 1) hstar(p_ol2) = 4.67E-3
-!        if(p_par > 1) hstar(p_par) = 1.13E-3  !wig, 1-May-2007: for CBMZ
-!        if(p_ch4 > 1) then 
-!           hstar(p_ch4) = 1.50E-3
-!           dhr(p_ch4)   = 0.
-!           f0(p_ch4)    = 0.
-!           dvj(p_ch4)   = 0.250
-!        end if
-!        if(p_co2 > 1) then 
-!           hstar(p_co2) = 1.86E-1
-!           dhr(p_co2)   = 1636.
-!           f0(p_co2)    = 0.
-!           dvj(p_co2)   = 0.151
-!        end if
+        hstar(p_no2)  = 6.40E-3
+        hstar(p_no)   = 1.90E-3
+        hstar(p_aco3) = 1.14E+1
+        hstar(p_tpan) = 2.97E+0
+        hstar(p_hono) = 3.47E+5
+        hstar(p_no3)  = 1.50E+1
+        hstar(p_hno4) = 2.00E+13
+        hstar(p_ald) = 1.14E+1
+        hstar(p_op1) = 2.21E+2
+        hstar(p_op2) = 1.68E+6
+        hstar(p_ket) = 3.30E+1
+        hstar(p_gly) = 1.40E+6
+        hstar(p_mgly) = 3.71E+3
+        hstar(p_dcb)  = 1.40E+6
+        hstar(p_so2) = 2.53E+5
+        hstar(p_eth) = 2.00E-3
+        hstar(p_hc3) = 1.42E-3
+        hstar(p_hc5) = 1.13E-3
+        hstar(p_hc8) = 1.42E-3
+        hstar(p_olt) = 4.76E-3
+        hstar(p_oli) = 1.35E-3
+        hstar(p_tol) = 1.51E-1
+        hstar(p_csl) = 4.00E+5
+        hstar(p_xyl) = 1.45E-1
+        hstar(p_iso) = 4.76E-3
+        hstar(p_hno3) = 2.69E+13
+        hstar(p_ora1) = 9.85E+6
+        hstar(p_ora2) = 9.63E+5
+        hstar(p_nh3)  = 1.04E+4
+        hstar(p_n2o5) = 1.00E+10
+        !if(p_ol2 > 1) hstar(p_ol2) = 4.67E-3
+        !if(p_par > 1) hstar(p_par) = 1.13E-3  !wig, 1-May-2007: for CBMZ
+        if(p_ch4 > 1) then 
+           hstar(p_ch4) = 1.50E-3
+           dhr(p_ch4)   = 0.
+           f0(p_ch4)    = 0.
+           dvj(p_ch4)   = 0.250
+        end if
+        if(p_co2 > 1) then 
+           hstar(p_co2) = 1.86E-1
+           dhr(p_co2)   = 1636.
+           f0(p_co2)    = 0.
+           dvj(p_co2)   = 0.151
+        end if
 !--------------------------------------------------
 !  FOLLOWING FOR RACM
 !--------------------------------------------------
-!        if( p_ete > 1 ) then
-!           HSTAR(p_ETE )=4.67E-3
-!           HSTAR(p_API )=4.76E-3
-!           HSTAR(p_LIM )=4.76E-3
-!           HSTAR(p_DIEN)=4.76E-3
-!           HSTAR(p_MACR)=1.14E+1
-!           HSTAR(p_UDD )=1.40E+6
-!           HSTAR(p_HKET)=7.80E+3
-!           DHR(p_ETE )=    0.
-!           DHR(p_API )=    0.
-!           DHR(p_LIM )=    0.
-!           DHR(p_DIEN)=    0.
-!           DHR(p_MACR)= 6266.
-!           DHR(p_UDD )=    0.
-!           DHR(p_HKET)=    0.
-!           F0(p_ETE )=0.
-!           F0(p_API )=0.
-!           F0(p_LIM )=0.
-!           F0(p_DIEN)=0.
-!           F0(p_MACR)=0.
-!           F0(p_UDD )=0.
-!           F0(p_HKET)=0.
-!           DVJ(p_ETE )=0.189
-!           DVJ(p_API )=0.086
-!           DVJ(p_LIM )=0.086
-!           DVJ(p_DIEN)=0.136
-!           DVJ(p_MACR)=0.120
-!           DVJ(p_UDD )=0.092
-!           DVJ(p_HKET)=0.116
-!        endif
+        if( p_ete > 1 ) then
+           HSTAR(p_ETE )=4.67E-3
+           HSTAR(p_API )=4.76E-3
+           HSTAR(p_LIM )=4.76E-3
+           HSTAR(p_DIEN)=4.76E-3
+           HSTAR(p_MACR)=1.14E+1
+           HSTAR(p_UDD )=1.40E+6
+           HSTAR(p_HKET)=7.80E+3
+           DHR(p_ETE )=    0.
+           DHR(p_API )=    0.
+           DHR(p_LIM )=    0.
+           DHR(p_DIEN)=    0.
+           DHR(p_MACR)= 6266.
+           DHR(p_UDD )=    0.
+           DHR(p_HKET)=    0.
+           F0(p_ETE )=0.
+           F0(p_API )=0.
+           F0(p_LIM )=0.
+           F0(p_DIEN)=0.
+           F0(p_MACR)=0.
+           F0(p_UDD )=0.
+           F0(p_HKET)=0.
+           DVJ(p_ETE )=0.189
+           DVJ(p_API )=0.086
+           DVJ(p_LIM )=0.086
+           DVJ(p_DIEN)=0.136
+           DVJ(p_MACR)=0.120
+           DVJ(p_UDD )=0.092
+           DVJ(p_HKET)=0.116
+        endif
 !--------------------------------------------------
 !     -DH/R (for temperature correction)
 !     [-DH/R]=K
@@ -2292,44 +2289,44 @@ is_cbm4_kpp : &
 !               dhr(p_tncarb11)    = 6266.
 !               dhr(p_udcarb17)    = 6266.
         else
-!           dhr(p_o3)   = 2300.
-!           dhr(p_h2o2) = 6615.
-!           dhr(p_hcho) = 7190.
-!           dhr(p_pan)  = 5760.
-!           dhr(p_onit) = 5487.
-!           dhr(p_paa)  = 6170.
+           dhr(p_o3)   = 2300.
+           dhr(p_h2o2) = 6615.
+           dhr(p_hcho) = 7190.
+           dhr(p_pan)  = 5760.
+           dhr(p_onit) = 5487.
+           dhr(p_paa)  = 6170.
         end if
-!        dhr(p_no2)  = 2500.
-!        dhr(p_no)   = 1480.
-!        dhr(p_aco3) = 6266.
-!        dhr(p_tpan) = 5760.
-!        dhr(p_hono) = 3775.
-!        dhr(p_no3) = 0.
-!        dhr(p_hno4) = 0.
-!        dhr(p_co)  = 0.
-!        dhr(p_ald) = 6266.
-!        dhr(p_op1) = 5607.
-!        dhr(p_op2) = 10240.
-!        dhr(p_ket) = 5773.
-!        dhr(p_gly) = 0.
-!        dhr(p_mgly) = 7541.
-!        dhr(p_dcb) = 0.
-!        dhr(p_so2) = 5816.
-!        dhr(p_eth) = 0.
-!        dhr(p_hc3) = 0.
-!        dhr(p_hc5) = 0.
-!        dhr(p_hc8) = 0.
-!        dhr(p_olt) = 0.
-!        dhr(p_oli) = 0.
-!        dhr(p_tol) = 0.
-!        dhr(p_csl) = 0.
-!        dhr(p_xyl) = 0.
-!        dhr(p_iso) = 0.
-!        dhr(p_hno3) = 8684.
-!        dhr(p_ora1) = 5716.
-!        dhr(p_ora2) = 8374.
-!        dhr(p_nh3)  = 3660.
-!        dhr(p_n2o5) = 0.
+        dhr(p_no2)  = 2500.
+        dhr(p_no)   = 1480.
+        dhr(p_aco3) = 6266.
+        dhr(p_tpan) = 5760.
+        dhr(p_hono) = 3775.
+        dhr(p_no3) = 0.
+        dhr(p_hno4) = 0.
+        dhr(p_co)  = 0.
+        dhr(p_ald) = 6266.
+        dhr(p_op1) = 5607.
+        dhr(p_op2) = 10240.
+        dhr(p_ket) = 5773.
+        dhr(p_gly) = 0.
+        dhr(p_mgly) = 7541.
+        dhr(p_dcb) = 0.
+        dhr(p_so2) = 5816.
+        dhr(p_eth) = 0.
+        dhr(p_hc3) = 0.
+        dhr(p_hc5) = 0.
+        dhr(p_hc8) = 0.
+        dhr(p_olt) = 0.
+        dhr(p_oli) = 0.
+        dhr(p_tol) = 0.
+        dhr(p_csl) = 0.
+        dhr(p_xyl) = 0.
+        dhr(p_iso) = 0.
+        dhr(p_hno3) = 8684.
+        dhr(p_ora1) = 5716.
+        dhr(p_ora2) = 8374.
+        dhr(p_nh3)  = 3660.
+        dhr(p_n2o5) = 0.
 !        if(p_ol2 > 1) dhr(p_ol2) = 0.
 !        if(p_par > 1) dhr(p_par) = 0.   !wig, 1-May-2007: for CBMZ
 !--------------------------------------------------
@@ -2505,44 +2502,44 @@ is_cbm4_kpp : &
 !               f0(p_udcarb17)    = 0.
 !        
         else
-!           f0(p_hcho) = 0.
-!           f0(p_onit) = 0.
+           f0(p_hcho) = 0.
+           f0(p_onit) = 0.
         end if
-!        f0(p_no2)  = 0.1
-!        f0(p_no)   = 0.
-!        f0(p_pan)  = 0.1
-!        f0(p_o3)   = 1.
-!        f0(p_aco3) = 1.
-!        f0(p_tpan) = 0.1
-!        f0(p_hono) = 0.1
-!        f0(p_no3)  = 1.
-!        f0(p_hno4) = 0.1
-!        f0(p_h2o2) = 1.
-!        f0(p_co)   = 0.
-!        f0(p_ald) = 0.
-!        f0(p_op1) = 0.1
-!        f0(p_op2) = 0.1
-!        f0(p_paa) = 0.1
-!        f0(p_ket) = 0.
-!        f0(p_gly) = 0.
-!        f0(p_mgly) = 0.
-!        f0(p_dcb)  = 0.
-!        f0(p_so2) = 0.
-!        f0(p_eth) = 0.
-!        f0(p_hc3) = 0.
-!        f0(p_hc5) = 0.
-!        f0(p_hc8) = 0.
-!        f0(p_olt) = 0.
-!        f0(p_oli) = 0.
-!        f0(p_tol) = 0.
-!        f0(p_csl) = 0.
-!        f0(p_xyl) = 0.
-!        f0(p_iso) = 0.
-!        f0(p_hno3) = 0.
-!        f0(p_ora1) = 0.
-!        f0(p_ora2) = 0.
-!        f0(p_nh3) = 0.
-!        f0(p_n2o5) = 1.
+        f0(p_no2)  = 0.1
+        f0(p_no)   = 0.
+        f0(p_pan)  = 0.1
+        f0(p_o3)   = 1.
+        f0(p_aco3) = 1.
+        f0(p_tpan) = 0.1
+        f0(p_hono) = 0.1
+        f0(p_no3)  = 1.
+        f0(p_hno4) = 0.1
+        f0(p_h2o2) = 1.
+        f0(p_co)   = 0.
+        f0(p_ald) = 0.
+        f0(p_op1) = 0.1
+        f0(p_op2) = 0.1
+        f0(p_paa) = 0.1
+        f0(p_ket) = 0.
+        f0(p_gly) = 0.
+        f0(p_mgly) = 0.
+        f0(p_dcb)  = 0.
+        f0(p_so2) = 0.
+        f0(p_eth) = 0.
+        f0(p_hc3) = 0.
+        f0(p_hc5) = 0.
+        f0(p_hc8) = 0.
+        f0(p_olt) = 0.
+        f0(p_oli) = 0.
+        f0(p_tol) = 0.
+        f0(p_csl) = 0.
+        f0(p_xyl) = 0.
+        f0(p_iso) = 0.
+        f0(p_hno3) = 0.
+        f0(p_ora1) = 0.
+        f0(p_ora2) = 0.
+        f0(p_nh3) = 0.
+        f0(p_n2o5) = 1.
 !        if(p_ol2 > 1) f0(p_ol2) = 0.
 !        if(p_par > 1) f0(p_par) = 0.   !wig, 1-May-2007: for CBMZ
 !--------------------------------------------------
@@ -2723,46 +2720,46 @@ is_cbm4_kpp : &
 !               dvj(p_udcarb17)    = 0.151
 !        
         else
-!           dvj(p_o3)   = 0.175
-!           dvj(p_h2o2) = 0.171
-!           dvj(p_hcho) = 0.183
-!           dvj(p_paa)  = 0.115
-!           dvj(p_onit) = 0.092
+           dvj(p_o3)   = 0.175
+           dvj(p_h2o2) = 0.171
+           dvj(p_hcho) = 0.183
+           dvj(p_paa)  = 0.115
+           dvj(p_onit) = 0.092
         end if
-!        dvj(p_no2)  = 0.147
-!        dvj(p_no)   = 0.183
-!        dvj(p_pan)  = 0.091
-!        dvj(p_aco3) = 0.115
-!        dvj(p_tpan) = 0.082
-!        dvj(p_hono) = 0.153
-!        dvj(p_no3)  = 0.127
-!        dvj(p_hno4) = 0.113
-!        dvj(p_co) = 0.189
-!        dvj(p_ald) = 0.151
-!        dvj(p_op1) = 0.144
-!        dvj(p_op2) = 0.127
-!        dvj(p_ket) = 0.118
-!        dvj(p_gly) = 0.131
-!        dvj(p_mgly) = 0.118
-!        dvj(p_dcb)  = 0.107
-!        dvj(p_so2) = 0.126
-!        dvj(p_eth) = 0.183
-!        dvj(p_hc3) = 0.151
-!        dvj(p_hc5) = 0.118
-!        dvj(p_hc8) = 0.094
-!        dvj(p_olt) = 0.154
-!        dvj(p_oli) = 0.121
-!        dvj(p_tol) = 0.104
-!        dvj(p_csl) = 0.096
-!        dvj(p_xyl) = 0.097
-!        dvj(p_iso) = 0.121
-!        dvj(p_hno3) = 0.126
-!        dvj(p_ora1) = 0.153
-!        dvj(p_ora2) = 0.124
-!        dvj(p_nh3) = 0.227
-!        dvj(p_n2o5) = 0.110
-!        dvj(p_ho) = 0.243
-!        dvj(p_ho2) = 0.174
+        dvj(p_no2)  = 0.147
+        dvj(p_no)   = 0.183
+        dvj(p_pan)  = 0.091
+        dvj(p_aco3) = 0.115
+        dvj(p_tpan) = 0.082
+        dvj(p_hono) = 0.153
+        dvj(p_no3)  = 0.127
+        dvj(p_hno4) = 0.113
+        dvj(p_co) = 0.189
+        dvj(p_ald) = 0.151
+        dvj(p_op1) = 0.144
+        dvj(p_op2) = 0.127
+        dvj(p_ket) = 0.118
+        dvj(p_gly) = 0.131
+        dvj(p_mgly) = 0.118
+        dvj(p_dcb)  = 0.107
+        dvj(p_so2) = 0.126
+        dvj(p_eth) = 0.183
+        dvj(p_hc3) = 0.151
+        dvj(p_hc5) = 0.118
+        dvj(p_hc8) = 0.094
+        dvj(p_olt) = 0.154
+        dvj(p_oli) = 0.121
+        dvj(p_tol) = 0.104
+        dvj(p_csl) = 0.096
+        dvj(p_xyl) = 0.097
+        dvj(p_iso) = 0.121
+        dvj(p_hno3) = 0.126
+        dvj(p_ora1) = 0.153
+        dvj(p_ora2) = 0.124
+        dvj(p_nh3) = 0.227
+        dvj(p_n2o5) = 0.110
+        dvj(p_ho) = 0.243
+        dvj(p_ho2) = 0.174
 !        if(p_ol2 > 1) dvj(p_ol2) = 0.189
 !        if(p_par > 1) dvj(p_par) = 0.118   !wig, 1-May-2007: for CBMZ
 ! Dep constants for SAPRCNOV, produced automatically using create_WRF_dep.m script,05-Oct-2009 pablosaide@uiowa.edu

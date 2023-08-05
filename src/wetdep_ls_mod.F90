@@ -1,5 +1,6 @@
 ! Revision History:
 !! 06/2023, Restructure for CATChem, Jian.He@noaa.gov
+!! 08/2023, Include RACM, Jian.He@noaa.gov
 
 module wetdep_ls_mod
 
@@ -65,9 +66,24 @@ contains
             alpha(p_dust_4) = 0.1
             alpha(p_dust_5) = 0.1
 
+          !JianHe: may need update
           case (CHEM_OPT_GOCART_RACM)
-            alpha = 1.0
-!            alpha(p_h2o2) = 0.5
+            alpha(numgas+1:)  = 1.0
+            alpha(p_so2   ) = 0.0
+            alpha(p_msa   ) = 0.0
+            alpha(p_dms   ) = 0.0
+            alpha(p_sulf) = 0.3
+            alpha(p_bc1) = 0.3
+            alpha(p_bc2) = 0.6
+            alpha(p_oc1) = 0.1
+            alpha(p_oc2) = 0.2
+            alpha(p_dust_1) = 0.1
+            alpha(p_dust_2) = 0.1
+            alpha(p_dust_3) = 0.1
+            alpha(p_dust_4) = 0.1
+            alpha(p_dust_5) = 0.1
+            alpha(p_hno3) = 1.0
+            alpha(p_h2o2) = 0.5
           case (CHEM_OPT_RACM_SOA_VBS)
 !            alpha(numgas + 1:) = 0.5
 !            alpha(p_sulf) = 0.5
@@ -110,6 +126,31 @@ contains
             alpha(p_seas_4) = 1.
             alpha(p_seas_5) = 1.
             alpha(p_p10   ) = 1.
+          !JianHe: may need update
+          case (CHEM_OPT_GOCART_RACM)
+            alpha = 0.0
+            alpha(p_so2   ) = 0.
+            alpha(p_sulf  ) = 1.5
+            alpha(p_dms   ) = 0.
+            alpha(p_msa   ) = 0.
+            alpha(p_p25   ) = 1.
+            alpha(p_bc1   ) = 0.7
+            alpha(p_bc2   ) = 0.7
+            alpha(p_oc1   ) = 1.
+            alpha(p_oc2   ) = 1.
+            alpha(p_dust_1) = 1.
+            alpha(p_dust_2) = 1.
+            alpha(p_dust_3) = 1.
+            alpha(p_dust_4) = 1.
+            alpha(p_dust_5) = 1.
+            alpha(p_seas_1) = 1.
+            alpha(p_seas_2) = 1.
+            alpha(p_seas_3) = 1.
+            alpha(p_seas_4) = 1.
+            alpha(p_seas_5) = 1.
+            alpha(p_p10   ) = 1.
+            alpha(p_hno3) = 1.0
+            alpha(p_h2o2) = 0.5
           case default
             ! -- NGAC large scale wet deposition only works with GOCART
         end select
@@ -119,6 +160,7 @@ contains
 
    ! -- replace first default wet scavenging coefficients with input values if
    ! available
+   !JianHe: not used at this point
    if (any(wetdep_ls_alpha > 0._kind_chem)) then
      n = min(size(alpha), size(wetdep_ls_alpha))
      alpha(1:n) = real(wetdep_ls_alpha(1:n))

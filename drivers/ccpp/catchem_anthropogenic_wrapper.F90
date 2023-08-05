@@ -44,6 +44,9 @@ contains
                    jdate, garea, rlat, rlon,    &
                    pr3d, ph3d,phl3d, prl3d, tk3d, spechum,emi_in,                       &
                    ntrac,ntso2,ntsulf,ntpp25,ntbc1,ntoc1,ntpp10,                        &
+                   ntiso,ntno,ntno2,ntco,nteth,nthc3,nthc5,nthc8,   &
+                   ntxyl,ntolt,ntoli,nttol,ntcsl,nthcho,ntald,    &
+                   ntket,ntora2,ntnh3, &
                    gq0,qgrs,abem,chem_opt_in,kemit_in,pert_scale_anthro,                &
                    emis_amp_anthro,do_sppt_emis,sppt_wts,errmsg,errflg)
 
@@ -54,6 +57,9 @@ contains
     integer,        intent(in) :: ntrac
     integer,        intent(in) :: ntso2,ntpp25,ntbc1,ntoc1,ntpp10
     integer,        intent(in) :: ntsulf
+    integer,        intent(in) :: ntiso,ntno,ntno2,ntco,nteth,nthc3,nthc5,nthc8, &
+                                  ntxyl,ntolt,ntoli,nttol,ntcsl,nthcho,ntald,  &
+                                  ntket,ntora2,ntnh3
     real(kind_phys),intent(in) :: dt, emis_amp_anthro, pert_scale_anthro
     real(kind_phys), optional, intent(in) :: sppt_wts(:,:)
     logical,        intent(in) :: do_sppt_emis
@@ -62,6 +68,7 @@ contains
     integer, parameter :: ims=1,jms=1,jme=1, kms=1
     integer, parameter :: its=1,jts=1,jte=1, kts=1
 
+    !JH, we need more tracers in the emissions input
     real(kind_phys), dimension(im, 10), intent(in) :: emi_in
     real(kind_phys), dimension(im), intent(in) :: garea, rlat,rlon
     real(kind_phys), dimension(im,kme), intent(in) :: ph3d, pr3d
@@ -127,6 +134,9 @@ contains
         xlat,xlong,dxy,  &
         pr3d,ph3d,phl3d,tk3d,prl3d,spechum,emi_in,                      &
         rri,t_phy,p_phy,rho_phy,dz8w,p8w,z_at_w,                        & 
+        ntiso,ntno,ntno2,ntco,nteth,nthc3,nthc5,nthc8,   &
+        ntxyl,ntolt,ntoli,nttol,ntcsl,nthcho,ntald,    &
+        ntket,ntora2,ntnh3, &
         ntso2,ntsulf,ntpp25,ntbc1,ntoc1,ntpp10,ntrac,gq0,               &
         num_chem, num_ebu_in,num_emis_ant,                              &
         emis_ant,ppm2ugkg,chem,random_factor,                           &
@@ -144,6 +154,26 @@ contains
        gq0(i,k,ntbc1  )=ppm2ugkg(p_bc1   ) * max(epsilc,chem(i,k,1,p_bc1))
        gq0(i,k,ntoc1  )=ppm2ugkg(p_oc1   ) * max(epsilc,chem(i,k,1,p_oc1))
        gq0(i,k,ntpp10 )=ppm2ugkg(p_p10   ) * max(epsilc,chem(i,k,1,p_p10))
+       if (chem_opt == CHEM_OPT_GOCART_RACM) then
+         gq0(i,k,ntiso  )=ppm2ugkg(p_iso   ) * max(epsilc,chem(i,k,1,p_iso))
+         gq0(i,k,ntno  )=ppm2ugkg(p_no   ) * max(epsilc,chem(i,k,1,p_no))
+         gq0(i,k,ntno2  )=ppm2ugkg(p_no2   ) * max(epsilc,chem(i,k,1,p_no2))
+         gq0(i,k,ntco  )=ppm2ugkg(p_co   ) * max(epsilc,chem(i,k,1,p_co))
+         gq0(i,k,nteth  )=ppm2ugkg(p_eth   ) * max(epsilc,chem(i,k,1,p_eth))
+         gq0(i,k,nthc3  )=ppm2ugkg(p_hc3   ) * max(epsilc,chem(i,k,1,p_hc3))
+         gq0(i,k,nthc5  )=ppm2ugkg(p_hc5   ) * max(epsilc,chem(i,k,1,p_hc5))
+         gq0(i,k,nthc8  )=ppm2ugkg(p_hc8   ) * max(epsilc,chem(i,k,1,p_hc8))
+         gq0(i,k,ntxyl  )=ppm2ugkg(p_xyl   ) * max(epsilc,chem(i,k,1,p_xyl))
+         gq0(i,k,ntolt  )=ppm2ugkg(p_olt   ) * max(epsilc,chem(i,k,1,p_olt))
+         gq0(i,k,ntoli  )=ppm2ugkg(p_oli   ) * max(epsilc,chem(i,k,1,p_oli))
+         gq0(i,k,nttol  )=ppm2ugkg(p_tol   ) * max(epsilc,chem(i,k,1,p_tol))
+         gq0(i,k,ntcsl  )=ppm2ugkg(p_csl   ) * max(epsilc,chem(i,k,1,p_csl))
+         gq0(i,k,nthcho  )=ppm2ugkg(p_hcho   ) * max(epsilc,chem(i,k,1,p_hcho))
+         gq0(i,k,ntald  )=ppm2ugkg(p_ald   ) * max(epsilc,chem(i,k,1,p_ald))
+         gq0(i,k,ntket  )=ppm2ugkg(p_ket   ) * max(epsilc,chem(i,k,1,p_ket))
+         gq0(i,k,ntora2  )=ppm2ugkg(p_ora2   ) * max(epsilc,chem(i,k,1,p_ora2))
+         gq0(i,k,ntnh3  )=ppm2ugkg(p_nh3   ) * max(epsilc,chem(i,k,1,p_nh3))
+       end if
      enddo
     enddo
 
@@ -155,6 +185,26 @@ contains
        qgrs(i,k,ntbc1  )=gq0(i,k,ntbc1  )
        qgrs(i,k,ntoc1  )=gq0(i,k,ntoc1  )
        qgrs(i,k,ntpp10 )=gq0(i,k,ntpp10 )
+       if (chem_opt == CHEM_OPT_GOCART_RACM) then
+         qgrs(i,k,ntiso )=gq0(i,k,ntiso  )
+         qgrs(i,k,ntno )=gq0(i,k,ntno  )
+         qgrs(i,k,ntno2 )=gq0(i,k,ntno2  )
+         qgrs(i,k,ntco )=gq0(i,k,ntco  )
+         qgrs(i,k,nteth )=gq0(i,k,nteth  )
+         qgrs(i,k,nthc3 )=gq0(i,k,nthc3  )
+         qgrs(i,k,nthc5 )=gq0(i,k,nthc5  )
+         qgrs(i,k,nthc8 )=gq0(i,k,nthc8  )
+         qgrs(i,k,ntxyl )=gq0(i,k,ntxyl  )
+         qgrs(i,k,ntolt )=gq0(i,k,ntolt  )
+         qgrs(i,k,ntoli )=gq0(i,k,ntoli  )
+         qgrs(i,k,nttol )=gq0(i,k,nttol  )
+         qgrs(i,k,ntcsl )=gq0(i,k,ntcsl  )
+         qgrs(i,k,nthcho )=gq0(i,k,nthcho  )
+         qgrs(i,k,ntald )=gq0(i,k,ntald  )
+         qgrs(i,k,ntket )=gq0(i,k,ntket  )
+         qgrs(i,k,ntora2 )=gq0(i,k,ntora2  )
+         qgrs(i,k,ntnh3 )=gq0(i,k,ntnh3  )
+       end if
      enddo
     enddo
 
@@ -172,6 +222,9 @@ contains
         xlat,xlong,dxy,  &
         pr3d,ph3d,phl3d,tk3d,prl3d,spechum,emi_in,                       &
         rri,t_phy,p_phy,rho_phy,dz8w,p8w,z_at_w,                         &
+        ntiso,ntno,ntno2,ntco,nteth,nthc3,nthc5,nthc8,   &
+        ntxyl,ntolt,ntoli,nttol,ntcsl,nthcho,ntald,    &
+        ntket,ntora2,ntnh3, &
         ntso2,ntsulf,ntpp25,ntbc1,ntoc1,ntpp10,ntrac,gq0,                &
         num_chem, num_ebu_in,num_emis_ant,                               &
         emis_ant,ppm2ugkg,chem,random_factor,                            &
@@ -190,6 +243,9 @@ contains
     integer, intent(in) :: ntrac
     integer, intent(in) :: ntso2,ntpp25,ntbc1,ntoc1,ntpp10
     integer,        intent(in) :: ntsulf
+    integer, intent(in) :: ntiso,ntno,ntno2,ntco,nteth,nthc3,nthc5,nthc8, &
+                           ntxyl,ntolt,ntoli,nttol,ntcsl,nthcho,ntald,  &
+                           ntket,ntora2,ntnh3
     real(kind=kind_phys), dimension(ims:ime), intent(in) :: garea, rlat, rlon
     real(kind=kind_phys), dimension(ims:ime,    10),   intent(in) :: emi_in
     real(kind=kind_phys), dimension(ims:ime, kms:kme), intent(in) :: pr3d,ph3d
@@ -213,7 +269,7 @@ contains
     real(kind_phys), dimension(ims:ime, kms:kme, jms:jme, num_chem),  intent(out) :: chem
 
     real(kind_phys), dimension(ims:ime, kms:kme, jms:jme), intent(out) :: z_at_w
-    real(kind_phys), dimension(ims:ime, jms:jme, num_ebu_in) :: emiss_ab
+    real(kind_phys), dimension(ims:ime, jms:jme, num_emis_ant) :: emiss_ab
     real(kind_phys), parameter :: frac_so2_ant = 1.0_kind_phys  ! antropogenic so2 fraction
 
 !>- volcanic stuff
@@ -389,7 +445,7 @@ contains
     endif
     endif !num_emis_voll 
 
-    ! -- anthropagenic
+    ! -- anthropogenic
     emiss_ab  = 0.   ! background
     do j=jts,jte
      do i=its,ite
@@ -399,6 +455,27 @@ contains
       emiss_ab(i,j,p_e_pm_25)=emi_in(i,4)*random_factor(i,j)
       emiss_ab(i,j,p_e_so2)  =emi_in(i,5)*random_factor(i,j)
       emiss_ab(i,j,p_e_pm_10)=emi_in(i,6)*random_factor(i,j)
+      if (chem_opt == CHEM_OPT_GOCART_RACM) then
+          !JH: need update later, in emi_in, more tracers
+          emiss_ab(i,j,p_e_iso) =emiss_ab(i,j,p_e_so2)  
+          emiss_ab(i,j,p_e_no) =emiss_ab(i,j,p_e_so2) 
+          emiss_ab(i,j,p_e_no2) =emiss_ab(i,j,p_e_so2)
+          emiss_ab(i,j,p_e_co) =emiss_ab(i,j,p_e_so2)
+          emiss_ab(i,j,p_e_eth) =emiss_ab(i,j,p_e_so2)
+          emiss_ab(i,j,p_e_hc3) =emiss_ab(i,j,p_e_so2)
+          emiss_ab(i,j,p_e_hc5) =emiss_ab(i,j,p_e_so2)
+          emiss_ab(i,j,p_e_hc8) =emiss_ab(i,j,p_e_so2)
+          emiss_ab(i,j,p_e_xyl) =emiss_ab(i,j,p_e_so2)
+          emiss_ab(i,j,p_e_olt) =emiss_ab(i,j,p_e_so2)
+          emiss_ab(i,j,p_e_oli) =emiss_ab(i,j,p_e_so2)
+          emiss_ab(i,j,p_e_tol) =emiss_ab(i,j,p_e_so2)
+          emiss_ab(i,j,p_e_csl) =emiss_ab(i,j,p_e_so2)
+          emiss_ab(i,j,p_e_hcho) =emiss_ab(i,j,p_e_so2)
+          emiss_ab(i,j,p_e_ald) =emiss_ab(i,j,p_e_so2)
+          emiss_ab(i,j,p_e_ket) =emiss_ab(i,j,p_e_so2)
+          emiss_ab(i,j,p_e_ora2) =emiss_ab(i,j,p_e_so2)
+          emiss_ab(i,j,p_e_nh3) =emiss_ab(i,j,p_e_so2)
+      end if
      enddo
     enddo
 
@@ -414,6 +491,26 @@ contains
           emis_ant(i,k,j,p_e_dms)= 0. !emiss_ab(j,p_e_dms)
           emis_ant(i,k,j,p_e_pm_25)=emiss_ab(i,j,p_e_pm_25)
           emis_ant(i,k,j,p_e_pm_10)=emiss_ab(i,j,p_e_pm_10)
+          if (chem_opt == CHEM_OPT_GOCART_RACM) then
+            emis_ant(i,k,j,p_e_iso) =emiss_ab(i,j,p_e_iso)  !JH: for now, need update later
+            emis_ant(i,k,j,p_e_no) =emiss_ab(i,j,p_e_no)
+            emis_ant(i,k,j,p_e_no2) =emiss_ab(i,j,p_e_no2)
+            emis_ant(i,k,j,p_e_co) =emiss_ab(i,j,p_e_co)
+            emis_ant(i,k,j,p_e_eth) =emiss_ab(i,j,p_e_eth)
+            emis_ant(i,k,j,p_e_hc3) =emiss_ab(i,j,p_e_hc3)
+            emis_ant(i,k,j,p_e_hc5) =emiss_ab(i,j,p_e_hc5)
+            emis_ant(i,k,j,p_e_hc8) =emiss_ab(i,j,p_e_hc8)
+            emis_ant(i,k,j,p_e_xyl) =emiss_ab(i,j,p_e_xyl)
+            emis_ant(i,k,j,p_e_olt) =emiss_ab(i,j,p_e_olt)
+            emis_ant(i,k,j,p_e_oli) =emiss_ab(i,j,p_e_oli)
+            emis_ant(i,k,j,p_e_tol) =emiss_ab(i,j,p_e_tol)
+            emis_ant(i,k,j,p_e_csl) =emiss_ab(i,j,p_e_csl)
+            emis_ant(i,k,j,p_e_hcho) =emiss_ab(i,j,p_e_hcho)
+            emis_ant(i,k,j,p_e_ald) =emiss_ab(i,j,p_e_ald)
+            emis_ant(i,k,j,p_e_ket) =emiss_ab(i,j,p_e_ket)
+            emis_ant(i,k,j,p_e_ora2) =emiss_ab(i,j,p_e_ora2)
+            emis_ant(i,k,j,p_e_nh3) =emiss_ab(i,j,p_e_nh3)
+          end if
         enddo
       enddo
     endif
@@ -426,6 +523,26 @@ contains
        chem(i,k,jts,p_bc1   )=max(epsilc,gq0(i,k,ntbc1  )/ppm2ugkg(p_bc1))
        chem(i,k,jts,p_oc1   )=max(epsilc,gq0(i,k,ntoc1  )/ppm2ugkg(p_oc1))
        chem(i,k,jts,p_p10   )=max(epsilc,gq0(i,k,ntpp10 )/ppm2ugkg(p_p10))
+       if (chem_opt == CHEM_OPT_GOCART_RACM) then
+         chem(i,k,jts,p_iso   )=max(epsilc,gq0(i,k,ntiso  )/ppm2ugkg(p_iso))
+         chem(i,k,jts,p_no   )=max(epsilc,gq0(i,k,ntno  )/ppm2ugkg(p_no))
+         chem(i,k,jts,p_no2   )=max(epsilc,gq0(i,k,ntno2  )/ppm2ugkg(p_no2))
+         chem(i,k,jts,p_co   )=max(epsilc,gq0(i,k,ntco  )/ppm2ugkg(p_co))
+         chem(i,k,jts,p_eth   )=max(epsilc,gq0(i,k,nteth  )/ppm2ugkg(p_eth))
+         chem(i,k,jts,p_hc3   )=max(epsilc,gq0(i,k,nthc3  )/ppm2ugkg(p_hc3))
+         chem(i,k,jts,p_hc5   )=max(epsilc,gq0(i,k,nthc5  )/ppm2ugkg(p_hc5))
+         chem(i,k,jts,p_hc8   )=max(epsilc,gq0(i,k,nthc8  )/ppm2ugkg(p_hc8))
+         chem(i,k,jts,p_xyl   )=max(epsilc,gq0(i,k,ntxyl  )/ppm2ugkg(p_xyl))
+         chem(i,k,jts,p_olt   )=max(epsilc,gq0(i,k,ntolt  )/ppm2ugkg(p_olt))
+         chem(i,k,jts,p_oli   )=max(epsilc,gq0(i,k,ntoli  )/ppm2ugkg(p_oli))
+         chem(i,k,jts,p_tol   )=max(epsilc,gq0(i,k,nttol  )/ppm2ugkg(p_tol))
+         chem(i,k,jts,p_csl   )=max(epsilc,gq0(i,k,ntcsl  )/ppm2ugkg(p_csl))
+         chem(i,k,jts,p_hcho   )=max(epsilc,gq0(i,k,nthcho  )/ppm2ugkg(p_hcho))
+         chem(i,k,jts,p_ald   )=max(epsilc,gq0(i,k,ntald  )/ppm2ugkg(p_ald))
+         chem(i,k,jts,p_ket   )=max(epsilc,gq0(i,k,ntket  )/ppm2ugkg(p_ket))
+         chem(i,k,jts,p_ora2   )=max(epsilc,gq0(i,k,ntora2  )/ppm2ugkg(p_ora2))
+         chem(i,k,jts,p_nh3   )=max(epsilc,gq0(i,k,ntnh3  )/ppm2ugkg(p_nh3))
+       end if
      enddo
     enddo
 
@@ -449,6 +566,39 @@ contains
             chem(i,k,j,p_p10)=chem(i,k,j,p_p10)+emis_ant(i,k,j,p_e_pm_10)*factor
             chem(i,k,j,p_sulf)=chem(i,k,j,p_sulf)+emis_ant(i,k,j,p_e_sulf)*factor
             chem(i,k,j,p_so2)=chem(i,k,j,p_so2)+emis_ant(i,k,j,p_e_so2)*factor2
+          enddo
+        enddo
+      end if
+
+      if (chem_opt == CHEM_OPT_GOCART_RACM) then
+        do j=jts,jte
+          do i=its,ite
+            factor=dtstep*rri(i,k,j)/dz8w(i,k,j)
+            factor2=4.828e-4*dtstep*rri(i,k,j)/(60.*dz8w(i,k,j))
+            chem(i,k,j,p_bc1)=chem(i,k,j,p_bc1)+emis_ant(i,k,j,p_e_bc)*factor
+            chem(i,k,j,p_oc1)=chem(i,k,j,p_oc1)+emis_ant(i,k,j,p_e_oc)*factor
+            chem(i,k,j,p_p25)=chem(i,k,j,p_p25)+emis_ant(i,k,j,p_e_pm_25)*factor
+            chem(i,k,j,p_p10)=chem(i,k,j,p_p10)+emis_ant(i,k,j,p_e_pm_10)*factor
+            chem(i,k,j,p_sulf)=chem(i,k,j,p_sulf)+emis_ant(i,k,j,p_e_sulf)*factor
+            chem(i,k,j,p_so2)=chem(i,k,j,p_so2)+emis_ant(i,k,j,p_e_so2)*factor2
+            chem(i,k,j,p_iso)=chem(i,k,j,p_iso)+emis_ant(i,k,j,p_e_iso)*factor2
+            chem(i,k,j,p_no)=chem(i,k,j,p_no)+emis_ant(i,k,j,p_e_no)*factor2
+            chem(i,k,j,p_no2)=chem(i,k,j,p_no2)+emis_ant(i,k,j,p_e_no2)*factor2
+            chem(i,k,j,p_co)=chem(i,k,j,p_co)+emis_ant(i,k,j,p_e_co)*factor2
+            chem(i,k,j,p_eth)=chem(i,k,j,p_eth)+emis_ant(i,k,j,p_e_eth)*factor2
+            chem(i,k,j,p_hc3)=chem(i,k,j,p_hc3)+emis_ant(i,k,j,p_e_hc3)*factor2
+            chem(i,k,j,p_hc5)=chem(i,k,j,p_hc5)+emis_ant(i,k,j,p_e_hc5)*factor2
+            chem(i,k,j,p_hc8)=chem(i,k,j,p_hc8)+emis_ant(i,k,j,p_e_hc8)*factor2
+            chem(i,k,j,p_xyl)=chem(i,k,j,p_xyl)+emis_ant(i,k,j,p_e_xyl)*factor2
+            chem(i,k,j,p_olt)=chem(i,k,j,p_olt)+emis_ant(i,k,j,p_e_olt)*factor2
+            chem(i,k,j,p_oli)=chem(i,k,j,p_oli)+emis_ant(i,k,j,p_e_oli)*factor2
+            chem(i,k,j,p_tol)=chem(i,k,j,p_tol)+emis_ant(i,k,j,p_e_tol)*factor2
+            chem(i,k,j,p_csl)=chem(i,k,j,p_csl)+emis_ant(i,k,j,p_e_csl)*factor2
+            chem(i,k,j,p_hcho)=chem(i,k,j,p_hcho)+emis_ant(i,k,j,p_e_hcho)*factor2
+            chem(i,k,j,p_ald)=chem(i,k,j,p_ald)+emis_ant(i,k,j,p_e_ald)*factor2
+            chem(i,k,j,p_ket)=chem(i,k,j,p_ket)+emis_ant(i,k,j,p_e_ket)*factor2
+            chem(i,k,j,p_ora2)=chem(i,k,j,p_ora2)+emis_ant(i,k,j,p_e_ora2)*factor2
+            chem(i,k,j,p_nh3)=chem(i,k,j,p_nh3)+emis_ant(i,k,j,p_e_nh3)*factor2
           enddo
         enddo
       endif
@@ -551,7 +701,7 @@ contains
             enddo
 
             select case (chem_opt)
-              case (CHEM_OPT_GOCART)
+              case (CHEM_OPT_GOCART, CHEM_OPT_GOCART_RACM)
                 ! -- if applied to gocart we only need finest ash bins, we use
                 ! the coarse one for so2
                 do ko=1,k_final
@@ -579,7 +729,7 @@ contains
     if (num_emis_voll > 0) then
 
       select case (chem_opt)
-        case (CHEM_OPT_GOCART)
+        case (CHEM_OPT_GOCART, CHEM_OPT_GOCART_RACM)
           ! -- for gocart only lump ash into p25 and p10
           !if (num_emis_voll /= 4) then
           !  call chem_rc_set(CHEM_RC_FAILURE, msg="num_emis_vol must be 4", &

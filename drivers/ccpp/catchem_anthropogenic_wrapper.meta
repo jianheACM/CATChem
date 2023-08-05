@@ -147,6 +147,13 @@
   dimensions = ()
   type = integer
   intent = in
+[ntiso]
+  standard_name = index_for_iso
+  long_name = index for iso
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
 [ntso2]
   standard_name = index_for_so2
   long_name = tracer index for so2
@@ -157,6 +164,125 @@
 [ntsulf]
   standard_name = index_for_sulfate
   long_name = index for sulfate
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntno]
+  standard_name = index_for_no
+  long_name = index for no
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntno2]
+  standard_name = index_for_no2
+  long_name = index for no2
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntco]
+  standard_name = index_for_co
+  long_name = index for co
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[nteth]
+  standard_name = index_for_eth
+  long_name = index for eth
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[nthc3]
+  standard_name = index_for_hc3
+  long_name = index for hc3
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[nthc5]
+  standard_name = index_for_hc5
+  long_name = index for hc5
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[nthc8]
+  standard_name = index_for_hc8
+  long_name = index for hc8
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntxyl]
+  standard_name = index_for_xyl
+  long_name = index for xyl
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntolt]
+  standard_name = index_for_olt
+  long_name = index for olt
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntoli]
+  standard_name = index_for_oli
+  long_name = index for oli
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[nttol]
+  standard_name = index_for_tol
+  long_name = index for tol
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntcsl]
+  standard_name = index_for_csl
+  long_name = index for csl
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[nthcho]
+  standard_name = index_for_hcho
+  long_name = index for hcho
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntald]
+  standard_name = index_for_ald
+  long_name = index for ald
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntket]
+  standard_name = index_for_ket
+  long_name = index for ket
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntora2]
+  standard_name = index_for_ora2
+  long_name = index for ora2
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntnh3]
+  standard_name = index_for_nh3
+  long_name = index for nh3
   units = index
   dimensions = ()
   type = integer

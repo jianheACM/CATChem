@@ -3,6 +3,7 @@
 !! Haiqin.Li@noaa.gov 06/2020
 !! Revision History:
 !! 05/2023, Restructure for CATChem, Jian.He@noaa.gov
+!! 08/2023, Include RACM species, Jian.He@noaa.gov
 
  module catchem_drydep_wrapper
 
@@ -50,6 +51,12 @@ contains
                    ntrac,ntso2,ntsulf,ntDMS,ntmsa,ntpp25,                     &
                    ntbc1,ntbc2,ntoc1,ntoc2,ntss1,ntss2,ntss3,ntss4,ntss5,     &
                    ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,ntpp10,            &
+                   ntno2,ntno,nto3,nthno3,nth2o2,ntald,nthcho,ntop1,ntop2,    &
+                   ntpaa,ntora1,ntora2,ntnh3,ntn2o5,ntno3,ntpan,nthc3,nthc5,  &
+                   nthc8,nteth,ntco,ntete,ntolt,ntoli,nttol,ntxyl,ntaco3,     &
+                   nttpan,nthono,nthno4,ntket,ntgly,ntmgly,ntdcb,ntonit,      &
+                   ntcsl,ntiso,ntco2,ntch4,ntudd,nthket,ntapi,ntlim,ntdien,   &
+                   ntmacr,ntho,ntho2,chem_opt_in,                             &
                    ntchmdiag,gq0,qgrs,drydep,chem_conv_tr_in,                 &
                    errmsg,errflg)
 
@@ -61,6 +68,15 @@ contains
     integer,        intent(in) :: ntdust1,ntdust2,ntdust3,ntdust4,ntdust5
     integer,        intent(in) :: ntso2,ntpp25,ntbc1,ntoc1,ntpp10
     integer,        intent(in) :: ntsulf,ntbc2,ntoc2,ntDMS,ntmsa
+    integer,        intent(in) :: ntno2,ntno,nto3,nthno3,nth2o2,ntald,   &
+                                  nthcho,ntop1,ntop2,ntpaa,ntora1,ntora2,&
+                                  ntnh3,ntn2o5,ntno3,ntpan,nthc3,nthc5,  &
+                                  nthc8,nteth,ntco,ntete,ntolt,ntoli,    &
+                                  nttol,ntxyl,ntaco3,nttpan,nthono,      &
+                                  nthno4,ntket,ntgly,ntmgly,ntdcb,       &
+                                  ntonit,ntcsl,ntiso,ntco2,ntch4,ntudd,  &
+                                  nthket,ntapi,ntlim,ntdien,ntmacr,ntho,ntho2    
+
     real(kind_phys),intent(in) :: dt,julian
 
     integer, parameter :: ids=1,jds=1,jde=1, kds=1
@@ -76,6 +92,7 @@ contains
     real(kind_phys), dimension(im,kte,ntrac), intent(inout) :: gq0, qgrs
     real(kind_phys), dimension(im,ntchmdiag), intent(inout) :: drydep
     integer,        intent(in) :: chem_conv_tr_in
+    integer,        intent(in) :: chem_opt_in
     character(len=*), intent(out) :: errmsg
     integer,          intent(out) :: errflg
 
@@ -122,6 +139,7 @@ contains
     errflg = 0
 
     chem_conv_tr      = chem_conv_tr_in
+    chem_opt          = chem_opt_in
 
     h2oai = 0.
     h2oaj = 0.
@@ -151,6 +169,11 @@ contains
    !ppm2ugkg(p_so2 ) = 1.e+03_kind_phys * mw_so2_aer / mwdry
     ppm2ugkg(p_sulf) = 1.e+03_kind_phys * mw_so4_aer / mwdry
 
+    ! -- initialize dry depostion
+    if (ktau==1) then
+      call dep_init(numgas,its, ite, jts, jte, ide, jde)
+    endif
+
     ! -- compute incremental convective and large-scale rainfall
     do i=its,ite
      rcav(i,1)=max(rainc_cpl(i)*1000.              , 0.) ! meter to mm
@@ -169,6 +192,12 @@ contains
         ntso2,ntsulf,ntDMS,ntmsa,ntpp25,                                &
         ntbc1,ntbc2,ntoc1,ntoc2,ntss1,ntss2,ntss3,ntss4,ntss5,          &
         ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,ntpp10,                 &
+        ntno2,ntno,nto3,nthno3,nth2o2,ntald,nthcho,ntop1,ntop2,    &
+        ntpaa,ntora1,ntora2,ntnh3,ntn2o5,ntno3,ntpan,nthc3,nthc5,  &
+        nthc8,nteth,ntco,ntete,ntolt,ntoli,nttol,ntxyl,ntaco3,     &
+        nttpan,nthono,nthno4,ntket,ntgly,ntmgly,ntdcb,ntonit,      &
+        ntcsl,ntiso,ntco2,ntch4,ntudd,nthket,ntapi,ntlim,ntdien,   &
+        ntmacr,ntho,ntho2,chem_opt,                                &
         ntrac,gq0,num_chem, num_moist,                                  &
         ppm2ugkg,moist,chem,                                            &
         ivgtyp,vegfrac,rmol,gsw,znt,hfx,pbl,snowh,                      &
@@ -186,15 +215,15 @@ contains
         !gas and aerosol drydep seperately
         !We will not based on chem_opt, but on gas/aero schemes
 
-        IF( chem_opt /= GOCART_SIMPLE ) THEN
-          ! wesely for gases 
-          call wesely_driver(current_month,julday, &
-              t_phy(i,kts,j),moist(i,kts,j,:),p8w(i,kts,j),     &
-              rcav(i,j),p_phy(i,kts,j),ddvel(i,j,:),     &
-              ivgtyp(i,j), &
-              tsk(i,j),gsw(i,j),vegfrac(i,j),rmol(i,j),        &
-              ust(i,j),znt(i,j),delz_at_w,snowh(i,j))
-        ENDIF
+        !IF( chem_opt /= GOCART_SIMPLE ) THEN
+        !  ! wesely for gases 
+        !  call wesely_driver(current_month,julday, &
+        !      t_phy(i,kts,j),moist(i,kts,j,:),p8w(i,kts,j),     &
+        !      rcav(i,j),p_phy(i,kts,j),ddvel(i,j,:),     &
+        !      ivgtyp(i,j), &
+        !      tsk(i,j),gsw(i,j),vegfrac(i,j),rmol(i,j),        &
+        !      ust(i,j),znt(i,j),delz_at_w,snowh(i,j))
+        !ENDIF
 
         IF (( chem_opt == GOCART_SIMPLE ) .or.            &
               ( chem_opt == GOCARTRACM_KPP)  .or.            &
@@ -328,6 +357,56 @@ contains
        gq0(i,k,ntss4  )=ppm2ugkg(p_seas_4) * max(epsilc,chem(i,k,1,p_seas_4))
        gq0(i,k,ntss5  )=ppm2ugkg(p_seas_5) * max(epsilc,chem(i,k,1,p_seas_5))
        gq0(i,k,ntpp10 )=ppm2ugkg(p_p10   ) * max(epsilc,chem(i,k,1,p_p10))
+       !JianHe: 08/2023: can we use some kind of index loop for this?
+       if (chem_opt == CHEM_OPT_GOCART_RACM) then
+         gq0(i,k,ntno2  )=ppm2ugkg(p_no2   ) * max(epsilc,chem(i,k,1,p_no2))
+         gq0(i,k,ntno  )=ppm2ugkg(p_no   ) * max(epsilc,chem(i,k,1,p_no))
+         gq0(i,k,nto3  )=ppm2ugkg(p_o3   ) * max(epsilc,chem(i,k,1,p_o3))
+         gq0(i,k,nthno3  )=ppm2ugkg(p_hno3   ) * max(epsilc,chem(i,k,1,p_hno3))
+         gq0(i,k,nth2o2  )=ppm2ugkg(p_h2o2   ) * max(epsilc,chem(i,k,1,p_h2o2))
+         gq0(i,k,ntald  )=ppm2ugkg(p_ald   ) * max(epsilc,chem(i,k,1,p_ald))
+         gq0(i,k,nthcho  )=ppm2ugkg(p_hcho   ) * max(epsilc,chem(i,k,1,p_hcho))
+         gq0(i,k,ntop1  )=ppm2ugkg(p_op1   ) * max(epsilc,chem(i,k,1,p_op1))
+         gq0(i,k,ntop2  )=ppm2ugkg(p_op2   ) * max(epsilc,chem(i,k,1,p_op2))
+         gq0(i,k,ntpaa  )=ppm2ugkg(p_paa   ) * max(epsilc,chem(i,k,1,p_paa))
+         gq0(i,k,ntora1  )=ppm2ugkg(p_ora1   ) * max(epsilc,chem(i,k,1,p_ora1))
+         gq0(i,k,ntora2  )=ppm2ugkg(p_ora2   ) * max(epsilc,chem(i,k,1,p_ora2))
+         gq0(i,k,ntnh3  )=ppm2ugkg(p_nh3   ) * max(epsilc,chem(i,k,1,p_nh3))
+         gq0(i,k,ntn2o5  )=ppm2ugkg(p_n2o5   ) * max(epsilc,chem(i,k,1,p_n2o5))
+         gq0(i,k,ntno3  )=ppm2ugkg(p_no3   ) * max(epsilc,chem(i,k,1,p_no3))
+         gq0(i,k,ntpan  )=ppm2ugkg(p_pan   ) * max(epsilc,chem(i,k,1,p_pan))
+         gq0(i,k,nthc3  )=ppm2ugkg(p_hc3   ) * max(epsilc,chem(i,k,1,p_hc3))
+         gq0(i,k,nthc5  )=ppm2ugkg(p_hc5   ) * max(epsilc,chem(i,k,1,p_hc5))
+         gq0(i,k,nthc8  )=ppm2ugkg(p_hc8   ) * max(epsilc,chem(i,k,1,p_hc8))
+         gq0(i,k,nteth  )=ppm2ugkg(p_eth   ) * max(epsilc,chem(i,k,1,p_eth))
+         gq0(i,k,ntco  )=ppm2ugkg(p_co   ) * max(epsilc,chem(i,k,1,p_co))
+         gq0(i,k,ntete  )=ppm2ugkg(p_ete   ) * max(epsilc,chem(i,k,1,p_ete))
+         gq0(i,k,ntolt  )=ppm2ugkg(p_olt   ) * max(epsilc,chem(i,k,1,p_olt))
+         gq0(i,k,ntoli  )=ppm2ugkg(p_oli   ) * max(epsilc,chem(i,k,1,p_oli))
+         gq0(i,k,nttol  )=ppm2ugkg(p_tol   ) * max(epsilc,chem(i,k,1,p_tol))
+         gq0(i,k,ntxyl  )=ppm2ugkg(p_xyl   ) * max(epsilc,chem(i,k,1,p_xyl))
+         gq0(i,k,ntaco3  )=ppm2ugkg(p_aco3   ) * max(epsilc,chem(i,k,1,p_aco3))
+         gq0(i,k,nttpan  )=ppm2ugkg(p_tpan   ) * max(epsilc,chem(i,k,1,p_tpan))
+         gq0(i,k,nthono  )=ppm2ugkg(p_hono   ) * max(epsilc,chem(i,k,1,p_hono))
+         gq0(i,k,nthno4  )=ppm2ugkg(p_hno4   ) * max(epsilc,chem(i,k,1,p_hno4))
+         gq0(i,k,ntket  )=ppm2ugkg(p_ket   ) * max(epsilc,chem(i,k,1,p_ket))
+         gq0(i,k,ntgly  )=ppm2ugkg(p_gly   ) * max(epsilc,chem(i,k,1,p_gly))
+         gq0(i,k,ntmgly  )=ppm2ugkg(p_mgly   ) * max(epsilc,chem(i,k,1,p_mgly))
+         gq0(i,k,ntdcb  )=ppm2ugkg(p_dcb   ) * max(epsilc,chem(i,k,1,p_dcb))
+         gq0(i,k,ntonit  )=ppm2ugkg(p_onit   ) * max(epsilc,chem(i,k,1,p_onit))
+         gq0(i,k,ntcsl  )=ppm2ugkg(p_csl   ) * max(epsilc,chem(i,k,1,p_csl))
+         gq0(i,k,ntiso  )=ppm2ugkg(p_iso   ) * max(epsilc,chem(i,k,1,p_iso))
+         gq0(i,k,ntco2  )=ppm2ugkg(p_co2   ) * max(epsilc,chem(i,k,1,p_co2))
+         gq0(i,k,ntch4  )=ppm2ugkg(p_ch4   ) * max(epsilc,chem(i,k,1,p_ch4))
+         gq0(i,k,ntudd  )=ppm2ugkg(p_udd   ) * max(epsilc,chem(i,k,1,p_udd))
+         gq0(i,k,nthket  )=ppm2ugkg(p_hket   ) * max(epsilc,chem(i,k,1,p_hket))
+         gq0(i,k,ntapi  )=ppm2ugkg(p_api   ) * max(epsilc,chem(i,k,1,p_api))
+         gq0(i,k,ntlim  )=ppm2ugkg(p_lim   ) * max(epsilc,chem(i,k,1,p_lim))
+         gq0(i,k,ntdien  )=ppm2ugkg(p_dien   ) * max(epsilc,chem(i,k,1,p_dien))
+         gq0(i,k,ntmacr  )=ppm2ugkg(p_macr   ) * max(epsilc,chem(i,k,1,p_macr))
+         gq0(i,k,ntho  )=ppm2ugkg(p_ho   ) * max(epsilc,chem(i,k,1,p_ho))
+         gq0(i,k,ntho2  )=ppm2ugkg(p_ho2   ) * max(epsilc,chem(i,k,1,p_ho2))
+       end if
      enddo
     enddo
 
@@ -353,6 +432,56 @@ contains
        qgrs(i,k,ntss4  )=gq0(i,k,ntss4  )
        qgrs(i,k,ntss5  )=gq0(i,k,ntss5  )
        qgrs(i,k,ntpp10 )=gq0(i,k,ntpp10 )
+       !JianHe: 08/2023: can we use some kind of index loop for this?
+       if (chem_opt == CHEM_OPT_GOCART_RACM) then
+         qgrs(i,k,ntno2  )=gq0(i,k,ntno2  )
+         qgrs(i,k,ntno  )=gq0(i,k,ntno  )
+         qgrs(i,k,nto3  )=gq0(i,k,nto3  )
+         qgrs(i,k,nthno3  )=gq0(i,k,nthno3  )
+         qgrs(i,k,nth2o2  )=gq0(i,k,nth2o2  )
+         qgrs(i,k,ntald  )=gq0(i,k,ntald  )
+         qgrs(i,k,nthcho  )=gq0(i,k,nthcho  )
+         qgrs(i,k,ntop1  )=gq0(i,k,ntop1  )
+         qgrs(i,k,ntop2  )=gq0(i,k,ntop2  )
+         qgrs(i,k,ntpaa  )=gq0(i,k,ntpaa  )
+         qgrs(i,k,ntora1  )=gq0(i,k,ntora1  )
+         qgrs(i,k,ntora2  )=gq0(i,k,ntora2  )
+         qgrs(i,k,ntnh3  )=gq0(i,k,ntnh3  )
+         qgrs(i,k,ntn2o5  )=gq0(i,k,ntn2o5  )
+         qgrs(i,k,ntno3  )=gq0(i,k,ntno3  )
+         qgrs(i,k,ntpan  )=gq0(i,k,ntpan  )
+         qgrs(i,k,nthc3  )=gq0(i,k,nthc3  )
+         qgrs(i,k,nthc5  )=gq0(i,k,nthc5  )
+         qgrs(i,k,nthc8  )=gq0(i,k,nthc8  )
+         qgrs(i,k,nteth  )=gq0(i,k,nteth  )
+         qgrs(i,k,ntco  )=gq0(i,k,ntco  )
+         qgrs(i,k,ntete  )=gq0(i,k,ntete  )
+         qgrs(i,k,ntolt  )=gq0(i,k,ntolt  )
+         qgrs(i,k,ntoli  )=gq0(i,k,ntoli  )
+         qgrs(i,k,nttol  )=gq0(i,k,nttol  )
+         qgrs(i,k,ntxyl  )=gq0(i,k,ntxyl  )
+         qgrs(i,k,ntaco3  )=gq0(i,k,ntaco3  )
+         qgrs(i,k,nttpan  )=gq0(i,k,nttpan  )
+         qgrs(i,k,nthono  )=gq0(i,k,nthono  )
+         qgrs(i,k,nthno4  )=gq0(i,k,nthno4  )
+         qgrs(i,k,ntket  )=gq0(i,k,ntket  )
+         qgrs(i,k,ntgly  )=gq0(i,k,ntgly  )
+         qgrs(i,k,ntmgly  )=gq0(i,k,ntmgly  )
+         qgrs(i,k,ntdcb  )=gq0(i,k,ntdcb  )
+         qgrs(i,k,ntonit  )=gq0(i,k,ntonit  )
+         qgrs(i,k,ntcsl  )=gq0(i,k,ntcsl  )
+         qgrs(i,k,ntiso  )=gq0(i,k,ntiso  )
+         qgrs(i,k,ntco2  )=gq0(i,k,ntco2  )
+         qgrs(i,k,ntch4  )=gq0(i,k,ntch4  )
+         qgrs(i,k,ntudd  )=gq0(i,k,ntudd  )
+         qgrs(i,k,nthket  )=gq0(i,k,nthket  )
+         qgrs(i,k,ntapi  )=gq0(i,k,ntapi  )
+         qgrs(i,k,ntlim  )=gq0(i,k,ntlim  )
+         qgrs(i,k,ntdien  )=gq0(i,k,ntdien  )
+         qgrs(i,k,ntmacr  )=gq0(i,k,ntmacr  )
+         qgrs(i,k,ntho  )=gq0(i,k,ntho  )
+         qgrs(i,k,ntho2  )=gq0(i,k,ntho2  )
+       end if
      enddo
     enddo
 
@@ -374,6 +503,12 @@ contains
         ntso2,ntsulf,ntDMS,ntmsa,ntpp25,                               &
         ntbc1,ntbc2,ntoc1,ntoc2,ntss1,ntss2,ntss3,ntss4,ntss5,         &
         ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,ntpp10,                &
+        ntno2,ntno,nto3,nthno3,nth2o2,ntald,nthcho,ntop1,ntop2,    &
+        ntpaa,ntora1,ntora2,ntnh3,ntn2o5,ntno3,ntpan,nthc3,nthc5,  &
+        nthc8,nteth,ntco,ntete,ntolt,ntoli,nttol,ntxyl,ntaco3,     &
+        nttpan,nthono,nthno4,ntket,ntgly,ntmgly,ntdcb,ntonit,      &
+        ntcsl,ntiso,ntco2,ntch4,ntudd,nthket,ntapi,ntlim,ntdien,   &
+        ntmacr,ntho,ntho2,chem_opt,                                &
         ntrac,gq0,num_chem, num_moist,                                 &
         ppm2ugkg,moist,chem,                                           &
         ivgtyp,vegfrac,rmol,gsw,znt,hfx,pbl,snowh,                     &
@@ -387,12 +522,20 @@ contains
     integer, intent(in) :: ntdust1,ntdust2,ntdust3,ntdust4,ntdust5
     integer, intent(in) :: ntso2,ntpp25,ntbc1,ntoc1,ntpp10
     integer, intent(in) :: ntsulf,ntbc2,ntoc2,ntDMS,ntmsa
+    integer, intent(in) :: ntno2,ntno,nto3,nthno3,nth2o2,ntald,   &
+                           nthcho,ntop1,ntop2,ntpaa,ntora1,ntora2,&
+                           ntnh3,ntn2o5,ntno3,ntpan,nthc3,nthc5,  &
+                           nthc8,nteth,ntco,ntete,ntolt,ntoli,    &
+                           nttol,ntxyl,ntaco3,nttpan,nthono,      &
+                           nthno4,ntket,ntgly,ntmgly,ntdcb,       &
+                           ntonit,ntcsl,ntiso,ntco2,ntch4,ntudd,  &
+                           nthket,ntapi,ntlim,ntdien,ntmacr,ntho,ntho2
+
     real(kind=kind_phys), dimension(ims:ime), intent(in) ::                & 
          ustar, rlat, rlon, ts2d, sigmaf, dswsfc, zorl, snow_cplchm, hf2d, pb2d
     real(kind=kind_phys), dimension(ims:ime, kms:kme), intent(in) :: pr3d,ph3d
     real(kind=kind_phys), dimension(ims:ime, kts:kte), intent(in) :: phl3d,tk3d,prl3d,spechum,exch
     real(kind=kind_phys), dimension(ims:ime, kts:kte,ntrac), intent(in) :: gq0
-
 
     !GSD Chem variables
     integer,intent(in) ::  num_chem, num_moist
@@ -401,7 +544,7 @@ contains
                            its,ite, jts,jte, kts,kte
 
     real(kind_phys), dimension(num_chem), intent(in) :: ppm2ugkg
-
+    integer, intent(in) :: chem_opt
     
     integer,dimension(ims:ime, jms:jme), intent(out) :: ivgtyp
     real(kind_phys), dimension(ims:ime, kms:kme, jms:jme), intent(out) ::              & 
@@ -417,7 +560,6 @@ contains
 
     ! -- local variables
     integer i,ip,j,jp,k,kp,kk,kkp,nv,l,ll,n
-
 
     ! -- initialize output arrays
     ivgtyp         = 0._kind_phys
@@ -575,6 +717,56 @@ contains
        chem(i,k,jts,p_seas_4)=max(epsilc,gq0(i,k,ntss4  )/ppm2ugkg(p_seas_4))
        chem(i,k,jts,p_seas_5)=max(epsilc,gq0(i,k,ntss5  )/ppm2ugkg(p_seas_5))
        chem(i,k,jts,p_p10   )=max(epsilc,gq0(i,k,ntpp10 )/ppm2ugkg(p_p10))
+       !JianHe: 08/2023: can we use some kind of index loop for this?
+       if (chem_opt == CHEM_OPT_GOCART_RACM) then
+         chem(i,k,jts,p_no2  )=max(epsilc,gq0(i,k,ntno2  )/ppm2ugkg(p_no2))
+         chem(i,k,jts,p_no  )=max(epsilc,gq0(i,k,ntno  )/ppm2ugkg(p_no))
+         chem(i,k,jts,p_o3  )=max(epsilc,gq0(i,k,nto3  )/ppm2ugkg(p_o3))
+         chem(i,k,jts,p_hno3  )=max(epsilc,gq0(i,k,nthno3  )/ppm2ugkg(p_hno3))
+         chem(i,k,jts,p_h2o2  )=max(epsilc,gq0(i,k,nth2o2  )/ppm2ugkg(p_h2o2))
+         chem(i,k,jts,p_ald  )=max(epsilc,gq0(i,k,ntald  )/ppm2ugkg(p_ald))
+         chem(i,k,jts,p_hcho  )=max(epsilc,gq0(i,k,nthcho  )/ppm2ugkg(p_hcho))
+         chem(i,k,jts,p_op1  )=max(epsilc,gq0(i,k,ntop1  )/ppm2ugkg(p_op1))
+         chem(i,k,jts,p_op2  )=max(epsilc,gq0(i,k,ntop2  )/ppm2ugkg(p_op2))
+         chem(i,k,jts,p_paa  )=max(epsilc,gq0(i,k,ntpaa  )/ppm2ugkg(p_paa))
+         chem(i,k,jts,p_ora1  )=max(epsilc,gq0(i,k,ntora1  )/ppm2ugkg(p_ora1))
+         chem(i,k,jts,p_ora2  )=max(epsilc,gq0(i,k,ntora2  )/ppm2ugkg(p_ora2))
+         chem(i,k,jts,p_nh3  )=max(epsilc,gq0(i,k,ntnh3  )/ppm2ugkg(p_nh3))
+         chem(i,k,jts,p_n2o5  )=max(epsilc,gq0(i,k,ntn2o5  )/ppm2ugkg(p_n2o5))
+         chem(i,k,jts,p_no3  )=max(epsilc,gq0(i,k,ntno3  )/ppm2ugkg(p_no3))
+         chem(i,k,jts,p_pan  )=max(epsilc,gq0(i,k,ntpan  )/ppm2ugkg(p_pan))
+         chem(i,k,jts,p_hc3  )=max(epsilc,gq0(i,k,nthc3  )/ppm2ugkg(p_hc3))
+         chem(i,k,jts,p_hc5  )=max(epsilc,gq0(i,k,nthc5  )/ppm2ugkg(p_hc5))
+         chem(i,k,jts,p_hc8  )=max(epsilc,gq0(i,k,nthc8  )/ppm2ugkg(p_hc8))
+         chem(i,k,jts,p_eth  )=max(epsilc,gq0(i,k,nteth  )/ppm2ugkg(p_eth))
+         chem(i,k,jts,p_co  )=max(epsilc,gq0(i,k,ntco  )/ppm2ugkg(p_co))
+         chem(i,k,jts,p_ete  )=max(epsilc,gq0(i,k,ntete  )/ppm2ugkg(p_ete))
+         chem(i,k,jts,p_olt  )=max(epsilc,gq0(i,k,ntolt  )/ppm2ugkg(p_olt))
+         chem(i,k,jts,p_oli  )=max(epsilc,gq0(i,k,ntoli  )/ppm2ugkg(p_oli))
+         chem(i,k,jts,p_tol  )=max(epsilc,gq0(i,k,nttol  )/ppm2ugkg(p_tol))
+         chem(i,k,jts,p_xyl  )=max(epsilc,gq0(i,k,ntxyl  )/ppm2ugkg(p_xyl))
+         chem(i,k,jts,p_aco3  )=max(epsilc,gq0(i,k,ntaco3  )/ppm2ugkg(p_aco3))
+         chem(i,k,jts,p_tpan  )=max(epsilc,gq0(i,k,nttpan  )/ppm2ugkg(p_tpan))
+         chem(i,k,jts,p_hono  )=max(epsilc,gq0(i,k,nthono  )/ppm2ugkg(p_hono))
+         chem(i,k,jts,p_hno4  )=max(epsilc,gq0(i,k,nthno4  )/ppm2ugkg(p_hno4))
+         chem(i,k,jts,p_ket  )=max(epsilc,gq0(i,k,ntket  )/ppm2ugkg(p_ket))
+         chem(i,k,jts,p_gly  )=max(epsilc,gq0(i,k,ntgly  )/ppm2ugkg(p_gly))
+         chem(i,k,jts,p_mgly  )=max(epsilc,gq0(i,k,ntmgly  )/ppm2ugkg(p_mgly))
+         chem(i,k,jts,p_dcb  )=max(epsilc,gq0(i,k,ntdcb  )/ppm2ugkg(p_dcb))
+         chem(i,k,jts,p_onit  )=max(epsilc,gq0(i,k,ntonit  )/ppm2ugkg(p_onit))
+         chem(i,k,jts,p_csl  )=max(epsilc,gq0(i,k,ntcsl  )/ppm2ugkg(p_csl))
+         chem(i,k,jts,p_iso  )=max(epsilc,gq0(i,k,ntiso  )/ppm2ugkg(p_iso))
+         chem(i,k,jts,p_co2  )=max(epsilc,gq0(i,k,ntco2  )/ppm2ugkg(p_co2))
+         chem(i,k,jts,p_ch4  )=max(epsilc,gq0(i,k,ntch4  )/ppm2ugkg(p_ch4))
+         chem(i,k,jts,p_udd  )=max(epsilc,gq0(i,k,ntudd  )/ppm2ugkg(p_udd))
+         chem(i,k,jts,p_hket  )=max(epsilc,gq0(i,k,nthket  )/ppm2ugkg(p_hket))
+         chem(i,k,jts,p_api  )=max(epsilc,gq0(i,k,ntapi  )/ppm2ugkg(p_api))
+         chem(i,k,jts,p_lim  )=max(epsilc,gq0(i,k,ntlim  )/ppm2ugkg(p_lim))
+         chem(i,k,jts,p_dien  )=max(epsilc,gq0(i,k,ntdien  )/ppm2ugkg(p_dien))
+         chem(i,k,jts,p_macr  )=max(epsilc,gq0(i,k,ntmacr  )/ppm2ugkg(p_macr))
+         chem(i,k,jts,p_ho  )=max(epsilc,gq0(i,k,ntho  )/ppm2ugkg(p_ho))
+         chem(i,k,jts,p_ho2  )=max(epsilc,gq0(i,k,ntho2  )/ppm2ugkg(p_ho2))
+       end if
      enddo
     enddo
 

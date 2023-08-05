@@ -1,10 +1,11 @@
 ! Revision History:
 !! 06/2023, Restructure for CATChem, Jian.He@noaa.gov
+!! 08/2023, Modify for numgas, Jian.He@noaa.gov
 
 module drydep_gocart_mod
 
   use catchem_constants ,        only : kind_chem, g => con_g
-  use catchem_config,            only : num_chem
+  use catchem_config,            only : num_chem, numgas
 
   implicit none
 
@@ -61,7 +62,10 @@ subroutine gocart_drydep_driver(               &
   call depvel_gocart(ii,imx,jmx,lmx,&
      airden, delz_sfc, pblz, ts, ustar, hflux, ilwi, &
      ps, z0, dvel, drydf,g)
-  do nv=1,num_chem
+  !JianHe: 08/2023, we include dms and msa here
+  ! numgas alrealy includes dms and msa, so
+  ! we start with dms (numgas-1)
+  do nv=numgas-1,num_chem 
     ddvel(nv)=dvel(1,1)
   enddo
 
