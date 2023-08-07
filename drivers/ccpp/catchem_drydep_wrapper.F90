@@ -170,7 +170,7 @@ contains
     ppm2ugkg(p_sulf) = 1.e+03_kind_phys * mw_so4_aer / mwdry
 
     ! -- initialize dry depostion
-    if (ktau==1) then
+    if (numgas>0 .and. ktau==1) then
       call dep_init(numgas,its, ite, jts, jte, ide, jde)
     endif
 
@@ -215,16 +215,17 @@ contains
         !gas and aerosol drydep seperately
         !We will not based on chem_opt, but on gas/aero schemes
 
-        !IF( chem_opt /= GOCART_SIMPLE ) THEN
-        !  ! wesely for gases 
-        !  call wesely_driver(current_month,julday, &
-        !      t_phy(i,kts,j),moist(i,kts,j,:),p8w(i,kts,j),     &
-        !      rcav(i,j),p_phy(i,kts,j),ddvel(i,j,:),     &
-        !      ivgtyp(i,j), &
-        !      tsk(i,j),gsw(i,j),vegfrac(i,j),rmol(i,j),        &
-        !      ust(i,j),znt(i,j),delz_at_w,snowh(i,j))
-        !ENDIF
-
+        IF( chem_opt /= GOCART_SIMPLE ) THEN
+          ! wesely for gases 
+          call wesely_driver(current_month,julday, &
+              t_phy(i,kts,j),moist(i,kts,j,:),p8w(i,kts,j),     &
+              rcav(i,j),p_phy(i,kts,j),ddvel(i,j,:),     &
+              ivgtyp(i,j), chem(i,kts,j,:), &
+              tsk(i,j),gsw(i,j),vegfrac(i,j),rmol(i,j),        &
+              ust(i,j),znt(i,j),delz_at_w,snowh(i,j))
+          !ddvel(i,j,p_nh3) = 0.
+        ENDIF
+        
         IF (( chem_opt == GOCART_SIMPLE ) .or.            &
               ( chem_opt == GOCARTRACM_KPP)  .or.            &
               ( chem_opt == 316)  .or.            &
@@ -601,6 +602,11 @@ contains
      pbl  (i,1)=pb2d(i)
      snowh(i,1)=snow_cplchm(i)*0.001
      ivgtyp (i,1)=vegtype(i)
+     !JH: somehow we have 0 from vegtype
+     !a problem in wesely drydep
+     !if (vegtype(i) <= 0) then
+      ! print *, 'diag input vegtype', vegtype(i)
+     !end if
      vegfrac(i,1)=sigmaf (i)
     enddo
    

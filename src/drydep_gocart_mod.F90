@@ -64,7 +64,8 @@ subroutine gocart_drydep_driver(               &
      ps, z0, dvel, drydf,g)
   !JianHe: 08/2023, we include dms and msa here
   ! numgas alrealy includes dms and msa, so
-  ! we start with dms (numgas-1)
+  ! we start with dms (numgas-1), so2 is done
+  ! in wesely
   do nv=numgas-1,num_chem 
     ddvel(nv)=dvel(1,1)
   enddo

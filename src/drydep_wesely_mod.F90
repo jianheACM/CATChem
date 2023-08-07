@@ -1,9 +1,11 @@
 ! Revision History:
 !! 06/2023, Restructure for CATChem, Jian.He@noaa.gov
+!! 08/2023, Modify for RACM, Jian.He@noaa.gov
 
 module drydep_wesely_mod
 
-  use catchem_config, GOCART_SIMPLE => CHEM_OPT_GOCART, chem_opt=>chem_opt
+  use catchem_constants ,        only : kind_chem
+  use catchem_config, GOCART_SIMPLE => CHEM_OPT_GOCART
 
   implicit none
 
@@ -14,8 +16,8 @@ module drydep_wesely_mod
 
       INTEGER, PARAMETER :: dep_seasons = 5
       INTEGER, PARAMETER :: nlu = 25
-      REAL, parameter    :: small_value = 1.e-36
-      REAL, parameter    :: large_value = 1.e36
+      real(kind_chem), parameter    :: small_value = 1.e-36
+      real(kind_chem), parameter    :: large_value = 1.e36
 
 !--------------------------------------------------
 ! following currently hardwired to USGS
@@ -27,9 +29,9 @@ module drydep_wesely_mod
                                                     4, 5, 4, 5, 6, &
                                                     7, 9, 6, 8, 9, &
                                                     6, 6, 8, 0, 0 /)
-      real, parameter    :: wh2o = 18.0153
-      real, parameter    :: wpan = 121.04793
-      real, PARAMETER ::  KARMAN=0.4
+      real(kind_chem), parameter    :: wh2o = 18.0153
+      real(kind_chem), parameter    :: wpan = 121.04793
+      real(kind_chem), PARAMETER ::  KARMAN=0.4
       INTEGER,  parameter :: luse2usgs(21) = (/14,13,12,11,15,8,9,10,10,7, &
                               17,4,1,5,24,19,16,21,22,23,16 /)
       character(len=4), parameter :: mminlu = 'USGS'
@@ -39,21 +41,21 @@ module drydep_wesely_mod
 !     include modis landuse 
 !--
 
-      REAL    :: kpart(nlu)
-      REAL    :: rac(nlu,dep_seasons), rclo(nlu,dep_seasons), rcls(nlu,dep_seasons)
-      REAL    :: rgso(nlu,dep_seasons), rgss(nlu,dep_seasons)
-      REAL    :: ri(nlu,dep_seasons), rlu(nlu,dep_seasons)
-      REAL    :: ri_pan(5,11)
-      real    :: c0_pan(11) = (/ 0.000, 0.006, 0.002, 0.009, 0.015, &
+      real(kind_chem)    :: kpart(nlu)
+      real(kind_chem)    :: rac(nlu,dep_seasons), rclo(nlu,dep_seasons), rcls(nlu,dep_seasons)
+      real(kind_chem)    :: rgso(nlu,dep_seasons), rgss(nlu,dep_seasons)
+      real(kind_chem)    :: ri(nlu,dep_seasons), rlu(nlu,dep_seasons)
+      real(kind_chem)    :: ri_pan(5,11)
+      real(kind_chem)    :: c0_pan(11) = (/ 0.000, 0.006, 0.002, 0.009, 0.015, &
                                  0.006, 0.000, 0.000, 0.000, 0.002, 0.002 /)
-      real    :: k_pan (11) = (/ 0.000, 0.010, 0.005, 0.004, 0.003, &
+      real(kind_chem)    :: k_pan (11) = (/ 0.000, 0.010, 0.005, 0.004, 0.003, &
                                  0.005, 0.000, 0.000, 0.000, 0.075, 0.002 /)
 
 !--------------------------------------------------
 ! NO MORE THAN 1000 SPECIES FOR DEPOSITION
 !--------------------------------------------------
-      REAL    :: dratio(1000), hstar(1000), hstar4(1000)
-      REAL    :: f0(1000), dhr(1000), scpr23(1000)
+      real(kind_chem)    :: dratio(1000), hstar(1000), hstar4(1000)
+      real(kind_chem)    :: f0(1000), dhr(1000), scpr23(1000)
 
       type wesely_pft
         integer          :: npft
@@ -68,15 +70,17 @@ module drydep_wesely_mod
 !--------------------------------------------------
 ! .. Default Accessibility ..
 !--------------------------------------------------
-    PUBLIC 
 
     logical, allocatable :: is_aerosol(:) ! true if field is aerosol (any phase)
+
+    public :: dep_init
+    public :: wesely_driver
 
     CONTAINS
 
 SUBROUTINE wesely_driver( current_month, julday, &
                           t_phy,moist, p8w, raincv,     &
-                          p_phy, ddvel, ivgtyp,tsk, gsw, vegfra,     &
+                          p_phy, ddvel, ivgtyp, chem_arr, tsk, gsw, vegfra,     &
                           rmol, ust, znt, delz_at_w, snowh        )
 !--------------------------------------------------
 !  Wesely dry dposition driver
@@ -88,39 +92,41 @@ SUBROUTINE wesely_driver( current_month, julday, &
 !--------------------------------------------------
 ! advected moisture variables
 !--------------------------------------------------
-   REAL, DIMENSION( num_moist ), INTENT(IN ) :: &
-                                                      moist  
+   real(kind_chem), DIMENSION( num_moist ), INTENT(IN ) :: &
+                                                      moist
+   real(kind_chem), DIMENSION( num_chem ), INTENT(IN ) :: &
+                                                      chem_arr
 !--------------------------------------------------
 ! deposition velocities
 !--------------------------------------------------
-   REAL, DIMENSION( num_chem ), INTENT(INOUT ) ::      &
-                                                      ddvel                     
+   real(kind_chem), DIMENSION( num_chem ), INTENT(INOUT ) ::      &
+                                                      ddvel              
 !--------------------------------------------------
 ! input from met model
 !--------------------------------------------------
-   REAL, INTENT(IN   ) :: t_phy,p_phy,p8w,delz_at_w,snowh
-   REAL, INTENT(INOUT   ) :: tsk,gsw,vegfra,rmol,ust, &
+   real(kind_chem), INTENT(IN   ) :: t_phy,p_phy,p8w,delz_at_w,snowh
+   real(kind_chem), INTENT(INOUT   ) :: tsk,gsw,vegfra,rmol,ust, &
                              raincv,znt
 !--------------------------------------------------
 ! .. Local Scalars
 !--------------------------------------------------
-      REAL    ::  clwchem, dvfog, dvpart, pa, rad, dep_vap
-      REAL    ::  rhchem, ta, ustar, vegfrac, z1, zntt
+      real(kind_chem)    ::  clwchem, dvfog, dvpart, pa, rad, dep_vap
+      real(kind_chem)    ::  rhchem, ta, ustar, vegfrac, z1, zntt
       INTEGER :: i, iland, iprt, iseason, j, jce, jcs, n, nr, ipr,jpr,nvr
       LOGICAL :: highnh3, rainflag, vegflag, wetflag
 !--------------------------------------------------
 ! .. Local Arrays
 !--------------------------------------------------
-      REAL :: p
-      REAL :: srfres(numgas)
-      REAL :: ddvel0d(numgas)
-      REAL :: aer_res_def
-      REAL :: aer_res_zcen
+      real(kind_chem) :: p
+      real(kind_chem) :: srfres(numgas)
+      real(kind_chem) :: ddvel0d(numgas)
+      real(kind_chem) :: aer_res_def
+      real(kind_chem) :: aer_res_zcen
 
 !-----------------------------------------------------------
 ! necessary for aerosols (module dependent)         
 !-----------------------------------------------------------
-      real :: rcx(numgas)
+      real(kind_chem) :: rcx(numgas)
 
 !-----------------------------------------------------------
 ! .. Intrinsic Functions
@@ -151,7 +157,14 @@ SUBROUTINE wesely_driver( current_month, julday, &
 
       iprt  = 0
 
-      iland = luse2usgs( ivgtyp )
+      !JianHe: 08/2023, input ivgtyp could be 0, an issue with luse2usgs(0)
+      ! we set ivgtyp to 17 (iswater) when it's 0
+      ! Also, we need make sure luse2usgs is consistent with lsm 
+      if (ivgtyp > 0) then
+        iland = luse2usgs( ivgtyp )
+      else
+        iland = luse2usgs( 17 )
+      end if
 !--
 
       if( chem_opt == MOZART_KPP .or. &
@@ -200,11 +213,11 @@ SUBROUTINE wesely_driver( current_month, julday, &
       rhchem = MAX(5.,RHCHEM)
       if (rhchem >= 95.) wetflag = .true.
 
-!            if( p_nh3 > 1 .and. p_so2 > 1 ) then
-!               if( chem(i,kts,j,p_nh3) > 2.*chem(i,kts,j,p_so2) ) then
-!                  highnh3 = .true.
-!               endif
-!            endif
+            if( p_nh3 >= 1 .and. p_so2 >= 1 ) then
+               if( chem_arr(p_nh3) > 2.*chem_arr(p_so2) ) then
+                  highnh3 = .true.
+               endif
+            endif
 
 !-----------------------------------------------------------
 !--- deposition
@@ -227,6 +240,7 @@ SUBROUTINE wesely_driver( current_month, julday, &
       ddvel0d(1:numgas) = 0.
       aer_res_def  = 0.
       aer_res_zcen = 0.
+   
       CALL landusevg( ddvel0d, ustar, rmol, zntt, z1, dvpart, iland,        &
                       numgas, srfres, aer_res_def, aer_res_zcen, p_sulf )
 
@@ -809,30 +823,30 @@ END SUBROUTINE wesely_driver
 !----------------------------------------------------------------------
         INTEGER, intent(in) :: iland, iseason, numgas
         INTEGER, intent(in) :: iprt
-        REAL, intent(in)    :: rad, rh
-        REAL, intent(in)    :: t                            ! surface temp (K)
-        REAL, intent(in)    :: p_srf                        ! surface pressure (Pa)
-        REAL, intent(in)    :: spec_hum                     ! surface specific humidity (kg/kg)
-        real, intent(out)   :: rcx(numgas)
+        real(kind_chem), intent(in)    :: rad, rh
+        real(kind_chem), intent(in)    :: t                            ! surface temp (K)
+        real(kind_chem), intent(in)    :: p_srf                        ! surface pressure (Pa)
+        real(kind_chem), intent(in)    :: spec_hum                     ! surface specific humidity (kg/kg)
+        real(kind_chem), intent(out)   :: rcx(numgas)
         LOGICAL, intent(in) :: highnh3, rainflag, wetflag
 
 !----------------------------------------------------------------------
 ! .. Local Scalars ..
 !----------------------------------------------------------------------
-        REAL, parameter :: t0    = 298.
-        REAL, parameter :: tmelt = 273.16
+        real(kind_chem), parameter :: t0    = 298.
+        real(kind_chem), parameter :: tmelt = 273.16
         INTEGER :: lt, n
         INTEGER :: chem_opt
-        REAL    :: rclx, rdc, resice, rgsx, rluo1, rluo2
-        REAL    :: rlux, rmx, rs, rsmx, rdtheta, z, wrk
-        REAL    :: qs, es, ws, dewm, dv_pan, drat
-        REAL    :: crs, tc
-        REAL    :: rs_pan, tc_pan
+        real(kind_chem)    :: rclx, rdc, resice, rgsx, rluo1, rluo2
+        real(kind_chem)    :: rlux, rmx, rs, rsmx, rdtheta, z, wrk
+        real(kind_chem)    :: qs, es, ws, dewm, dv_pan, drat
+        real(kind_chem)    :: crs, tc
+        real(kind_chem)    :: rs_pan, tc_pan
         LOGICAL :: has_dew
 !----------------------------------------------------------------------
 ! .. Local Arrays ..
 !----------------------------------------------------------------------
-        REAL :: hstary(numgas)
+        real(kind_chem) :: hstary(numgas)
 
 !----------------------------------------------------------------------
 ! .. Intrinsic Functions ..
@@ -988,7 +1002,7 @@ is_mozart :  if( chem_opt == MOZART_KPP .or. &
 !       R_STOM
 !--------------------------------------------------
 is_so2 : &
-     if( p_so2 > 1 ) then
+     if( p_so2 >= 1 ) then
         rsmx = rs*dratio(p_so2)
 !--------------------------------------------------
 !       R_EXT
@@ -1060,7 +1074,8 @@ is_so2 : &
 !     NH3 according to Erisman et al. 1994
 !       R_STOM
 !--------------------------------------------------
-is_nh3: if( p_nh3 > 1 ) then
+!JianHe: testing this piece
+is_nh3: if( p_nh3 >= 1 ) then
         rsmx = rs*dratio(p_nh3)
 !--------------------------------------------------
 !       GRASSLAND (PASTURE DURING GRAZING)
@@ -1212,8 +1227,8 @@ is_nh3: if( p_nh3 > 1 ) then
 ! .. Scalar Arguments ..
 !--------------------------------------------------
         INTEGER, intent(in) :: iland
-        REAL, intent(in)    :: clw, rh, rmol, ustar
-        REAL, intent(out)   :: dvfog, dvpart
+        real(kind_chem), intent(in)    :: clw, rh, rmol, ustar
+        real(kind_chem), intent(out)   :: dvfog, dvpart
 
 !--------------------------------------------------
 ! .. Intrinsic Functions ..
@@ -1296,26 +1311,26 @@ is_nh3: if( p_nh3 > 1 ) then
 ! .. Scalar Arguments ..
 !--------------------------------------------------
         INTEGER, intent(in) :: iland, numgas, p_sulf
-        REAL, intent(in)    :: dvparx, ustar, z0, zz
-        REAL, intent(inout) :: rmol
-        REAL, intent(inout) :: aer_res_def
-        REAL, intent(inout) :: aer_res_zcen
+        real(kind_chem), intent(in)    :: dvparx, ustar, z0, zz
+        real(kind_chem), intent(inout) :: rmol
+        real(kind_chem), intent(inout) :: aer_res_def
+        real(kind_chem), intent(inout) :: aer_res_zcen
 !--------------------------------------------------
 ! .. Array Arguments ..
 !--------------------------------------------------
-        REAL, intent(in)  :: srfres(numgas)
-        REAL, intent(out) :: vgs(numgas)
+        real(kind_chem), intent(in)  :: srfres(numgas)
+        real(kind_chem), intent(out) :: vgs(numgas)
 
 !--------------------------------------------------
 ! .. Local Scalars ..
 !--------------------------------------------------
         INTEGER :: jspec
-        REAL    :: vgp, vgpart, zr
-        REAL    :: rmol_tmp
+        real(kind_chem)    :: vgp, vgpart, zr
+        real(kind_chem)    :: rmol_tmp
 !--------------------------------------------------
 ! .. Local Arrays ..
 !--------------------------------------------------
-        REAL :: vgspec(numgas)
+        real(kind_chem) :: vgspec(numgas)
 
 !--------------------------------------------------
 !   Calculate aerodynamic resistance for reference
@@ -1354,7 +1369,7 @@ is_nh3: if( p_nh3 > 1 ) then
           vgs(jspec) = 1.0/(1.0/vgspec(jspec) + srfres(jspec))
         END DO
         vgs(p_sulf) = vgp
-
+ 
         CALL cellvg( vgs, ustar, zz, zr, rmol, numgas )
 
       END SUBROUTINE landusevg
@@ -1382,16 +1397,16 @@ is_nh3: if( p_nh3 > 1 ) then
 ! .. Scalar Arguments ..
 !--------------------------------------------------
         INTEGER, intent(in) :: nspec
-        REAL, intent(in)    :: dz, rmol, ustar, zr
+        real(kind_chem), intent(in)    :: dz, rmol, ustar, zr
 !--------------------------------------------------
 ! .. Array Arguments ..
 !--------------------------------------------------
-        REAL, intent(out) :: vgtemp(nspec)
+        real(kind_chem), intent(out) :: vgtemp(nspec)
 !--------------------------------------------------
 ! .. Local Scalars ..
 !--------------------------------------------------
         INTEGER :: nss
-        REAL    :: a, fac, pdz, pzr, vk
+        real(kind_chem)    :: a, fac, pdz, pzr, vk
 !--------------------------------------------------
 ! .. Intrinsic Functions ..
 !--------------------------------------------------
@@ -1469,18 +1484,18 @@ is_nh3: if( p_nh3 > 1 ) then
 ! .. Scalar Arguments ..
 !--------------------------------------------------
         INTEGER, intent(in) :: numgas
-        REAL, intent(in)    :: ustar, z0, zr
-        REAL, intent(out)   :: vgpart, aer_res
-        REAL, intent(inout) :: rmol
+        real(kind_chem), intent(in)    :: ustar, z0, zr
+        real(kind_chem), intent(out)   :: vgpart, aer_res
+        real(kind_chem), intent(inout) :: rmol
 !--------------------------------------------------
 ! .. Array Arguments ..
 !--------------------------------------------------
-        REAL, intent(out) :: depv(numgas)
+        real(kind_chem), intent(out) :: depv(numgas)
 !--------------------------------------------------
 ! .. Local Scalars ..
 !--------------------------------------------------
         INTEGER :: l
-        REAL    :: ao, ar, polint, vk
+        real(kind_chem)    :: ao, ar, polint, vk
 !--------------------------------------------------
 ! .. Intrinsic Functions ..
 !--------------------------------------------------
@@ -1553,21 +1568,18 @@ is_nh3: if( p_nh3 > 1 ) then
         integer :: cpos, slen
         integer :: lon_e, lat_e
         integer :: iend, jend
-        integer :: chem_opt
         integer, allocatable :: input_wes_seasonal(:,:,:,:)
-        REAL    :: sc
+        real(kind_chem)    :: sc
         character(len=128) :: err_msg
         character(len=128) :: filename
         character(len=3)   :: id_num
 !--------------------------------------------------
 ! .. Local Arrays
 !--------------------------------------------------
-        REAL :: dat1(nlu,dep_seasons), dat2(nlu,dep_seasons),         &
+        real(kind_chem) :: dat1(nlu,dep_seasons), dat2(nlu,dep_seasons),         &
                 dat3(nlu,dep_seasons), dat4(nlu,dep_seasons),         &
                 dat5(nlu,dep_seasons), dat6(nlu,dep_seasons),         &
                 dat7(nlu,dep_seasons), dvj(numgas)
-
-      chem_opt = chem_opt
 
       if( chem_opt == MOZART_KPP .or. &
           chem_opt == MOZCART_KPP .or. &

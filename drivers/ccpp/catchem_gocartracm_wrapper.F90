@@ -446,7 +446,7 @@ contains
        gq0(i,k,ntpp10 )=ppm2ugkg(p_p10   ) * max(epsilc,chem(i,k,1,p_p10))
        !JianHe: 08/2023: can we use some kind of index loop for this?
        if (chem_opt == CHEM_OPT_GOCART_RACM) then
-         gq0(i,k,ntno2  )=ppm2ugkg(p_no2   ) * max(epsilc,chem(i,k,1,p_no2))
+         gq0(i,k,ntno2  )=ppm2ugkg(p_no2   ) * max(epsilc,chem(i,k,1,p_no2))   !ppm
          gq0(i,k,ntno  )=ppm2ugkg(p_no   ) * max(epsilc,chem(i,k,1,p_no))
          gq0(i,k,nto3  )=ppm2ugkg(p_o3   ) * max(epsilc,chem(i,k,1,p_o3))
          gq0(i,k,nthno3  )=ppm2ugkg(p_hno3   ) * max(epsilc,chem(i,k,1,p_hno3))
@@ -852,11 +852,14 @@ contains
                 endif !chem_opt >= 300 .and. chem_opt <  500
 
                 !JianHe: we may add bkg o3 from nto3???
+                ! we need understand the units here
 !                if ((chem_opt == CHEM_OPT_GOCART_RACM) .or. (chem_opt == CHEM_OPT_RACM_SOA_VBS)) then  !added o3 background !lzhang
 !                  kk=min(k,kte)
 !                  kkp = kk - kts + 1
 !                  ! -- add initial constant into O3,CH4 and CO ect.
-!                  chem(i,k,j,p_o3)=epsilc
+                  if (ntoz > 0) then
+                    chem(i,k,j,p_o3)=(airmw/48.)*gq0(i,k,ntoz)*1e6  ! kg/kg to ppm 
+                    chem(i,k,j,p_o3)=max(epsilc,chem(i,k,j,p_o3))
 !                  ! -- this section needs to be revisited before enabling the
 !                  ! corresponding chem_opt options
 !                  ! maxth=min(400.,th_pvsrf(i,j))
@@ -866,17 +869,17 @@ contains
 !                  ! else
 !                  !   chem(i,k,j,p_o3)=0.03 !ppm
 !                  ! endif
-!                  chem(i,k,j,p_ch4)=1.85 !ppm
-!                  chem(i,k,j,p_co)=0.06 !ppm
-!                  chem(i,k,j,p_co2)=380.
-!                  chem(i,k,j,p_ete)=epsilc
-!                  chem(i,k,j,p_udd)=chem(i,k,j,p_ete)
-!                  chem(i,k,j,p_hket)=chem(i,k,j,p_ete)
-!                  chem(i,k,j,p_api)=chem(i,k,j,p_ete)
-!                  chem(i,k,j,p_lim)=chem(i,k,j,p_ete)
-!                  chem(i,k,j,p_dien)=chem(i,k,j,p_ete)
-!                  chem(i,k,j,p_macr)=chem(i,k,j,p_ete)
-!                endif !( (chem_opt == 301.or.chem_opt==108))
+                  chem(i,k,j,p_ch4)=1.85 !ppm
+                  chem(i,k,j,p_co)=0.06 !ppm
+                  chem(i,k,j,p_co2)=380.
+                  chem(i,k,j,p_ete)=epsilc
+                  chem(i,k,j,p_udd)=chem(i,k,j,p_ete)
+                  chem(i,k,j,p_hket)=chem(i,k,j,p_ete)
+                  chem(i,k,j,p_api)=chem(i,k,j,p_ete)
+                  chem(i,k,j,p_lim)=chem(i,k,j,p_ete)
+                  chem(i,k,j,p_dien)=chem(i,k,j,p_ete)
+                  chem(i,k,j,p_macr)=chem(i,k,j,p_ete)
+                endif !( (chem_opt == 301.or.chem_opt==108))
               enddo
             enddo
           enddo

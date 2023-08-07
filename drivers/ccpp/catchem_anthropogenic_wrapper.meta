@@ -136,7 +136,7 @@
   standard_name = anthropogenic_background_input_cplchp
   long_name = anthropogenic background input cplchp
   units = various
-  dimensions = (horizontal_loop_extent,10)
+  dimensions = (horizontal_loop_extent,28)
   type = real
   kind = kind_phys
   intent = in

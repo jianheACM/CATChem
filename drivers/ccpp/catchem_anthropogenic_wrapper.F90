@@ -3,6 +3,7 @@
 !! Haiqin.Li@noaa.gov 07/2020
 !! Revision History:
 !! 05/2023, Restructure for CATChem, Jian.He@noaa.gov
+!! 08/2023, Hardwired for RACM emissions, Jian.He@noaa.gov
 
  module catchem_anthropogenic_wrapper
 
@@ -68,8 +69,8 @@ contains
     integer, parameter :: ims=1,jms=1,jme=1, kms=1
     integer, parameter :: its=1,jts=1,jte=1, kts=1
 
-    !JH, we need more tracers in the emissions input
-    real(kind_phys), dimension(im, 10), intent(in) :: emi_in
+    !JianHe, we need more tracers in the emissions input
+    real(kind_phys), dimension(im, 28), intent(in) :: emi_in
     real(kind_phys), dimension(im), intent(in) :: garea, rlat,rlon
     real(kind_phys), dimension(im,kme), intent(in) :: ph3d, pr3d
     real(kind_phys), dimension(im,kte), intent(in) :: phl3d, prl3d, tk3d, spechum
@@ -247,7 +248,7 @@ contains
                            ntxyl,ntolt,ntoli,nttol,ntcsl,nthcho,ntald,  &
                            ntket,ntora2,ntnh3
     real(kind=kind_phys), dimension(ims:ime), intent(in) :: garea, rlat, rlon
-    real(kind=kind_phys), dimension(ims:ime,    10),   intent(in) :: emi_in
+    real(kind=kind_phys), dimension(ims:ime,    28),   intent(in) :: emi_in   !JianHe
     real(kind=kind_phys), dimension(ims:ime, kms:kme), intent(in) :: pr3d,ph3d
     real(kind=kind_phys), dimension(ims:ime, kts:kte), intent(in) :: phl3d,tk3d,prl3d,spechum
     real(kind=kind_phys), dimension(ims:ime, kts:kte,ntrac), intent(in) :: gq0
@@ -455,26 +456,27 @@ contains
       emiss_ab(i,j,p_e_pm_25)=emi_in(i,4)*random_factor(i,j)
       emiss_ab(i,j,p_e_so2)  =emi_in(i,5)*random_factor(i,j)
       emiss_ab(i,j,p_e_pm_10)=emi_in(i,6)*random_factor(i,j)
+      !JianHe: need to be consistent with those in io
       if (chem_opt == CHEM_OPT_GOCART_RACM) then
           !JH: need update later, in emi_in, more tracers
-          emiss_ab(i,j,p_e_iso) =emiss_ab(i,j,p_e_so2)  
-          emiss_ab(i,j,p_e_no) =emiss_ab(i,j,p_e_so2) 
-          emiss_ab(i,j,p_e_no2) =emiss_ab(i,j,p_e_so2)
-          emiss_ab(i,j,p_e_co) =emiss_ab(i,j,p_e_so2)
-          emiss_ab(i,j,p_e_eth) =emiss_ab(i,j,p_e_so2)
-          emiss_ab(i,j,p_e_hc3) =emiss_ab(i,j,p_e_so2)
-          emiss_ab(i,j,p_e_hc5) =emiss_ab(i,j,p_e_so2)
-          emiss_ab(i,j,p_e_hc8) =emiss_ab(i,j,p_e_so2)
-          emiss_ab(i,j,p_e_xyl) =emiss_ab(i,j,p_e_so2)
-          emiss_ab(i,j,p_e_olt) =emiss_ab(i,j,p_e_so2)
-          emiss_ab(i,j,p_e_oli) =emiss_ab(i,j,p_e_so2)
-          emiss_ab(i,j,p_e_tol) =emiss_ab(i,j,p_e_so2)
-          emiss_ab(i,j,p_e_csl) =emiss_ab(i,j,p_e_so2)
-          emiss_ab(i,j,p_e_hcho) =emiss_ab(i,j,p_e_so2)
-          emiss_ab(i,j,p_e_ald) =emiss_ab(i,j,p_e_so2)
-          emiss_ab(i,j,p_e_ket) =emiss_ab(i,j,p_e_so2)
-          emiss_ab(i,j,p_e_ora2) =emiss_ab(i,j,p_e_so2)
-          emiss_ab(i,j,p_e_nh3) =emiss_ab(i,j,p_e_so2)
+          emiss_ab(i,j,p_e_iso) =emi_in(i,11)*random_factor(i,j)
+          emiss_ab(i,j,p_e_no) =emi_in(i,12)*random_factor(i,j)
+          emiss_ab(i,j,p_e_no2) =emi_in(i,13)*random_factor(i,j)
+          emiss_ab(i,j,p_e_co) =emi_in(i,14)*random_factor(i,j)
+          emiss_ab(i,j,p_e_eth) =emi_in(i,15)*random_factor(i,j)
+          emiss_ab(i,j,p_e_hc3) =emi_in(i,16)*random_factor(i,j)
+          emiss_ab(i,j,p_e_hc5) =emi_in(i,17)*random_factor(i,j)
+          emiss_ab(i,j,p_e_hc8) =emi_in(i,18)*random_factor(i,j)
+          emiss_ab(i,j,p_e_xyl) =emi_in(i,19)*random_factor(i,j)
+          emiss_ab(i,j,p_e_olt) =emi_in(i,20)*random_factor(i,j)
+          emiss_ab(i,j,p_e_oli) =emi_in(i,21)*random_factor(i,j)
+          emiss_ab(i,j,p_e_tol) =emi_in(i,22)*random_factor(i,j)
+          emiss_ab(i,j,p_e_csl) =emi_in(i,23)*random_factor(i,j)
+          emiss_ab(i,j,p_e_hcho) =emi_in(i,24)*random_factor(i,j)
+          emiss_ab(i,j,p_e_ald) =emi_in(i,25)*random_factor(i,j)
+          emiss_ab(i,j,p_e_ket) =emi_in(i,26)*random_factor(i,j)
+          emiss_ab(i,j,p_e_ora2) =emi_in(i,27)*random_factor(i,j)
+          emiss_ab(i,j,p_e_nh3) =emi_in(i,28)*random_factor(i,j)
       end if
      enddo
     enddo
@@ -492,7 +494,7 @@ contains
           emis_ant(i,k,j,p_e_pm_25)=emiss_ab(i,j,p_e_pm_25)
           emis_ant(i,k,j,p_e_pm_10)=emiss_ab(i,j,p_e_pm_10)
           if (chem_opt == CHEM_OPT_GOCART_RACM) then
-            emis_ant(i,k,j,p_e_iso) =emiss_ab(i,j,p_e_iso)  !JH: for now, need update later
+            emis_ant(i,k,j,p_e_iso) =emiss_ab(i,j,p_e_iso) 
             emis_ant(i,k,j,p_e_no) =emiss_ab(i,j,p_e_no)
             emis_ant(i,k,j,p_e_no2) =emiss_ab(i,j,p_e_no2)
             emis_ant(i,k,j,p_e_co) =emiss_ab(i,j,p_e_co)
@@ -570,12 +572,13 @@ contains
         enddo
       end if
 
+     !JianHe: convert to ug/kg
       if (chem_opt == CHEM_OPT_GOCART_RACM) then
         do j=jts,jte
           do i=its,ite
             factor=dtstep*rri(i,k,j)/dz8w(i,k,j)
             factor2=4.828e-4*dtstep*rri(i,k,j)/(60.*dz8w(i,k,j))
-            chem(i,k,j,p_bc1)=chem(i,k,j,p_bc1)+emis_ant(i,k,j,p_e_bc)*factor
+            chem(i,k,j,p_bc1)=chem(i,k,j,p_bc1)+emis_ant(i,k,j,p_e_bc)*factor    !ug/kg
             chem(i,k,j,p_oc1)=chem(i,k,j,p_oc1)+emis_ant(i,k,j,p_e_oc)*factor
             chem(i,k,j,p_p25)=chem(i,k,j,p_p25)+emis_ant(i,k,j,p_e_pm_25)*factor
             chem(i,k,j,p_p10)=chem(i,k,j,p_p10)+emis_ant(i,k,j,p_e_pm_10)*factor
