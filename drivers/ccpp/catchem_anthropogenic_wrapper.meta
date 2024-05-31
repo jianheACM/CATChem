@@ -1,7 +1,7 @@
 [ccpp-table-properties]
   name = catchem_anthropogenic_wrapper
   type = scheme
-  dependencies = ../../parameters/catchem_config.F90,../../parameters/catchem_constants.F90,../../parameters/seas_data_mod.F90
+  dependencies = ../../parameters/catchem_config.F90,../../parameters/catchem_constants.F90,../../parameters/seas_data_mod.F90,../../src/gfdlam4chem/mo_vinterp.F90
 
 ########################################################################
 [ccpp-arg-table]
@@ -17,6 +17,20 @@
 [ccpp-arg-table]
   name = catchem_anthropogenic_wrapper_run
   type = scheme
+[me]
+  standard_name = mpi_rank
+  long_name = MPI rank of current process
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[master]
+  standard_name = mpi_root
+  long_name = MPI rank of master process
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
 [im]
   standard_name = horizontal_loop_extent
   long_name = horizontal loop extent
@@ -136,14 +150,58 @@
   standard_name = anthropogenic_background_input_cplchp
   long_name = anthropogenic background input cplchp
   units = various
-  dimensions = (horizontal_loop_extent,10)
+  dimensions = (horizontal_loop_extent,30)
   type = real
   kind = kind_phys
+  intent = in
+[chemic_in]
+  standard_name = chemical_initial_conditions_3d_input
+  long_name = chemical initial conditions 3d input
+  units = various
+  dimensions = (horizontal_loop_extent,49,number_of_tracers_in_chemical_ic_input)
+  type = real
+  kind = kind_phys
+  active = (flag_for_am4_chemistry)
+  intent = in
+[chem_in_opt]
+  standard_name = catchem_in_opt
+  long_name = catchem coldstart or restart option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntchs]
+  standard_name = index_of_first_chemical_tracer_in_tracer_concentration_array
+  long_name = tracer index for first chemical tracer
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntche]
+  standard_name = index_for_last_chemical_tracer
+  long_name = tracer index for last chemical tracer
+  units = index
+  dimensions = ()
+  type = integer
   intent = in
 [ntrac]
   standard_name = number_of_tracers
   long_name = number of tracers
   units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[ntextinct]
+  standard_name = index_for_extinction
+  long_name = index for extinction
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntisop]
+  standard_name = index_for_isop
+  long_name = index for isop
+  units = index
   dimensions = ()
   type = integer
   intent = in
@@ -157,6 +215,125 @@
 [ntsulf]
   standard_name = index_for_sulfate
   long_name = index for sulfate
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntno]
+  standard_name = index_for_no
+  long_name = index for no
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntno2]
+  standard_name = index_for_no2
+  long_name = index for no2
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntco]
+  standard_name = index_for_co
+  long_name = index for co
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntnh3]
+  standard_name = index_for_nh3
+  long_name = index for nh3
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntch2o]
+  standard_name = index_for_ch2o
+  long_name = index for ch2o
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntch4]
+  standard_name = index_for_ch4
+  long_name = index for ch4
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntc2h4]
+  standard_name = index_for_c2h4
+  long_name = index for c2h4
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntc2h6]
+  standard_name = index_for_c2h6
+  long_name = index for c2h6
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntc3h6]
+  standard_name = index_for_c3h6
+  long_name = index for c3h6
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntc3h8]
+  standard_name = index_for_c3h8
+  long_name = index for c3h8
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntc4h10]
+  standard_name = index_for_c4h10
+  long_name = index for c4h10
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntc10h16]
+  standard_name = index_for_c10h16
+  long_name = index for c10h16
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntch3oh]
+  standard_name = index_for_ch3oh
+  long_name = index for ch3oh
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntc2h5oh]
+  standard_name = index_for_c2h5oh
+  long_name = index for c2h5oh
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntch3coch3]
+  standard_name = index_for_ch3coch3
+  long_name = index for ch3coch3
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[nth2]
+  standard_name = index_for_h2
+  long_name = index for h2
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[nte90]
+  standard_name = index_for_e90
+  long_name = index for e90
   units = index
   dimensions = ()
   type = integer
@@ -189,6 +366,20 @@
   dimensions = ()
   type = integer
   intent = in
+[nvar_emi]
+  standard_name = number_of_tracers_in_anthro_emis_input
+  long_name = number of tracers in anthropogenic emission input
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[nvar_chemic]
+  standard_name = number_of_tracers_in_chemical_ic_input
+  long_name = number of tracers in chemical initial condition input
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
 [gq0]
   standard_name = tracer_concentration_of_new_state
   long_name = tracer concentration updated by physics
@@ -213,12 +404,44 @@
   type = real
   kind = kind_phys
   intent = inout
+[bioem]
+  standard_name = instantaneous_biogenic_emissions
+  long_name = instantaneous biogenic emissions for dms, isop, c10h16, and lighting nox
+  units = mol km-2 hr-1
+  dimensions = (horizontal_loop_extent,4)
+  type = real
+  kind = kind_phys
+  active = (flag_for_am4_chemistry)
+  intent = inout
+[antem]
+  standard_name = instantaneous_anthropogenic_emissions
+  long_name = instantaneous anthropogenic emissions for co, ch4, nh3, and so2
+  units = mol km-2 hr-1
+  dimensions = (horizontal_loop_extent,4)
+  type = real
+  kind = kind_phys
+  active = (flag_for_am4_chemistry)
+  intent = inout
 [chem_opt_in]
   standard_name = catchem_option
   long_name = catchem option
   units = index
   dimensions = ()
   type = integer
+  intent = in
+[gaschem_opt]
+  standard_name = catchem_gaschem_option
+  long_name = catchem gas-phase chemical mechanism option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[do_am4chem]
+  standard_name = flag_for_am4_chemistry
+  long_name = flag for am4 chemistry
+  units = flag
+  dimensions = ()
+  type = logical
   intent = in
 [kemit_in]
   standard_name = k_emit_dry_dep

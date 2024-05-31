@@ -10,6 +10,7 @@
    use physcons,        only : g => con_g, pi => con_pi
    use machine ,        only : kind_phys
    use catchem_config
+   use catchem_constants, only : AVOGNO, epsilc
    use plume_data_mod
    use plume_rise_mod
 
@@ -45,8 +46,11 @@ contains
 !> @{
     subroutine catchem_plume_wrapper_run(im, kte, kme, ktau, dt, julian,         &
                    pr3d, ph3d,phl3d, prl3d, tk3d, us3d, vs3d, spechum,           &
-                   w,vegtype,fire_GBBEPx,fire_MODIS,                             &
+                   w,vegtype,fire_GBBEPx,nvar_gbbepx,nvar_gbbepxp2,fire_MODIS,   &
                    ntrac,ntso2,ntpp25,ntbc1,ntoc1,ntpp10,igb,                    &
+                   ntch3coch3,ntc2h4,ntc2h5oh,ntc2h6,ntc3h6,ntc3h8,    &
+                   ntc4h10,ntch2o,ntch3oh,ntch4,ntco,nth2,ntisop, &
+                   ntnh3,ntno,ntc10h16,gaschem_opt,bmbem, &
                    gq0,qgrs,ebu,abem,biomass_burn_opt_in,plumerise_flag_in,      &
                    plumerisefire_frq_in,pert_scale_plume,ca_emis_plume,          &
                    do_ca,ca_sgs,ca_sgs_emis,vegtype_cpl,ca_sgs_gbbepx_frp,       &
@@ -58,6 +62,12 @@ contains
     integer,        intent(in) :: im,kte,kme,ktau,igb
     integer,        intent(in) :: ntrac,ntso2,ntpp25,ntbc1,ntoc1,ntpp10
     real(kind_phys),intent(in) :: dt, emis_amp_plume, pert_scale_plume,julian
+    integer,        intent(in) :: nvar_gbbepx, nvar_gbbepxp2
+    integer,        intent(in) :: ntisop,ntno,ntco,ntc2h4,ntc2h6,ntc3h6,ntc3h8,  &
+                                  ntnh3,ntch2o,ntch4,ntc4h10,ntc10h16,ntch3oh,ntc2h5oh,&
+                                  ntch3coch3,nth2,gaschem_opt
+
+    real(kind_phys), optional, intent(inout) :: bmbem(:,:)
 
     integer, parameter :: ids=1,jds=1,jde=1, kds=1
     integer, parameter :: ims=1,jms=1,jme=1, kms=1
@@ -67,7 +77,7 @@ contains
     real(kind_phys), intent(in) :: sppt_wts(:,:), ca_emis_plume(:)
     integer, dimension(im), intent(in) :: vegtype    
     integer, dimension(im), intent(out) :: vegtype_cpl
-    real(kind_phys), dimension(im,    5, igb), intent(in) :: fire_GBBEPx
+    real(kind_phys), dimension(im, nvar_gbbepx, igb), intent(in) :: fire_GBBEPx
     real(kind_phys), dimension(im,   13), intent(in) :: fire_MODIS
     real(kind_phys), intent(out) :: ca_sgs_gbbepx_frp(:)
     real(kind_phys), dimension(im,kme), intent(in) :: ph3d, pr3d
@@ -75,7 +85,7 @@ contains
                 us3d, vs3d, spechum, w
     real(kind_phys), dimension(im,kte,ntrac), intent(inout) :: gq0, qgrs
     real(kind_phys), dimension(im,12        ), intent(inout) :: abem
-    real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:num_ebu), intent(inout) :: ebu
+    real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:nvar_gbbepxp2), intent(inout) :: ebu
     integer,        intent(in) :: biomass_burn_opt_in, plumerise_flag_in, plumerisefire_frq_in
     character(len=*), intent(out) :: errmsg
     integer,          intent(out) :: errflg
@@ -108,6 +118,7 @@ contains
 !>-- local variables
     real(kind_phys) :: curr_secs
     real(kind_phys) :: factor, factor2, factor3, random_factor(ims:im)
+    real(kind_phys) :: factor4
     integer :: nbegin
     integer :: i, j, jp, k, kp, n
   
@@ -153,6 +164,9 @@ contains
         rri,t_phy,u_phy,v_phy,p_phy,rho_phy,dz8w,p8w,                   &
         z_at_w,vvel,                                                    &
         ntso2,ntpp25,ntbc1,ntoc1,ntpp10,igb,ntrac,gq0,                  &
+        ntch3coch3,ntc2h4,ntc2h5oh,ntc2h6,ntc3h6,ntc3h8,    &
+        ntc4h10,ntch2o,ntch3oh,ntch4,ntco,nth2,ntisop, &
+        ntnh3,ntno,ntc10h16,gaschem_opt,nvar_gbbepx, &
         num_chem, num_moist,num_ebu_in,ca_sgs_gbbepx_frp_with_j,        &
         plumerise_flag,num_plume_data,ppm2ugkg,                         &
         mean_fct_agtf,mean_fct_agef,mean_fct_agsv,mean_fct_aggr,        &
@@ -175,7 +189,7 @@ contains
     ! compute wild-fire plumes
     if (call_plume) then
       call plumerise_driver (ktau,dtstep,num_chem,num_ebu,num_ebu_in,   &
-        ebu,ebu_in,                                                     &
+        ebu,ebu_in,gaschem_opt,                                         &
         mean_fct_agtf,mean_fct_agef,mean_fct_agsv,mean_fct_aggr,        &
         firesize_agtf,firesize_agef,firesize_agsv,firesize_aggr,        &
         'GOCART','BIOMASSB', t_phy,moist(:,:,:,p_qv),                   &
@@ -194,12 +208,16 @@ contains
       endif
 
       factor3 = 0._kind_phys
+      factor4 = 0._kind_phys
+
       select case (plumerise_flag)
         case (FIRE_OPT_MODIS)
           factor3 = 4.828e-04_kind_phys/60.
           kp = kte    ! full column
         case (FIRE_OPT_GBBEPx)
           factor3 = 1.e-03_kind_phys * mwdry / mw_so2_aer
+          !JianHe: pay attension to the input units!!!
+          factor4 = (1.e-03_kind_phys * mwdry) / (AVOGNO*1.e-4) ! molec/cm2/s to mol/m2/s
           if (plumerisefire_frq > 0) then
             kp = kte  ! full column
           else
@@ -226,6 +244,40 @@ contains
           end do
         end do
 
+#ifdef AM4_CHEM
+        bmbem = 0._kind_phys
+        k = kts
+        do j = jts, jp
+          do i = its, ite
+            ! -- factor for pm emissions, factor2 for burn emissions
+            factor  = dt*rri(i,k,j)/dz8w(i,k,j)*random_factor(i)
+            factor2 = factor * factor3
+            chem(i,k,j,p_no) =chem(i,k,j,p_no) + factor*ebu_in(i,j,p_ebu_in_no)*factor4*1.e6
+            chem(i,k,j,p_nh3) =chem(i,k,j,p_nh3) + factor*ebu_in(i,j,p_ebu_in_nh3)*factor4*1.e6
+            chem(i,k,j,p_co) =chem(i,k,j,p_co) + factor*ebu_in(i,j,p_ebu_in_co)*factor4*1.e6
+            chem(i,k,j,p_ch4) =chem(i,k,j,p_ch4) + factor*ebu_in(i,j,p_ebu_in_ch4)*factor4*1.e6
+            chem(i,k,j,p_ch2o) =chem(i,k,j,p_ch2o) + factor*ebu_in(i,j,p_ebu_in_ch2o)*factor4*1.e6
+            chem(i,k,j,p_c2h4) =chem(i,k,j,p_c2h4) + factor*ebu_in(i,j,p_ebu_in_c2h4)*factor4*1.e6
+            chem(i,k,j,p_c2h6) =chem(i,k,j,p_c2h6) + factor*ebu_in(i,j,p_ebu_in_c2h6)*factor4*1.e6
+            chem(i,k,j,p_c3h6) =chem(i,k,j,p_c3h6) + factor*ebu_in(i,j,p_ebu_in_c3h6)*factor4*1.e6
+            chem(i,k,j,p_c3h8) =chem(i,k,j,p_c3h8) + factor*ebu_in(i,j,p_ebu_in_c3h8)*factor4*1.e6
+            chem(i,k,j,p_c4h10) =chem(i,k,j,p_c4h10) + factor*ebu_in(i,j,p_ebu_in_c4h10)*factor4*1.e6
+            chem(i,k,j,p_isop) =chem(i,k,j,p_isop) + factor*ebu_in(i,j,p_ebu_in_isop)*factor4*1.e6
+            chem(i,k,j,p_c10h16) =chem(i,k,j,p_c10h16)+ factor*ebu_in(i,j,p_ebu_in_c10h16 )*factor4*1.e6
+            chem(i,k,j,p_ch3oh) =chem(i,k,j,p_ch3oh) + factor*ebu_in(i,j,p_ebu_in_ch3oh)*factor4*1.e6
+            chem(i,k,j,p_c2h5oh) =chem(i,k,j,p_c2h5oh)+ factor*ebu_in(i,j,p_ebu_in_c2h5oh )*factor4*1.e6
+            chem(i,k,j,p_ch3coch3) =chem(i,k,j,p_ch3coch3)+ factor*ebu_in(i,j,p_ebu_in_ch3coch3 )*factor4*1.e6
+            chem(i,k,j,p_h2) =chem(i,k,j,p_h2) + factor*ebu_in(i,j,p_ebu_in_h2)*factor4*1.e6
+          end do
+        end do
+
+        ! convert molec/cm2/s to mol/km2/hr
+        bmbem(:,1) = ebu_in(:,1,p_ebu_in_co)/AVOGNO*1.e10*3600.
+        bmbem(:,2) = ebu_in(:,1,p_ebu_in_ch4)/AVOGNO*1.e10*3600.
+        bmbem(:,3) = ebu_in(:,1,p_ebu_in_nh3)/AVOGNO*1.e10*3600.
+        bmbem(:,4) = ebu_in(:,1,p_ebu_in_c10h16)/AVOGNO*1.e10*3600.
+#endif
+
       else
         ! -- use full-column emissions
         do j = jts, jp
@@ -242,6 +294,44 @@ contains
             end do
           end do
         end do
+
+#ifdef AM4_CHEM
+        bmbem = 0._kind_phys
+        ! -- use full-column emissions
+        do j = jts, jp
+          do k = kts, kp
+            do i = its, ite
+              ! -- factor for pm emissions, factor2 for burn emissions
+              factor  = dt*rri(i,k,j)/dz8w(i,k,j)*random_factor(i)
+              factor2 = factor * factor3
+               chem(i,k,j,p_no) =chem(i,k,j,p_no) + factor*ebu(i,k,j,p_ebu_no)*factor4*1.e6
+               chem(i,k,j,p_nh3) =chem(i,k,j,p_nh3) + factor*ebu(i,k,j,p_ebu_nh3)*factor4*1.e6
+               chem(i,k,j,p_co) =chem(i,k,j,p_co) + factor*ebu(i,k,j,p_ebu_co)*factor4*1.e6
+               chem(i,k,j,p_ch4) =chem(i,k,j,p_ch4) + factor*ebu(i,k,j,p_ebu_ch4)*factor4*1.e6
+               chem(i,k,j,p_ch2o) =chem(i,k,j,p_ch2o) + factor*ebu(i,k,j,p_ebu_ch2o)*factor4*1.e6
+               chem(i,k,j,p_c2h4) =chem(i,k,j,p_c2h4) + factor*ebu(i,k,j,p_ebu_c2h4)*factor4*1.e6
+               chem(i,k,j,p_c2h6) =chem(i,k,j,p_c2h6) + factor*ebu(i,k,j,p_ebu_c2h6)*factor4*1.e6
+               chem(i,k,j,p_c3h6) =chem(i,k,j,p_c3h6) + factor*ebu(i,k,j,p_ebu_c3h6)*factor4*1.e6
+               chem(i,k,j,p_c3h8) =chem(i,k,j,p_c3h8) + factor*ebu(i,k,j,p_ebu_c3h8)*factor4*1.e6
+               chem(i,k,j,p_c4h10) =chem(i,k,j,p_c4h10) + factor*ebu(i,k,j,p_ebu_c4h10)*factor4*1.e6
+               chem(i,k,j,p_isop) =chem(i,k,j,p_isop) + factor*ebu(i,k,j,p_ebu_isop)*factor4*1.e6
+               chem(i,k,j,p_c10h16) =chem(i,k,j,p_c10h16)+ factor*ebu(i,k,j,p_ebu_c10h16 )*factor4*1.e6
+               chem(i,k,j,p_ch3oh) =chem(i,k,j,p_ch3oh) + factor*ebu(i,k,j,p_ebu_ch3oh)*factor4*1.e6
+               chem(i,k,j,p_c2h5oh) =chem(i,k,j,p_c2h5oh)+ factor*ebu(i,k,j,p_ebu_c2h5oh )*factor4*1.e6
+               chem(i,k,j,p_ch3coch3) =chem(i,k,j,p_ch3coch3)+ factor*ebu(i,k,j,p_ebu_ch3coch3 )*factor4*1.e6
+               chem(i,k,j,p_h2) =chem(i,k,j,p_h2) + factor*ebu(i,k,j,p_ebu_h2)*factor4*1.e6
+            end do
+          end do
+        end do
+
+        ! convert molec/cm2/s to mol/km2/hr
+        do k = kts, kp
+          bmbem(:,1) = bmbem(:,1) + ebu(:,k,1,p_ebu_co)/AVOGNO*1.e10*3600.
+          bmbem(:,2) = bmbem(:,2) + ebu(:,k,1,p_ebu_ch4)/AVOGNO*1.e10*3600.
+          bmbem(:,3) = bmbem(:,3) + ebu(:,k,1,p_ebu_nh3)/AVOGNO*1.e10*3600.
+          bmbem(:,4) = bmbem(:,4) + ebu(:,k,1,p_ebu_c10h16)/AVOGNO*1.e10*3600.
+        end do
+#endif
       end if
 
     end if
@@ -268,10 +358,49 @@ contains
      enddo
     enddo
 
+#ifdef AM4_CHEM
+    do k=kts,kte
+      do i=its,ite
+         gq0(i,k,ntisop )=ppm2ugkg(p_isop   ) * max(epsilc,chem(i,k,1,p_isop))
+         gq0(i,k,ntno )=ppm2ugkg(p_no   ) * max(epsilc,chem(i,k,1,p_no))
+         gq0(i,k,ntco )=ppm2ugkg(p_co   ) * max(epsilc,chem(i,k,1,p_co))
+         gq0(i,k,ntc2h4 )=ppm2ugkg(p_c2h4   ) * max(epsilc,chem(i,k,1,p_c2h4))
+         gq0(i,k,ntc2h6 )=ppm2ugkg(p_c2h6   ) * max(epsilc,chem(i,k,1,p_c2h6))
+         gq0(i,k,ntc3h6 )=ppm2ugkg(p_c3h6   ) * max(epsilc,chem(i,k,1,p_c3h6))
+         gq0(i,k,ntc3h8 )=ppm2ugkg(p_c3h8   ) * max(epsilc,chem(i,k,1,p_c3h8))
+         gq0(i,k,ntnh3 )=ppm2ugkg(p_nh3   ) * max(epsilc,chem(i,k,1,p_nh3))
+         gq0(i,k,ntch2o )=ppm2ugkg(p_ch2o   ) * max(epsilc,chem(i,k,1,p_ch2o))
+         gq0(i,k,ntch4 )=ppm2ugkg(p_ch4   ) * max(epsilc,chem(i,k,1,p_ch4))
+         gq0(i,k,ntc4h10 )=ppm2ugkg(p_c4h10   ) * max(epsilc,chem(i,k,1,p_c4h10))
+         gq0(i,k,ntc10h16 )=ppm2ugkg(p_c10h16   ) * max(epsilc,chem(i,k,1,p_c10h16))
+         gq0(i,k,ntch3oh )=ppm2ugkg(p_ch3oh   ) * max(epsilc,chem(i,k,1,p_ch3oh))
+         gq0(i,k,ntc2h5oh )=ppm2ugkg(p_c2h5oh   ) * max(epsilc,chem(i,k,1,p_c2h5oh))
+         gq0(i,k,ntch3coch3 )=ppm2ugkg(p_ch3coch3   ) * max(epsilc,chem(i,k,1,p_ch3coch3))
+         gq0(i,k,nth2 )=ppm2ugkg(p_h2   ) * max(epsilc,chem(i,k,1,p_h2))
+
+         qgrs(i,k,ntisop)=gq0(i,k,ntisop )
+         qgrs(i,k,ntno)=gq0(i,k,ntno )
+         qgrs(i,k,ntco)=gq0(i,k,ntco )
+         qgrs(i,k,ntc2h4)=gq0(i,k,ntc2h4 )
+         qgrs(i,k,ntc2h6)=gq0(i,k,ntc2h6 )
+         qgrs(i,k,ntc3h6)=gq0(i,k,ntc3h6 )
+         qgrs(i,k,ntc3h8)=gq0(i,k,ntc3h8 )
+         qgrs(i,k,ntnh3)=gq0(i,k,ntnh3 )
+         qgrs(i,k,ntch2o)=gq0(i,k,ntch2o )
+         qgrs(i,k,ntch4)=gq0(i,k,ntch4 )
+         qgrs(i,k,ntc4h10)=gq0(i,k,ntc4h10 )
+         qgrs(i,k,ntc10h16)=gq0(i,k,ntc10h16 )
+         qgrs(i,k,ntch3oh)=gq0(i,k,ntch3oh )
+         qgrs(i,k,ntc2h5oh)=gq0(i,k,ntc2h5oh )
+         qgrs(i,k,ntch3coch3)=gq0(i,k,ntch3coch3 )
+         qgrs(i,k,nth2)=gq0(i,k,nth2 )
+      enddo
+    enddo
+#endif
+
     abem(:,4)=ugkg*ebu_in  (:,kts,p_ebu_in_bc )*random_factor(:)
     abem(:,5)=ugkg*ebu_in  (:,kts,p_ebu_in_oc )*random_factor(:)
     abem(:,6)=ugkg*ebu_in  (:,kts,p_ebu_in_so2)*random_factor(:)
-
 
    end subroutine catchem_plume_wrapper_run
 !> @}
@@ -287,6 +416,9 @@ contains
         ntbc1,ntoc1,                                       &
         ntpp10,igb,                &
         ntrac,gq0,                                                     &
+        ntch3coch3,ntc2h4,ntc2h5oh,ntc2h6,ntc3h6,ntc3h8,    &
+        ntc4h10,ntch2o,ntch3oh,ntch4,ntco,nth2,ntisop, &
+        ntnh3,ntno,ntc10h16,gaschem_opt,nvar_gbbepx, &
         num_chem, num_moist,num_ebu_in,ca_sgs_gbbepx_frp_with_j,       &
         plumerise_flag,num_plume_data,                    &
         ppm2ugkg,                                             &
@@ -306,9 +438,14 @@ contains
     integer, dimension(ims:ime), intent(in) :: vegtype
     integer, intent(in) :: ntrac,igb
     integer, intent(in) :: ntso2,ntpp25,ntbc1,ntoc1,ntpp10
+    integer, intent(in) :: ntisop,ntno,ntco,ntc2h4,ntc2h6,ntc3h6,ntc3h8, &
+                           ntnh3,ntch2o,ntch4,ntc4h10,ntc10h16,ntch3oh,ntc2h5oh,&
+                           ntch3coch3,nth2,gaschem_opt
+    integer, intent(in) :: nvar_gbbepx
     logical, intent(in) :: doing_sgs_emis
+
     real(kind=kind_phys), intent(in) :: ca_emis_plume(:)
-    real(kind=kind_phys), dimension(ims:ime,     5,igb),   intent(in) :: fire_GBBEPx
+    real(kind=kind_phys), dimension(ims:ime,nvar_gbbepx,igb),   intent(in) :: fire_GBBEPx
     real(kind=kind_phys), dimension(ims:ime,    13),   intent(in) :: fire_MODIS
     real(kind=kind_phys), dimension(ims:ime, kms:kme), intent(in) ::     &
          pr3d,ph3d
@@ -324,7 +461,7 @@ contains
                            ims,ime, jms,jme, kms,kme,                      &
                            its,ite, jts,jte, kts,kte
 
-    real(kind_phys), dimension(num_chem), intent(in) :: ppm2ugkg
+    real(kind_phys), dimension(1:num_chem), intent(in) :: ppm2ugkg
     real(kind_phys), dimension(:, :), intent(out) :: ca_sgs_gbbepx_frp_with_j
     real(kind_phys), dimension(ims:ime, jms:jme, num_ebu_in),intent(out) :: ebu_in
     
@@ -480,10 +617,33 @@ contains
           endif
         do j=jts,jte
          do i=its,ite
-          emiss_abu(i,j,p_e_bc)   =fire_GBBEPx(i,1,ii)
-          emiss_abu(i,j,p_e_oc)   =fire_GBBEPx(i,2,ii)
-          emiss_abu(i,j,p_e_pm_25)=fire_GBBEPx(i,3,ii)
-          emiss_abu(i,j,p_e_so2)  =fire_GBBEPx(i,4,ii)
+          emiss_abu(i,j,p_ebu_bc)   =fire_GBBEPx(i,1,ii)
+          emiss_abu(i,j,p_ebu_oc)   =fire_GBBEPx(i,2,ii)
+          emiss_abu(i,j,p_ebu_pm25)=fire_GBBEPx(i,3,ii)
+          emiss_abu(i,j,p_ebu_so2)  =fire_GBBEPx(i,4,ii)
+
+          !JianHe: for AM4, fire emission unit
+          ! molec/cm2/s for below gas
+!          if (gaschem_opt == 1) then
+#ifdef AM4_CHEM
+            emiss_abu(i,j,p_ebu_ch3coch3)  =fire_GBBEPx(i,6,ii)
+            emiss_abu(i,j,p_ebu_c2h4)  =fire_GBBEPx(i,7,ii)
+            emiss_abu(i,j,p_ebu_c2h5oh)  =fire_GBBEPx(i,8,ii)
+            emiss_abu(i,j,p_ebu_c2h6)  =fire_GBBEPx(i,9,ii)
+            emiss_abu(i,j,p_ebu_c3h6)  =fire_GBBEPx(i,10,ii)
+            emiss_abu(i,j,p_ebu_c3h8)  =fire_GBBEPx(i,11,ii)
+            emiss_abu(i,j,p_ebu_c4h10)  =fire_GBBEPx(i,12,ii)
+            emiss_abu(i,j,p_ebu_ch2o)  =fire_GBBEPx(i,13,ii)
+            emiss_abu(i,j,p_ebu_ch3oh)  =fire_GBBEPx(i,14,ii)
+            emiss_abu(i,j,p_ebu_ch4)  =fire_GBBEPx(i,15,ii)
+            emiss_abu(i,j,p_ebu_co)  =fire_GBBEPx(i,16,ii)
+            emiss_abu(i,j,p_ebu_h2)  =fire_GBBEPx(i,17,ii)
+            emiss_abu(i,j,p_ebu_isop)  =fire_GBBEPx(i,18,ii)
+            emiss_abu(i,j,p_ebu_nh3)  =fire_GBBEPx(i,19,ii)
+            emiss_abu(i,j,p_ebu_no)  =fire_GBBEPx(i,20,ii)
+            emiss_abu(i,j,p_ebu_c10h16)  =fire_GBBEPx(i,21,ii)
+#endif
+
          enddo
         enddo
         if(doing_sgs_emis) then
@@ -513,7 +673,7 @@ contains
         do i=its,ite
 
 
-          ebu_in(i,j,p_ebu_in_pm10)=emiss_abu(i,j,p_e_pm_10)
+          ebu_in(i,j,p_ebu_in_pm10)=emiss_abu(i,j,p_ebu_pm10)
           ebu_in(i,j,p_ebu_in_dms)= 0._kind_phys
 
           select case (plumerise_flag)
@@ -531,10 +691,30 @@ contains
               firesize_agsv(i,j)=plume(i,j,7)
               firesize_aggr(i,j)=plume(i,j,8)
             case (FIRE_OPT_GBBEPx)
-              ebu_in(i,j,p_ebu_in_oc)   = frpc * emiss_abu(i,j,p_e_oc)
-              ebu_in(i,j,p_ebu_in_bc)   = frpc * emiss_abu(i,j,p_e_bc)
-              ebu_in(i,j,p_ebu_in_pm25) = frpc * (emiss_abu(i,j,p_e_pm_25) - emiss_abu(i,j,p_e_bc) - emiss_abu(i,j,p_e_oc))
-              ebu_in(i,j,p_ebu_in_so2)  = frpc * emiss_abu(i,j,p_e_so2)
+              ebu_in(i,j,p_ebu_in_oc)   = frpc * emiss_abu(i,j,p_ebu_oc) !kg/m2/s to ug/m2/s?
+              ebu_in(i,j,p_ebu_in_bc)   = frpc * emiss_abu(i,j,p_ebu_bc)
+              ebu_in(i,j,p_ebu_in_pm25) = frpc * (emiss_abu(i,j,p_ebu_pm25) - emiss_abu(i,j,p_ebu_bc) - emiss_abu(i,j,p_ebu_oc))
+              ebu_in(i,j,p_ebu_in_so2)  = frpc * emiss_abu(i,j,p_ebu_so2)
+              !JianHe: for AM4
+!              if (gaschem_opt == 1) then
+#ifdef AM4_CHEM
+                ebu_in(i,j,p_ebu_in_ch3coch3)  = emiss_abu(i,j,p_ebu_ch3coch3) ! molec/cm2/s
+                ebu_in(i,j,p_ebu_in_c2h4)  = emiss_abu(i,j,p_ebu_c2h4)
+                ebu_in(i,j,p_ebu_in_c2h5oh)  = emiss_abu(i,j,p_ebu_c2h5oh)
+                ebu_in(i,j,p_ebu_in_c2h6)  = emiss_abu(i,j,p_ebu_c2h6)
+                ebu_in(i,j,p_ebu_in_c3h6)  = emiss_abu(i,j,p_ebu_c3h6)
+                ebu_in(i,j,p_ebu_in_c3h8)  = emiss_abu(i,j,p_ebu_c3h8)
+                ebu_in(i,j,p_ebu_in_c4h10)  = emiss_abu(i,j,p_ebu_c4h10)
+                ebu_in(i,j,p_ebu_in_ch2o)  = emiss_abu(i,j,p_ebu_ch2o)
+                ebu_in(i,j,p_ebu_in_ch3oh)  = emiss_abu(i,j,p_ebu_ch3oh)
+                ebu_in(i,j,p_ebu_in_ch4)  = emiss_abu(i,j,p_ebu_ch4)
+                ebu_in(i,j,p_ebu_in_co)  = emiss_abu(i,j,p_ebu_co)
+                ebu_in(i,j,p_ebu_in_h2)  = emiss_abu(i,j,p_ebu_h2)
+                ebu_in(i,j,p_ebu_in_isop)  = emiss_abu(i,j,p_ebu_isop)
+                ebu_in(i,j,p_ebu_in_nh3)  = emiss_abu(i,j,p_ebu_nh3)
+                ebu_in(i,j,p_ebu_in_no)  = emiss_abu(i,j,p_ebu_no)
+                ebu_in(i,j,p_ebu_in_c10h16)  = emiss_abu(i,j,p_ebu_c10h16)
+#endif
               plumedist(i,j,p_frp_flam_frac) = flaming(catb(ivgtyp(i,j)))
               plumedist(i,j,p_frp_mean     ) = frp2plume * plume(i,j,1)
               plumedist(i,j,p_frp_std      ) = 0.3_kind_phys   * frp2plume * plume(i,j,1)
@@ -554,6 +734,25 @@ contains
        chem(i,k,jts,p_bc1   )=max(epsilc,gq0(i,k,ntbc1  )/ppm2ugkg(p_bc1))
        chem(i,k,jts,p_oc1   )=max(epsilc,gq0(i,k,ntoc1  )/ppm2ugkg(p_oc1))
        chem(i,k,jts,p_p10   )=max(epsilc,gq0(i,k,ntpp10 )/ppm2ugkg(p_p10))
+!       if (gaschem_opt == 1) then
+#ifdef AM4_CHEM
+         chem(i,k,jts,p_isop   )=max(epsilc,gq0(i,k,ntisop  )/ppm2ugkg(p_isop))
+         chem(i,k,jts,p_no   )=max(epsilc,gq0(i,k,ntno  )/ppm2ugkg(p_no))
+         chem(i,k,jts,p_co   )=max(epsilc,gq0(i,k,ntco  )/ppm2ugkg(p_co))
+         chem(i,k,jts,p_ch2o   )=max(epsilc,gq0(i,k,ntch2o  )/ppm2ugkg(p_ch2o))
+         chem(i,k,jts,p_nh3   )=max(epsilc,gq0(i,k,ntnh3  )/ppm2ugkg(p_nh3))
+         chem(i,k,jts,p_ch4   )=max(epsilc,gq0(i,k,ntch4  )/ppm2ugkg(p_ch4))
+         chem(i,k,jts,p_c2h4   )=max(epsilc,gq0(i,k,ntc2h4  )/ppm2ugkg(p_c2h4))
+         chem(i,k,jts,p_c2h6   )=max(epsilc,gq0(i,k,ntc2h6  )/ppm2ugkg(p_c2h6))
+         chem(i,k,jts,p_c3h6   )=max(epsilc,gq0(i,k,ntc3h6  )/ppm2ugkg(p_c3h6))
+         chem(i,k,jts,p_c3h8   )=max(epsilc,gq0(i,k,ntc3h8  )/ppm2ugkg(p_c3h8))
+         chem(i,k,jts,p_c4h10   )=max(epsilc,gq0(i,k,ntc4h10)/ppm2ugkg(p_c4h10))
+         chem(i,k,jts,p_c10h16  )=max(epsilc,gq0(i,k,ntc10h16)/ppm2ugkg(p_c10h16))
+         chem(i,k,jts,p_ch3oh   )=max(epsilc,gq0(i,k,ntch3oh)/ppm2ugkg(p_ch3oh))
+         chem(i,k,jts,p_c2h5oh  )=max(epsilc,gq0(i,k,ntc2h5oh)/ppm2ugkg(p_c2h5oh))
+         chem(i,k,jts,p_ch3coch3)=max(epsilc,gq0(i,k,ntch3coch3)/ppm2ugkg(p_ch3coch3))
+         chem(i,k,jts,p_h2   )=max(epsilc,gq0(i,k,nth2  )/ppm2ugkg(p_h2))
+#endif
      enddo
     enddo
 

@@ -163,11 +163,18 @@
   dimensions = (horizontal_loop_extent)
   type = integer
   intent = in
+[nvar_emi]
+  standard_name = number_of_tracers_in_anthro_emis_input
+  long_name = number of tracers in anthropogenic emission input
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
 [emi_in]
   standard_name = anthropogenic_background_input_cplchp
   long_name = anthropogenic background input cplchp
   units = various
-  dimensions = (horizontal_loop_extent,10)
+  dimensions = (horizontal_loop_extent,number_of_tracers_in_anthro_emis_input)
   type = real
   kind = kind_phys
   intent = in
@@ -200,6 +207,22 @@
   dimensions = (horizontal_loop_extent,vertical_layer_dimension,number_of_tracers)
   type = real
   kind = kind_phys
+  intent = inout
+[do_am4chem]
+  standard_name = flag_for_am4_chemistry
+  long_name = flag for am4 chemistry
+  units = flag
+  dimensions = ()
+  type = logical
+  intent = in
+[bioem]
+  standard_name = instantaneous_biogenic_emissions
+  long_name = instantaneous biogenic emissions for dms, isop, c10h16, and lighting nox
+  units = mol km-2 hr-1
+  dimensions = (horizontal_loop_extent,4)
+  type = real
+  kind = kind_phys
+  active = (flag_for_am4_chemistry)
   intent = inout
 [dmsemis_opt_in]
   standard_name = catchem_dms_emis_opt

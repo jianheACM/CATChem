@@ -147,11 +147,25 @@
   dimensions = (horizontal_loop_extent)
   type = integer
   intent = in
+[nvar_gbbepx]
+  standard_name = number_of_tracers_in_gbbepx_input
+  long_name = number of tracers in GBBEPx emission input
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[nvar_gbbepxp2]
+  standard_name = number_of_tracers_in_gbbepx_input_plus_two
+  long_name = number of tracers in GBBEPx emission input plus two
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
 [fire_GBBEPx]
   standard_name = emission_fire_GBBEPx
   long_name = emission fire GBBEPx
   units = various
-  dimensions = (horizontal_loop_extent,5,35)
+  dimensions = (horizontal_loop_extent,number_of_tracers_in_gbbepx_input,35)
   type = real
   kind = kind_phys
   intent = in
@@ -220,6 +234,133 @@
   dimensions = ()
   type = integer
   intent = in
+[ntisop]
+  standard_name = index_for_isop
+  long_name = index for isop
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntno]
+  standard_name = index_for_no
+  long_name = index for no
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntco]
+  standard_name = index_for_co
+  long_name = index for co
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntnh3]
+  standard_name = index_for_nh3
+  long_name = index for nh3
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntch2o]
+  standard_name = index_for_ch2o
+  long_name = index for ch2o
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntch4]
+  standard_name = index_for_ch4
+  long_name = index for ch4
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntc2h4]
+  standard_name = index_for_c2h4
+  long_name = index for c2h4
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntc2h6]
+  standard_name = index_for_c2h6
+  long_name = index for c2h6
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntc3h6]
+  standard_name = index_for_c3h6
+  long_name = index for c3h6
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntc3h8]
+  standard_name = index_for_c3h8
+  long_name = index for c3h8
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntc4h10]
+  standard_name = index_for_c4h10
+  long_name = index for c4h10
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntc10h16]
+  standard_name = index_for_c10h16
+  long_name = index for c10h16
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntch3oh]
+  standard_name = index_for_ch3oh
+  long_name = index for ch3oh
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntc2h5oh]
+  standard_name = index_for_c2h5oh
+  long_name = index for c2h5oh
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntch3coch3]
+  standard_name = index_for_ch3coch3
+  long_name = index for ch3coch3
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[nth2]
+  standard_name = index_for_h2
+  long_name = index for h2
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[bmbem]
+  standard_name = instantaneous_biomass_burning_emissions
+  long_name = instantaneous biomass burning emissions for co, ch4, nh3, and terp
+  units = mol km-2 hr-1
+  dimensions = (horizontal_loop_extent,4)
+  type = real
+  kind = kind_phys
+  intent = inout
+[gaschem_opt]
+  standard_name = catchem_gaschem_option
+  long_name = catchem gas-phase chemical mechanism option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
 [do_ca]
   standard_name = flag_for_cellular_automata
   long_name = cellular automata main switch
@@ -261,7 +402,7 @@
   standard_name = chem_buffer_ebu
   long_name = chemistry buffer of ebu
   units = various
-  dimensions = (horizontal_loop_extent,vertical_interface_dimension,1,7)
+  dimensions = (horizontal_loop_extent,vertical_interface_dimension,1,number_of_tracers_in_gbbepx_input_plus_two)
   type = real
   kind = kind_phys
   intent = inout

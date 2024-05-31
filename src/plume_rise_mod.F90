@@ -22,7 +22,7 @@ module plume_rise_mod
 contains
 
   subroutine plumerise_driver (ktau,dtstep,num_chem,num_ebu,num_ebu_in,          &
-             ebu,ebu_in,                                                         &
+             ebu,ebu_in,gaschem_opt,                                             &
              mean_fct_agtf,mean_fct_agef,mean_fct_agsv,mean_fct_aggr,            &
              firesize_agtf,firesize_agef,firesize_agsv,firesize_aggr,            &
              chem_opt,burn_opt,t_phy,q_vap,                                      &
@@ -39,6 +39,7 @@ contains
                                   ids,ide, jds,jde, kds,kde,           &
                                   ims,ime, jms,jme, kms,kme,           &
                                   its,ite, jts,jte, kts,kte
+   INTEGER,      INTENT(IN   ) :: gaschem_opt  !JianHe
    REAL(kind=kind_chem), DIMENSION( ims:ime, kms:kme, jms:jme, num_ebu ),              &
          INTENT(INOUT ) ::                                   ebu
    REAL(kind=kind_chem), DIMENSION( ims:ime, jms:jme, num_ebu_in ),                    &
@@ -95,7 +96,10 @@ contains
        if ( burn_opt == 'BIOMASSB' ) then
          do j=jts,jte
             do i=its,ite
-            if ( chem_opt == 'GOCARTRACM'.or.chem_opt == 'RACMSOAVBS' ) then
+            !JianHe: for AM4
+            if (gaschem_opt == 1) then
+               ebu(i,kts,j,1:num_ebu) = ebu_in(i,j,1:num_ebu)
+            elseif ( chem_opt == 'GOCARTRACM'.or.chem_opt == 'RACMSOAVBS' ) then
 !               ebu(i,kts,j,p_ebu_no)=ebu_in(i,j,p_ebu_in_no)
 !               ebu(i,kts,j,p_ebu_no2)=ebu_in(i,j,p_ebu_in_no2)
 !               ebu(i,kts,j,p_ebu_co)=ebu_in(i,j,p_ebu_in_co)

@@ -14,7 +14,7 @@ contains
 
         subroutine gocart_dmsemis(dt,u_phy,v_phy,          &
           chem_arr,dz8w,u10,v10,    &
-          delp,dms_0,tsk,area)
+          delp,dms_0,tsk,area,bems)
 
   IMPLICIT NONE
 
@@ -23,14 +23,15 @@ contains
    REAL(kind_chem), INTENT(IN ) :: dt, u_phy,v_phy, &
                                    dz8w,u10,v10,  &
                                    delp,dms_0,tsk, area 
-  
+   REAL(kind=kind_chem), DIMENSION( 1,1,1 ),                 &
+         INTENT(INOUT ) ::  bems
 !
 ! local variables
 !
   integer :: i,j,k,ndt,imx,jmx,lmx,nmx
   integer,dimension (1,1) :: ilwi
   real(kind_chem), DIMENSION (1,1,1,1) :: tc
-  real(kind_chem), DIMENSION (1,1,1) :: bems,airmas
+  real(kind_chem), DIMENSION (1,1,1) :: airmas
   real(kind_chem), DIMENSION (1,1) :: emsdms
   real(kind_chem), dimension (1,1) :: w10m,gwet,airden,tskin,dmso
   real(kind_chem), dimension (1) :: dxy
@@ -53,6 +54,7 @@ contains
   dxy(1)=area
   tskin(1,1)=tsk
   emsdms(1,1)=0.
+  bems(1,1,1)=0.
 !
 ! we don't trust the u10,v10 values, is model layers are very thin near surface
 !
@@ -87,7 +89,7 @@ SUBROUTINE srcdms(imx, jmx, lmx, nmx, ndt1, tc,airmw, &
   REAL(kind_chem),    INTENT(IN)    :: airmas(imx,jmx,lmx)
   REAL(kind_chem),    INTENT(INOUT) :: tc(imx,jmx,lmx,nmx)
   REAL(kind_chem),    INTENT(INOUT) :: emsdms(imx,jmx)
-  REAL(kind_chem),    INTENT(OUT)   :: bems(imx,jmx,nmx)
+  REAL(kind_chem),    INTENT(INOUT)   :: bems(imx,jmx,nmx)
 
   INTEGER :: i,j
   REAL(kind_chem)    :: sst, sc, conc, w10, scco2, akw, erate, dmssrc, c
@@ -196,7 +198,8 @@ SUBROUTINE srcdms(imx, jmx, lmx, nmx, ndt1, tc,airmw, &
         !    ---------------------------------------------------------------
         emsdms(i,j) = emsdms(i,j) + dmssrc * smw / tcmw(NDMS) ! kgS
 !        bems(i,j,NDMS) = c * airmas(i,j,1) / airmw * smw ! kgS
-        bems(i,j,NDMS) = dmssrc  ! kgDMS
+!        bems(i,j,NDMS) = dmssrc  ! kgDMS
+        bems(i,j,NDMS) = dmssrc/dxy(j)/REAL(ndt1)   ! kgDMS/m2/s
 
      END DO lon_loop
   END DO lat_loop

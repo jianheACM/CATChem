@@ -288,11 +288,18 @@
   type = real
   kind = kind_phys
   intent = in
+[nvar_emi]
+  standard_name = number_of_tracers_in_anthro_emis_input
+  long_name = number of tracers in anthropogenic emission input
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
 [emi_in]
   standard_name = anthropogenic_background_input_cplchp
   long_name = anthropogenic background input cplchp
   units = various
-  dimensions = (horizontal_loop_extent,10)
+  dimensions = (horizontal_loop_extent,number_of_tracers_in_anthro_emis_input)
   type = real
   kind = kind_phys
   intent = in

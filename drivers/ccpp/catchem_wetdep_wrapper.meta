@@ -1,13 +1,56 @@
 [ccpp-table-properties]
   name = catchem_wetdep_wrapper
   type = scheme
-  dependencies = ../../parameters/catchem_config.F90,../../parameters/catchem_constants.F90,../../parameters/dust_data_mod.F90,../../src/gocart_diag_mod.F90,../../src/gocart_aerosols_mod.F90,../../src/gocart_chem_mod.F90,../../src/wetdep_ls_mod.F90
+  dependencies = ../../parameters/catchem_config.F90,../../parameters/catchem_constants.F90,../../parameters/dust_data_mod.F90,../../src/gocart_diag_mod.F90,../../src/gocart_aerosols_mod.F90,../../src/gocart_chem_mod.F90,../../src/wetdep_ls_mod.F90,../../src/gfdlam4chem/gfdl_astronomy.F90,../../src/gfdlam4chem/gfdl_time_utls.F90,../../src/gfdlam4chem/mo_errmsg.F90,../../src/gfdlam4chem/mo_chem_utls.F90,../../src/gfdlam4chem/gfdl_wetdep_mod.F90
 
 ########################################################################
 [ccpp-arg-table]
   name = catchem_wetdep_wrapper_init
   type = scheme
-
+[me]
+  standard_name = mpi_rank
+  long_name = MPI rank of current process
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[master]
+  standard_name = mpi_root
+  long_name = MPI rank of master process
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[gaschem_opt]
+  standard_name = catchem_gaschem_option
+  long_name = catchem gas-phase chemical mechanism option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[tracer_names]
+  standard_name = atmos_mod_tracer_names
+  long_name = array of atmos model tracer names
+  units = none
+  dimensions = (number_of_tracers)
+  type = character
+  kind = len=32
+  intent = in
+[errmsg]
+  standard_name = ccpp_error_message
+  long_name = error message for error handling in CCPP
+  units = none
+  dimensions = ()
+  type = character
+  kind = len=*
+  intent = out
+[errflg]
+  standard_name = ccpp_error_code
+  long_name = error code for error handling in CCPP
+  units = 1
+  dimensions = ()
+  type = integer
+  intent = out
 ########################################################################
 [ccpp-arg-table]
   name = catchem_wetdep_wrapper_finalize
@@ -17,6 +60,20 @@
 [ccpp-arg-table]
   name = catchem_wetdep_wrapper_run
   type = scheme
+[me]
+  standard_name = mpi_rank
+  long_name = MPI rank of current process
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[master]
+  standard_name = mpi_root
+  long_name = MPI rank of master process
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
 [im]
   standard_name = horizontal_loop_extent
   long_name = horizontal loop extent
@@ -87,6 +144,22 @@
   long_name = total convective precipitation
   units = m
   dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
+[pfi_lsan]
+  standard_name = ice_flux_due_to_large_scale_precipitation
+  long_name = instantaneous 3D flux of ice from nonconvective precipitation
+  units = kg m-2 s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = in
+[pfl_lsan]
+  standard_name = liquid_flux_due_to_large_scale_precipitation
+  long_name = instantaneous 3D flux of liquid water from nonconvective precipitation
+  units = kg m-2 s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
   intent = in
@@ -178,9 +251,53 @@
   type = real
   kind = kind_phys
   intent = in
+[lmk]
+  standard_name = adjusted_vertical_layer_dimension_for_radiation
+  long_name = adjusted number of vertical layers for radiation
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[cld_frac]
+  standard_name = instantaneous_3d_cloud_fraction
+  long_name = instantaneous 3D cloud fraction for all MPs
+  units = frac
+  dimensions = (horizontal_loop_extent,adjusted_vertical_layer_dimension_for_radiation)
+  type = real
+  kind = kind_phys
+  intent = in
+[cnvc]
+  standard_name = convective_cloud_cover
+  long_name = convective cloud cover
+  units = frac
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = in
 [ntrac]
   standard_name = number_of_tracers
   long_name = number of tracers
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[ntchs]
+  standard_name = index_of_first_chemical_tracer_in_tracer_concentration_array
+  long_name = tracer index for first chemical tracer
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntchm]
+  standard_name = number_of_chemical_tracers
+  long_name = number of chemical tracers
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[ndchm]
+  standard_name = number_of_diagnostic_chemical_tracers
+  long_name = number of diagnostic chemical tracers
   units = count
   dimensions = ()
   type = integer
@@ -191,6 +308,28 @@
   units = count
   dimensions = ()
   type = integer
+  intent = in
+[ntcw]
+  standard_name = index_of_cloud_liquid_water_mixing_ratio_in_tracer_concentration_array
+  long_name = tracer index for cloud condensate (or liquid water)
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntiw]
+  standard_name = index_of_cloud_ice_mixing_ratio_in_tracer_concentration_array
+  long_name = tracer index for  ice water
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[tracer_names]
+  standard_name = atmos_mod_tracer_names
+  long_name = array of atmos model tracer names
+  units = none
+  dimensions = (number_of_tracers)
+  type = character
+  kind = len=32
   intent = in
 [ntso2]
   standard_name = index_for_so2
@@ -332,6 +471,27 @@
   dimensions = ()
   type = integer
   intent = in
+[ntage]
+  standard_name = index_for_age
+  long_name = index for age
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntaoanh]
+  standard_name = index_for_aoanh
+  long_name = index for aoanh
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntsoa]
+  standard_name = index_for_soa
+  long_name = index for soa
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
 [gq0]
   standard_name = tracer_concentration_of_new_state
   long_name = tracer concentration updated by physics
@@ -356,12 +516,35 @@
   type = real
   kind = kind_phys
   intent = inout
+[wdep]
+  standard_name = instantaneous_wet_deposition_from_AM4
+  long_name = instantaneous wet deposition for so2, nh3 and so4
+  units = kg m-2 s-1
+  dimensions = (horizontal_loop_extent,3)
+  type = real
+  kind = kind_phys
+  active = (flag_for_am4_chemistry)
+  intent = inout
 [wetdep_ls_opt_in]
   standard_name = catchem_wetdep_ls_opt
   long_name = catchem large scale wet deposition option
   units = index
   dimensions = ()
   type = integer
+  intent = in
+[gaschem_opt]
+  standard_name = catchem_gaschem_option
+  long_name = catchem gas-phase chemical mechanism option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[do_am4chem]
+  standard_name = flag_for_am4_chemistry
+  long_name = flag for am4 chemistry
+  units = flag
+  dimensions = ()
+  type = logical
   intent = in
 [errmsg]
   standard_name = ccpp_error_message

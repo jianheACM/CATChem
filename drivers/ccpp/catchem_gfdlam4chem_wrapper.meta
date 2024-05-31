@@ -1,0 +1,779 @@
+[ccpp-table-properties]
+  name = catchem_gfdlam4chem_wrapper
+  type = scheme
+  dependencies = ../../parameters/catchem_config.F90,../../parameters/catchem_constants.F90,../../src/gfdlam4chem/gfdl_am4chem_mod.F90,../../src/gfdlam4chem/gfdl_astronomy.F90,../../src/gfdlam4chem/gfdl_time_utls.F90,../../src/gfdlam4chem/mo_errmsg.F90,../../src/gfdlam4chem/mo_chemdr.F90,../../src/gfdlam4chem/mo_chemini.F90,../../src/gfdlam4chem/mo_chem_utls.F90,../../src/gfdlam4chem/mo_exp_slv.F90,../../src/gfdlam4chem/mo_fastjx.F90,../../src/gfdlam4chem/mo_fphoto.F90,../../src/gfdlam4chem/mo_imp_slv.F90,../../src/gfdlam4chem/mo_photo.F90,../../src/gfdlam4chem/mo_rodas_slv.F90,../../src/gfdlam4chem/mo_setinv.F90,../../src/gfdlam4chem/mo_setsox.F90,../../src/gfdlam4chem/mo_usrrxt.F90,../../src/gfdlam4chem/moz.mat.F90,../../src/gfdlam4chem/moz.mods.F90,../../src/gfdlam4chem/moz.subs.F90,../../src/gfdlam4chem/strat_chem_utilities.F90,../../src/gfdlam4chem/tropchem_types_mod.F90,../../src/gfdlam4chem/m_tracname.F90,../../src/gfdlam4chem/mo_jpl.F90,../../src/gfdlam4chem/mo_read_sim_chm.F90,../../src/gfdlam4chem/gfdl_sat_vapor_pres.F90,../../src/gfdlam4chem/gfdl_sat_vapor_pres_k.F90,../../src/gfdlam4chem/cloud_chem.F90,../../src/gfdlam4chem/aerosol_thermodynamics.F90,../../src/gfdlam4chem/isoropiaIIcode.F,../../src/gfdlam4chem/isrpia.inc,../../src/gfdlam4chem/mo_vinterp.F90,../../src/gfdlam4chem/atmos_age_tracer.F90,../../src/gfdlam4chem/atmos_radon.F90,../../src/gfdlam4chem/atmos_regional_tracer_driver.F90,../../src/gocart_aerosols_mod.F90
+
+########################################################################
+[ccpp-arg-table]
+  name = catchem_gfdlam4chem_wrapper_init
+  type = scheme
+[me]
+  standard_name = mpi_rank
+  long_name = MPI rank of current process
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[master]
+  standard_name = mpi_root
+  long_name = MPI rank of master process
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[nlunit]
+  standard_name = iounit_of_namelist
+  long_name = fortran unit number for opening nameliust file
+  units = none
+  dimensions = ()
+  type = integer
+  intent = in
+[input_nml_file]
+  standard_name = filename_of_internal_namelist
+  long_name = character string to store full namelist contents
+  units = none
+  dimensions = (number_of_lines_in_internal_namelist)
+  type = character
+  kind = len=*
+  intent = in
+[dt]
+  standard_name = timestep_for_physics
+  long_name = physics time step
+  units = s
+  dimensions = ()
+  type = real
+  kind = kind_phys
+  intent = in
+[logunit]
+  standard_name = iounit_of_log
+  long_name = fortran unit number for writing logfile
+  units = none
+  dimensions = ()
+  type = integer
+  intent = in
+[fn_nml]
+  standard_name = filename_of_namelist
+  long_name = namelist filename
+  units = none
+  dimensions = ()
+  type = character
+  kind = len=*
+  intent = in
+[ntche]
+  standard_name = index_for_last_chemical_tracer
+  long_name = tracer index for last chemical tracer
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ndchm]
+  standard_name = number_of_diagnostic_chemical_tracers
+  long_name = number of diagnostic chemical tracers
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[phot_opt]
+  standard_name = catchem_phot_opt
+  long_name = catchem phot option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[gaschem_opt]
+  standard_name = catchem_gaschem_option
+  long_name = catchem gas-phase chemical mechanism option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[do_am4chem]
+  standard_name = flag_for_am4_chemistry
+  long_name = flag for am4 chemistry
+  units = flag
+  dimensions = ()
+  type = logical
+  intent = in
+[restart]
+  standard_name = flag_for_restart
+  long_name = flag for restart (warmstart) or coldstart
+  units = flag
+  dimensions = ()
+  type = logical
+  intent = in
+[idat]
+  standard_name = date_and_time_at_model_initialization_in_iso_order
+  long_name = initialization date and time
+  units = none
+  dimensions = (8)
+  type = integer
+  intent = in
+[jdat]
+  standard_name = date_and_time_of_forecast_in_united_states_order
+  long_name = current forecast date and time
+  units = none
+  dimensions = (8)
+  type = integer
+  intent = in
+[tracer_names]
+  standard_name = atmos_mod_tracer_names
+  long_name = array of atmos model tracer names
+  units = none
+  dimensions = (number_of_tracers)
+  type = character
+  kind = len=32
+  intent = in
+[errmsg]
+  standard_name = ccpp_error_message
+  long_name = error message for error handling in CCPP
+  units = none
+  dimensions = ()
+  type = character
+  kind = len=*
+  intent = out
+[errflg]
+  standard_name = ccpp_error_code
+  long_name = error code for error handling in CCPP
+  units = 1
+  dimensions = ()
+  type = integer
+  intent = out
+########################################################################
+[ccpp-arg-table]
+  name = catchem_gfdlam4chem_wrapper_finalize
+  type = scheme
+
+########################################################################
+[ccpp-arg-table]
+  name = catchem_gfdlam4chem_wrapper_run
+  type = scheme
+[me]
+  standard_name = mpi_rank
+  long_name = MPI rank of current process
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[master]
+  standard_name = mpi_root
+  long_name = MPI rank of master process
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[im]
+  standard_name = horizontal_loop_extent
+  long_name = horizontal loop extent
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[kte]
+  standard_name = vertical_layer_dimension
+  long_name = vertical layer dimension
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[kme]
+  standard_name = vertical_interface_dimension
+  long_name = number of vertical levels plus one
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[ktau]
+  standard_name = index_of_timestep
+  long_name = current forecast iteration
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[dt]
+  standard_name = timestep_for_physics
+  long_name = physics time step
+  units = s
+  dimensions = ()
+  type = real
+  kind = kind_phys
+  intent = in
+[garea]
+  standard_name = cell_area
+  long_name = grid cell area
+  units = m2
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
+[land]
+  standard_name = sea_land_ice_mask
+  long_name = landmask: sea/land/ice=0/1/2
+  units = flag
+  dimensions = (horizontal_loop_extent)
+  type = integer
+  intent = in
+[oceanfrac]
+  standard_name = sea_area_fraction
+  long_name = fraction of horizontal grid area occupied by ocean
+  units = frac
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
+[landfrac]
+  standard_name = land_area_fraction
+  long_name = fraction of horizontal grid area occupied by land
+  units = frac
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
+[lmk]
+  standard_name = adjusted_vertical_layer_dimension_for_radiation
+  long_name = adjusted number of vertical layers for radiation
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[cld_frac]
+  standard_name = instantaneous_3d_cloud_fraction
+  long_name = instantaneous 3D cloud fraction for all MPs
+  units = frac
+  dimensions = (horizontal_loop_extent,adjusted_vertical_layer_dimension_for_radiation)
+  type = real
+  kind = kind_phys
+  intent = in
+[fice]
+  standard_name = sea_ice_area_fraction_of_sea_area_fraction
+  long_name = ice fraction over open water
+  units = frac
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
+[u10m]
+  standard_name = x_wind_at_10m
+  long_name = 10 meter u wind speed
+  units = m s-1
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
+[v10m]
+  standard_name = y_wind_at_10m
+  long_name = 10 meter v wind speed
+  units = m s-1
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
+[rlat]
+  standard_name = latitude
+  long_name = latitude
+  units = radian
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
+[rlon]
+  standard_name = longitude
+  long_name = longitude
+  units = radian
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
+[tskin]
+  standard_name = surface_skin_temperature
+  long_name = surface skin temperature
+  units = K
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
+[julian]
+  standard_name = forecast_julian_day
+  long_name = julian day
+  units = days
+  dimensions = ()
+  type = real
+  kind = kind_phys
+  intent = in
+[sfalb]
+  standard_name = surface_albedo_for_diffused_shortwave_on_radiation_timestep
+  long_name = mean surface diffused sw albedo
+  units = frac
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
+[xcosz]
+  standard_name = instantaneous_cosine_of_zenith_angle
+  long_name = cosine of zenith angle at current time
+  units = none
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
+[solcon]
+  standard_name = solar_constant
+  long_name = solar constant (sun-earth distant adjusted)
+  units = W m-2
+  dimensions = ()
+  type = real
+  kind = kind_phys
+  intent = in
+[pr3d]
+  standard_name = air_pressure_at_interface
+  long_name = air pressure at model layer interfaces
+  units = Pa
+  dimensions = (horizontal_loop_extent,vertical_interface_dimension)
+  type = real
+  kind = kind_phys
+  intent = in
+[ph3d]
+  standard_name = geopotential_at_interface
+  long_name = geopotential at model layer interfaces
+  units = m2 s-2
+  dimensions = (horizontal_loop_extent,vertical_interface_dimension)
+  type = real
+  kind = kind_phys
+  intent = in
+[phl3d]
+  standard_name = geopotential
+  long_name = geopotential at model layer centers
+  units = m2 s-2
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = in
+[prl3d]
+  standard_name = air_pressure
+  long_name = mean layer pressure
+  units = Pa
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = in
+[tk3d]
+  standard_name = air_temperature_of_new_state
+  long_name = updated temperature
+  units = K
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = in
+[spechum]
+  standard_name = specific_humidity_of_new_state
+  long_name = water vapor specific humidity updated by physics
+  units = kg kg-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = in
+[idat]
+  standard_name = date_and_time_at_model_initialization_in_iso_order
+  long_name = initialization date and time
+  units = none
+  dimensions = (8)
+  type = integer
+  intent = in
+[jdat]
+  standard_name = date_and_time_of_forecast_in_united_states_order
+  long_name = current forecast date and time
+  units = none
+  dimensions = (8)
+  type = integer
+  intent = in
+[jval]
+  standard_name = instantaneous_photolysis_rates
+  long_name = instantaneous photolysis rates for o2, o1d, no2
+  units = s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension,3)
+  type = real
+  kind = kind_phys
+  intent = inout
+[ox_prod]
+  standard_name = o3_chemical_production
+  long_name = o3 chemical production
+  units = mol mol-1 s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = inout
+[ox_loss]
+  standard_name = o3_chemical_loss
+  long_name = o3 chemical loss
+  units = mol mol-1 s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = inout
+[lch4_prod]
+  standard_name = ch4_chemical_loss_due_to_oh
+  long_name = ch4 chemical loss due to oh
+  units = mol mol s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = inout
+[ch4_loss]
+  standard_name = ch4_chemical_loss
+  long_name = ch4 chemical loss due to oh, o1d, cl
+  units = mol mol s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = inout
+[oh_prod]
+  standard_name = oh_chemical_production
+  long_name = oh chemical production
+  units = mol mol-1 s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = inout
+[oh_loss]
+  standard_name = oh_chemical_loss
+  long_name = oh chemical loss
+  units = mol mol-1 s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = inout
+[bioem]
+  standard_name = instantaneous_biogenic_emissions
+  long_name = instantaneous biogenic emissions for isop, c10h16, lighting nox, and dms
+  units = mol km-2 hr-1
+  dimensions = (horizontal_loop_extent,4)
+  type = real
+  kind = kind_phys
+  intent = inout
+[emi2_in]
+  standard_name = anthropogenic_background_3d_input
+  long_name = anthropogenic background 3d input
+  units = various
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension,3)
+  type = real
+  kind = kind_phys
+  intent = in
+[dfdage_in]
+  standard_name = cfc_destruction_rate_3d_input
+  long_name = cfc destruction rate 3d input
+  units = various
+  dimensions = (horizontal_loop_extent,72,8)
+  type = real
+  kind = kind_phys
+  intent = in
+[ntrac]
+  standard_name = number_of_tracers
+  long_name = number of tracers
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[ntso2]
+  standard_name = index_for_so2
+  long_name = tracer index for so2
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntsulf]
+  standard_name = index_for_sulfate
+  long_name = index for sulfate
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntDMS]
+  standard_name = index_for_DMS
+  long_name = tracer index for DMS
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntmsa]
+  standard_name = index_for_msa
+  long_name = tracer index for msa
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntpp25]
+  standard_name = index_for_pp25
+  long_name = tracer index for pp25
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntbc1]
+  standard_name = index_for_bcphobic
+  long_name = index for bcphobic
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntbc2]
+  standard_name = index_for_bcphilic
+  long_name = index for bcphilic
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntoc1]
+  standard_name = index_for_ocphobic
+  long_name = index for ocphobic
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntoc2]
+  standard_name = index_for_ocphilic
+  long_name = index for ocphilic
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntdust1]
+  standard_name = index_for_dust_bin1
+  long_name = index for dust bin1
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntdust2]
+  standard_name = index_for_dust_bin2
+  long_name = index for dust bin2
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntdust3]
+  standard_name = index_for_dust_bin3
+  long_name = index for dust bin3
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntdust4]
+  standard_name = index_for_dust_bin4
+  long_name = index for dust bin4
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntdust5]
+  standard_name = index_for_dust_bin5
+  long_name = index for dust bin5
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntss1]
+  standard_name = index_for_seasalt_bin1
+  long_name = index for seasalt bin1
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntss2]
+  standard_name = index_for_seasalt_bin2
+  long_name = index for seasalt bin2
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntss3]
+  standard_name = index_for_seasalt_bin3
+  long_name = index for seasalt bin3
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntss4]
+  standard_name = index_for_seasalt_bin4
+  long_name = index for seasalt bin4
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntss5]
+  standard_name = index_for_seasalt_bin5
+  long_name = index for seasalt bin5
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntpp10]
+  standard_name = index_for_pp10
+  long_name = tracer index for pp10
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntage]
+  standard_name = index_for_age
+  long_name = index for age
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntaoanh]
+  standard_name = index_for_aoanh
+  long_name = index for aoanh
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntextinct]
+  standard_name = index_for_extinction
+  long_name = index for extinction
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntsoa]
+  standard_name = index_for_soa
+  long_name = index for soa
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntso4]
+  standard_name = index_for_so4
+  long_name = index for so4
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntqv]
+  standard_name = index_of_specific_humidity_in_tracer_concentration_array
+  long_name = tracer index for water vapor (specific humidity)
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntoz]
+  standard_name = index_of_ozone_mixing_ratio_in_tracer_concentration_array
+  long_name = tracer index for ozone mixing ratio
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntchs]
+  standard_name = index_of_first_chemical_tracer_in_tracer_concentration_array
+  long_name = tracer index for first chemical tracer
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntche]
+  standard_name = index_for_last_chemical_tracer
+  long_name = tracer index for last chemical tracer
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntchm]
+  standard_name = number_of_chemical_tracers
+  long_name = number of chemical tracers
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[ndchm]
+  standard_name = number_of_diagnostic_chemical_tracers
+  long_name = number of diagnostic chemical tracers
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[tracer_names]
+  standard_name = atmos_mod_tracer_names
+  long_name = array of atmos model tracer names
+  units = none
+  dimensions = (number_of_tracers)
+  type = character
+  kind = len=32
+  intent = in
+[chem_in_opt]
+  standard_name = catchem_in_opt
+  long_name = catchem coldstart or restart option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[gq0]
+  standard_name = tracer_concentration_of_new_state
+  long_name = tracer concentration updated by physics
+  units = kg kg-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension,number_of_tracers)
+  type = real
+  kind = kind_phys
+  intent = inout
+[qgrs]
+  standard_name = tracer_concentration
+  long_name = model layer mean tracer concentration
+  units = kg kg-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension,number_of_tracers)
+  type = real
+  kind = kind_phys
+  intent = inout
+[tile_num]
+  standard_name = index_of_cubed_sphere_tile
+  long_name = tile number
+  units = none
+  dimensions = ()
+  type = integer
+  intent = in
+[chem_opt]
+  standard_name = catchem_option
+  long_name = catchem option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[phot_opt]
+  standard_name = catchem_phot_opt
+  long_name = catchem phot option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[gaschem_opt]
+  standard_name = catchem_gaschem_option
+  long_name = catchem gas-phase mechanism option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[do_am4chem]
+  standard_name = flag_for_am4_chemistry
+  long_name = flag for am4 chemistry
+  units = flag
+  dimensions = ()
+  type = logical
+  intent = in
+[aer_ra_frq_in]
+  standard_name = catchem_aer_ra_frq
+  long_name = catchem aer radiation frequency
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[errmsg]
+  standard_name = ccpp_error_message
+  long_name = error message for error handling in CCPP
+  units = none
+  dimensions = ()
+  type = character
+  kind = len=*
+  intent = out
+[errflg]
+  standard_name = ccpp_error_code
+  long_name = error code for error handling in CCPP
+  units = 1
+  dimensions = ()
+  type = integer
+  intent = out

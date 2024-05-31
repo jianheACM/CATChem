@@ -1,0 +1,274 @@
+[ccpp-table-properties]
+  name = catchem_lnox_wrapper
+  type = scheme
+  dependencies = ../../parameters/catchem_config.F90,../../parameters/catchem_constants.F90,../../src/gfdlam4chem/gfdl_lnox_mod.F90
+
+########################################################################
+[ccpp-arg-table]
+  name = catchem_lnox_wrapper_init
+  type = scheme
+[me]
+  standard_name = mpi_rank
+  long_name = MPI rank of current process
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[master]
+  standard_name = mpi_root
+  long_name = MPI rank of master process
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[lnox_opt]
+  standard_name = catchem_lnox_emis_opt
+  long_name = catchem lightning nox emission option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[lght_no_prd_factor]
+  standard_name = catchem_lnox_prod_factor
+  long_name = catchem lightning no production factor
+  units = index
+  dimensions = ()
+  type = real
+  kind = kind_phys
+  intent = in
+[min_land_frac_lght]
+  standard_name = catchem_min_land_frac_lght
+  long_name = catchem minimum land fraction for flash frequency calculation
+  units = index
+  dimensions = ()
+  type = real
+  kind = kind_phys
+  intent = in
+[normalize_lght_no_prd_area]
+  standard_name = catchem_normalize_lght_no_prd_area
+  long_name = catchem normalize lightning NOx production by grid cell area
+  units = index
+  dimensions = ()
+  type = logical
+  intent = in
+[errmsg]
+  standard_name = ccpp_error_message
+  long_name = error message for error handling in CCPP
+  units = none
+  dimensions = ()
+  type = character
+  kind = len=*
+  intent = out
+[errflg]
+  standard_name = ccpp_error_code
+  long_name = error code for error handling in CCPP
+  units = 1
+  dimensions = ()
+  type = integer
+  intent = out
+########################################################################
+[ccpp-arg-table]
+  name = catchem_lnox_wrapper_finalize
+  type = scheme
+
+########################################################################
+[ccpp-arg-table]
+  name = catchem_lnox_wrapper_run
+  type = scheme
+[me]
+  standard_name = mpi_rank
+  long_name = MPI rank of current process
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[master]
+  standard_name = mpi_root
+  long_name = MPI rank of master process
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[im]
+  standard_name = horizontal_loop_extent
+  long_name = horizontal loop extent
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[kte]
+  standard_name = vertical_layer_dimension
+  long_name = vertical layer dimension
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[kme]
+  standard_name = vertical_interface_dimension
+  long_name = number of vertical levels plus one
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[dt]
+  standard_name = timestep_for_physics
+  long_name = physics time step
+  units = s
+  dimensions = ()
+  type = real
+  kind = kind_phys
+  intent = in
+[garea]
+  standard_name = cell_area
+  long_name = grid cell area
+  units = m2
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
+[rlat]
+  standard_name = latitude
+  long_name = latitude
+  units = radian
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
+[rlon]
+  standard_name = longitude
+  long_name = longitude
+  units = radian
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
+[landfrac]
+  standard_name = land_area_fraction
+  long_name = fraction of horizontal grid area occupied by land
+  units = frac
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
+[pr3d]
+  standard_name = air_pressure_at_interface
+  long_name = air pressure at model layer interfaces
+  units = Pa
+  dimensions = (horizontal_loop_extent,vertical_interface_dimension)
+  type = real
+  kind = kind_phys
+  intent = in
+[ph3d]
+  standard_name = geopotential_at_interface
+  long_name = geopotential at model layer interfaces
+  units = m2 s-2
+  dimensions = (horizontal_loop_extent,vertical_interface_dimension)
+  type = real
+  kind = kind_phys
+  intent = in
+[phl3d]
+  standard_name = geopotential
+  long_name = geopotential at model layer centers
+  units = m2 s-2
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = in
+[prl3d]
+  standard_name = air_pressure
+  long_name = mean layer pressure
+  units = Pa
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = in
+[tk3d]
+  standard_name = air_temperature_of_new_state
+  long_name = updated temperature
+  units = K
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = in
+[spechum]
+  standard_name = specific_humidity_of_new_state
+  long_name = water vapor specific humidity updated by physics
+  units = kg kg-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = in
+[ktop]
+  standard_name = vertical_index_at_cloud_top
+  long_name = vertical index at cloud top
+  units = index
+  dimensions = (horizontal_loop_extent)
+  type = integer
+  intent = in
+[kbot]
+  standard_name = vertical_index_at_cloud_base
+  long_name = vertical index at cloud base
+  units = index
+  dimensions = (horizontal_loop_extent)
+  type = integer
+  intent = in
+[ntrac]
+  standard_name = number_of_tracers
+  long_name = number of tracers
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[ntno]
+  standard_name = index_for_no
+  long_name = index for no
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[gq0]
+  standard_name = tracer_concentration_of_new_state
+  long_name = tracer concentration updated by physics
+  units = kg kg-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension,number_of_tracers)
+  type = real
+  kind = kind_phys
+  intent = inout
+[qgrs]
+  standard_name = tracer_concentration
+  long_name = model layer mean tracer concentration
+  units = kg kg-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension,number_of_tracers)
+  type = real
+  kind = kind_phys
+  intent = inout
+[bioem]
+  standard_name = instantaneous_biogenic_emissions
+  long_name = instantaneous biogenic emissions for dms, isop, c10h16, and lighting nox
+  units = mol km-2 hr-1
+  dimensions = (horizontal_loop_extent,4)
+  type = real
+  kind = kind_phys
+  intent = inout
+[lnox_opt]
+  standard_name = catchem_lnox_emis_opt
+  long_name = catchem lightning nox emission option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[errmsg]
+  standard_name = ccpp_error_message
+  long_name = error message for error handling in CCPP
+  units = none
+  dimensions = ()
+  type = character
+  kind = len=*
+  intent = out
+[errflg]
+  standard_name = ccpp_error_code
+  long_name = error code for error handling in CCPP
+  units = 1
+  dimensions = ()
+  type = integer
+  intent = out

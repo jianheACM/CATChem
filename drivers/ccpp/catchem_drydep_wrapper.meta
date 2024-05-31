@@ -1,13 +1,63 @@
 [ccpp-table-properties]
   name = catchem_drydep_wrapper
   type = scheme
-  dependencies = ../../parameters/catchem_config.F90,../../parameters/catchem_constants.F90,../../src/dep_vertmx_mod.F90,../../src/drydep_gocart_mod.F90,../../src/drydep_wesely_mod.F90
+  dependencies = ../../parameters/catchem_config.F90,../../parameters/catchem_constants.F90,../../src/dep_vertmx_mod.F90,../../src/drydep_gocart_mod.F90,../../src/drydep_wesely_mod.F90,../../src/gfdlam4chem/gfdl_astronomy.F90,../../src/gfdlam4chem/gfdl_time_utls.F90,../../src/gfdlam4chem/mo_errmsg.F90,../../src/gfdlam4chem/mo_chem_utls.F90,../../src/gfdlam4chem/gfdl_drydep_mod.F90
 
 ########################################################################
 [ccpp-arg-table]
   name = catchem_drydep_wrapper_init
   type = scheme
-
+[me]
+  standard_name = mpi_rank
+  long_name = MPI rank of current process
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[master]
+  standard_name = mpi_root
+  long_name = MPI rank of master process
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[gaschem_opt]
+  standard_name = catchem_gaschem_option
+  long_name = catchem gas-phase chemical mechanism option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[do_am4chem]
+  standard_name = flag_for_am4_chemistry
+  long_name = flag for am4 chemistry
+  units = flag
+  dimensions = ()
+  type = logical
+  intent = in
+[tracer_names]
+  standard_name = atmos_mod_tracer_names
+  long_name = array of atmos model tracer names
+  units = none
+  dimensions = (number_of_tracers)
+  type = character
+  kind = len=32
+  intent = in
+[errmsg]
+  standard_name = ccpp_error_message
+  long_name = error message for error handling in CCPP
+  units = none
+  dimensions = ()
+  type = character
+  kind = len=*
+  intent = out
+[errflg]
+  standard_name = ccpp_error_code
+  long_name = error code for error handling in CCPP
+  units = 1
+  dimensions = ()
+  type = integer
+  intent = out
 ########################################################################
 [ccpp-arg-table]
   name = catchem_drydep_wrapper_finalize
@@ -17,6 +67,28 @@
 [ccpp-arg-table]
   name = catchem_drydep_wrapper_run
   type = scheme
+[me]
+  standard_name = mpi_rank
+  long_name = MPI rank of current process
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[master]
+  standard_name = mpi_root
+  long_name = MPI rank of master process
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[tracer_names]
+  standard_name = atmos_mod_tracer_names
+  long_name = array of atmos model tracer names
+  units = none
+  dimensions = (number_of_tracers)
+  type = character
+  kind = len=32
+  intent = in
 [im]
   standard_name = horizontal_loop_extent
   long_name = horizontal loop extent
@@ -60,11 +132,51 @@
   dimensions = (horizontal_loop_extent)
   type = integer
   intent = in
+[oceanfrac]
+  standard_name = sea_area_fraction
+  long_name = fraction of horizontal grid area occupied by ocean
+  units = frac
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
+[landfrac]
+  standard_name = land_area_fraction
+  long_name = fraction of horizontal grid area occupied by land
+  units = frac
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
+[fice]
+  standard_name = sea_ice_area_fraction_of_sea_area_fraction
+  long_name = ice fraction over open water
+  units = frac
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
 [ustar]
   standard_name = surface_friction_velocity
   long_name = boundary layer parameter
   units = m s-1
   dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
+[ugrs]
+  standard_name = x_wind
+  long_name = zonal wind
+  units = m s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = in
+[vgrs]
+  standard_name = y_wind
+  long_name = meridional wind
+  units = m s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
   intent = in
@@ -107,6 +219,15 @@
   dimensions = (horizontal_loop_extent)
   type = real
   kind = kind_phys
+  intent = in
+[depvel_in]
+  standard_name = dry_deposition_velocity_2d_input
+  long_name = dry deposition velocity 2d input
+  units = m s-1
+  dimensions = (horizontal_loop_extent,22)
+  type = real
+  kind = kind_phys
+  active = (flag_for_am4_chemistry)
   intent = in
 [hf2d]
   standard_name = instantaneous_surface_upward_sensible_heat_flux
@@ -237,6 +358,34 @@
   standard_name = number_of_tracers
   long_name = number of tracers
   units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[ntchs]
+  standard_name = index_of_first_chemical_tracer_in_tracer_concentration_array
+  long_name = tracer index for first chemical tracer
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntchm]
+  standard_name = number_of_chemical_tracers
+  long_name = number of chemical tracers
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[ndchm]
+  standard_name = number_of_diagnostic_chemical_tracers
+  long_name = number of diagnostic chemical tracers
+  units = count
+  dimensions = ()
+  type = integer
+  intent = in
+[ntextinct]
+  standard_name = index_for_extinction
+  long_name = index for extinction
+  units = index
   dimensions = ()
   type = integer
   intent = in
@@ -380,6 +529,27 @@
   dimensions = ()
   type = integer
   intent = in
+[ntage]
+  standard_name = index_for_age
+  long_name = index for age
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntaoanh]
+  standard_name = index_for_aoanh
+  long_name = index for aoanh
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntsoa]
+  standard_name = index_for_soa
+  long_name = index for soa
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
 [ntchmdiag]
   standard_name = number_of_chemical_tracers_for_diagnostics
   long_name = number of chemical tracers for diagnostic output
@@ -411,12 +581,42 @@
   type = real
   kind = kind_phys
   intent = inout
+[ddep]
+  standard_name = instantaneous_dry_deposition_from_AM4
+  long_name = instantaneous dry deposition for o3, nh3, and so4
+  units = kg m-2 s-1
+  dimensions = (horizontal_loop_extent,3)
+  type = real
+  kind = kind_phys
+  active = (flag_for_am4_chemistry)
+  intent = inout
 [chem_conv_tr_in]
   standard_name = catchem_conv_tr
   long_name = catchem convective transport option
   units = index
   dimensions = ()
   type = integer
+  intent = in
+[chem_opt]
+  standard_name = catchem_option
+  long_name = catchem option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[gaschem_opt]
+  standard_name = catchem_gaschem_option
+  long_name = catchem gas-phase chemical mechanism option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[do_am4chem]
+  standard_name = flag_for_am4_chemistry
+  long_name = flag for am4 chemistry
+  units = flag
+  dimensions = ()
+  type = logical
   intent = in
 [errmsg]
   standard_name = ccpp_error_message
