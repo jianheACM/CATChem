@@ -289,7 +289,11 @@ contains
                      xland, frac_open_sea, dsinku(:,:,n), dt, &
                      chem(:,kts,:,n), rlat_in, rlon_in, Time, &
                      depvel_am4(:,:,:),ddvel(:,:,n))
+         !dsinku, ppm/s or ug/kg/s
+         !dsinku=tracer*(1. - exp(-dsinku*dt))/dt
+         chem(:,kts,:,n) = chem(:,kts,:,n) - dsinku(:,:,n)*dt
        end do
+       
 
        !
        !   Compute dry deposition according to NGAC
@@ -435,10 +439,16 @@ contains
 
 !           endif
 
+           CASE (CHEM_OPT_GFDL_AM4) 
+            !Turn off for now
+              if ((nv.ne.p_age) .and. (nv.ne.p_n2o) .and. (nv.ne.p_aoanh)) then 
+               call vertmx(dt,pblst,ekmfull,dryrho_1d, &
+                           zzfull,zz,ddvel(i,j,nv),kts,kte)
+              endif
+
            CASE DEFAULT
                call vertmx(dt,pblst,ekmfull,dryrho_1d, &
                            zzfull,zz,ddvel(i,j,nv),kts,kte)
-
            END SELECT mix_select
 
            do k=kts,kte

@@ -192,6 +192,13 @@
   type = real
   kind = kind_phys
   intent = out
+[read_emis3d]
+  standard_name = flag_for_reading_3d_emissions
+  long_name = flag for reading 3d emissions
+  units = flag
+  dimensions = ()
+  type = logical
+  intent = in
 [ntrac]
   standard_name = number_of_tracers
   long_name = number of tracers
@@ -348,9 +355,9 @@
   intent = in
 [bmbem]
   standard_name = instantaneous_biomass_burning_emissions
-  long_name = instantaneous biomass burning emissions for co, ch4, nh3, and terp
+  long_name = instantaneous biomass burning emissions for co, ch4, nh3, so2, terp, and h2
   units = mol km-2 hr-1
-  dimensions = (horizontal_loop_extent,4)
+  dimensions = (horizontal_loop_extent,6)
   type = real
   kind = kind_phys
   intent = inout

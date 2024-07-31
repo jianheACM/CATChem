@@ -6,7 +6,7 @@ implicit none
                 get_spc_ndx, get_het_ndx, get_extfrc_ndx, &
                 has_drydep, has_srfems, get_rxt_ndx, get_grp_ndx, &
                 get_grp_mem_ndx, chem_utls_init, &
-                get_solar_flux_by_band
+                get_solar_flux_by_band, read_2D_emis_diurnal
 
       integer, parameter :: NO_TRACER = -99
 
@@ -820,5 +820,81 @@ iounit = 66
 
 !---------------------------------------------------------------------
 end subroutine get_solar_flux_by_band
+
+!#######################################################################
+
+! <SUBROUTINE NAME="read_2D_emis_data">
+!   <OVERVIEW>
+!     Read emissions file
+!   </OVERVIEW>
+!   <DESCRIPTION>
+!     Reads tracer surface emissions from a NetCDF file
+!   </DESCRIPTION>
+!   <TEMPLATE>
+!     call read_2D_emis_data( emis_type, emis, Time, &
+!                             field_names, &
+!                             Ldiurnal, coszen, half_day, lon, &
+!                             is, js, id_emis_diag )
+!   </TEMPLATE>
+
+subroutine read_2D_emis_diurnal( emis, Time, &
+                dt, PI, lat, lon, is, ie, js, je)
+
+   use gfdl_time_utls_mod, only : time_type, get_date,real_to_time_type
+   use gfdl_astronomy_mod,  only : astronomy_init, astronomy_end, &
+                                       diurnal_solar, universal_time
+
+   implicit none
+
+   real, intent(inout), dimension(:,:) :: emis
+   real, intent(in)                   :: dt, PI
+   type(time_type),intent(in) :: Time
+   real, intent(in),    dimension(:,:)            :: lon, lat  !radian
+   integer, intent(in) :: is, ie, js, je
+
+   integer :: i, j, k, n
+   real, dimension(size(emis,1),size(emis,2))  :: coszen, fracday, half_day
+   real :: rrsun, twopi
+   real :: diurnal_scale_factor, gmt, iso_on, iso_off, dayfrac
+   real :: local_angle, factor_tmp
+
+   twopi      = 2.*PI
+
+   call astronomy_init
+
+   call diurnal_solar( lat, lon, Time, coszen, fracday, &
+                           rrsun, dt_time=real_to_time_type(dt), &
+                           half_day_out=half_day )
+
+
+    do j=1,size(emis,2)
+      do i=1,size(emis,1)
+         if( coszen(i,j) < 0. ) then
+            diurnal_scale_factor = 0.
+         else
+            iso_off = .8 * half_day(i,j)
+            iso_on  = -iso_off
+            dayfrac = iso_off/PI
+            gmt = universal_time(Time)
+            local_angle = gmt + lon(i,j) - PI
+            if (local_angle >= PI) local_angle = local_angle - twopi
+            if (local_angle < -PI) local_angle = local_angle + twopi
+            if( local_angle >= iso_off .or. local_angle <= iso_on ) then
+               diurnal_scale_factor = 0.
+            else
+               factor_tmp = local_angle - iso_on
+               factor_tmp = factor_tmp / MAX(2.*iso_off,1.e-6)
+               diurnal_scale_factor = 2. / dayfrac * (sin(PI*factor_tmp))**2
+            end if
+         end if
+
+         emis(i,j) = emis(i,j) * diurnal_scale_factor
+
+      end do
+    end do
+
+end subroutine read_2D_emis_diurnal
+!</SUBROUTINE>
+
 
       end module mo_chem_utls_mod

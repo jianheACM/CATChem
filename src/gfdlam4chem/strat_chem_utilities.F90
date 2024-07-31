@@ -693,7 +693,9 @@ do k = 1,kl
    do i=1,IL
      RMODE = (VHET(i,1)*A1/A4)**0.33333333
      psc%rmean(i,k) = MAX(RMODE*A2, 1.e-12)
-!    psc%aliq(i,k) = 3.0*A4*(RMODE**2)*A3
+     !JianHe: we do not use strat_aerosol as we do not have extinct calculated
+     !Follow AM3?
+!     psc%aliq(i,k) = 3.0*A4*(RMODE**2)*A3
      psc%aliq(i,k) = strat_aerosol(i,k)
      RMODESAT = (VHET(i,2)*A1/A4)**0.33333333
      psc%asat(i,k) = 3.0*A4*(RMODESAT**2)*A3
@@ -701,7 +703,7 @@ do k = 1,kl
      psc%rice(i,k) = (VHET(i,4)/(1.33333333*PI*psc%aice))**0.33333333
      SANAT = 4.*PI * psc%anat * psc%rnat(i,k)**2
      psc%asat(i,k) = MAX(psc%asat(i,k) - SANAT, 0.)
-!    psc%aliq(i,k) = MAX(psc%aliq(i,k) - SANAT, 0.)
+!     psc%aliq(i,k) = MAX(psc%aliq(i,k) - SANAT, 0.)  ! JianHe: follow AM3?
    end do
 end do
 

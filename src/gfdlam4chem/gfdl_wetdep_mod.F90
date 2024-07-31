@@ -114,8 +114,8 @@ module gfdl_wetdep_mod
 
 
   ! --->h1g, add a scale factor for aerosol wet deposition, 2014-04-10
-  real ::                scale_aerosol_wetdep =1.0
-  real ::                scale_aerosol_wetdep_snow =1.0
+  real ::                scale_aerosol_wetdep = 1.5 !1.0
+  real ::                scale_aerosol_wetdep_snow =1.5 !1.0
   character(len=64)  :: file_dry = 'depvel.nc'  ! NetCDF file for dry deposition velocities
   logical :: drydep_exp = .true.
   real :: T_snow_dep = 263.15
@@ -212,7 +212,7 @@ contains
           tracer_units(n)='mmr'
        endif
        if (name=='cld_amt') then
-          tracer_units(n)='1'
+          tracer_units(n)='frac'
        endif
        if ((name=='age') .or. (name=='aoanh')) then
           tracer_units(n)='years'
@@ -356,7 +356,7 @@ contains
 
     if ((name=='bc1') .or. (name=='oc1')) then  ! bcphob, omphob
       Wetdep(n)%scheme = "aerosol_below"
-      Wetdep(n)%frac_in_cloud = 0.*scale_aerosol_wetdep
+      Wetdep(n)%frac_in_cloud = 0.1*scale_aerosol_wetdep
       Wetdep(n)%frac_in_cloud_snow=Wetdep(n)%frac_in_cloud
       Wetdep(n)%frac_in_cloud_snow_homogeneous = Wetdep(n)%frac_in_cloud
       Wetdep(n)%alpha_r = 0.001*scale_aerosol_wetdep
@@ -626,6 +626,7 @@ subroutine gfdl_wet_deposition( me, master, tracer_names,&
     f_snow_berg, rain3d, snow3d, &
     tracer, tracer_dt, cloud_param, &
     is, js, dt, sum_wdep_out, so2_so4_out )
+
   !
   !<OVERVIEW>
   ! Routine to calculate the fraction of tracer removed by wet deposition
@@ -871,7 +872,6 @@ subroutine gfdl_wet_deposition( me, master, tracer_names,&
     precip3dr(:,:,k) = rain3d(:,:,k+1)-rain3d(:,:,k)
     pwt(:,:,k)  = ( phalf(:,:,k+1) - phalf(:,:,k) )/GRAV ! kg/m2
     zdel(:,:,k) = zhalf(:,:,k) - zhalf(:,:,k+1) ! m
-    !zdel(:,:,k) = pwt(:,:,k)/rhoa(:,:,k)     ! JianHe: follow GOCART?
  end do
  if (Lice) then
     do k=1,kd
@@ -1076,6 +1076,7 @@ subroutine gfdl_wet_deposition( me, master, tracer_names,&
           do k=1,kd
              ! Calculate the temperature dependent Henry's Law constant
              scav_factor(:,:) = 0.0
+             scav_factor_s(:,:) = 0.0
              xliq(:,:,k)  = MAX( cloud(:,:,k) * mw_air, 0. ) ! (kg H2O)/(mole air)
              n_air(:,:,k) = pfull(:,:,k) / (kboltz*T(:,:,k)) * cm3_2_m3 ! molec/cm3
              if (Lgas) then
@@ -1090,6 +1091,11 @@ subroutine gfdl_wet_deposition( me, master, tracer_names,&
                 if (frac_in_cloud == frac_in_cloud_snow) then
                    scav_factor_s(:,:) = scav_factor(:,:)
                 else
+                  ! if (me == master) then
+                   !  write(*,*) 'diag wetdep: ', maxval(f_snow_berg),minval(f_snow_berg)
+                  !   write(*,*) 'diag wetdep: ', frac_in_cloud_snow, frac_in_cloud, k
+                  !   write(*,*) 'diag wetdep: ', maxval(scav_factor_s),minval(scav_factor_s)
+                  ! end if
                    scav_factor_s(:,:) = f_snow_berg(:,:,k)*frac_in_cloud_snow +&
                         (1.-f_snow_berg(:,:,k))*frac_in_cloud
                    if (frac_in_cloud_snow_homogeneous .ne. frac_in_cloud) then

@@ -123,7 +123,7 @@ contains
 
     !JianHe: AM4 lev is in 3rd dimension 
     real(kind_phys), dimension(1:im,jms:jme,1:kte) :: t_am4, z_am4, p_am4
-    real(kind_phys), dimension(1:im,jms:jme,1:kme) :: z8w_am4, p8w_am4
+    real(kind_phys), dimension(1:im,jms:jme,1:kme) :: z8w_am4, p8w_am4, rho_am4
 
     real(kind_phys), dimension(ims:im, jms:jme) :: xland, dxy, xlat, xlong
     real(kind_phys), dimension(ims:im, jms:jme) :: ilat
@@ -180,6 +180,7 @@ if (soa_opt > 0) then
             t_am4(i,j,kp) = t_phy(i,k,j)  !K
             p_am4(i,j,kp) = p_phy(i,k,j)  !Pa
             z_am4(i,j,kp) = z_phy(i,k,j)
+            rho_am4(i,j,kp) = rho_phy(i,k,j) ! kg/m3
             soa_am4(i,j,kp) = chem(i,k,j,p_soa)*1.e-9 ! ug/kg to kg/kg
             oh_am4(i,j,kp) = chem(i,k,j,p_oh)*1.e-6  ! ppm to mol/mol
             c4h10_am4(i,j,kp) = chem(i,k,j,p_c4h10)*1.e-6  ! ppm to mol/mol
@@ -363,8 +364,8 @@ endif
     enddo
 
      do i=its,ite
-       xbvoc(i,1,1) = bioem(i,1)*AVOGNO*1.e-10/3600. ! isop, mol/km2/hr to molec/cm2/s
-       xbvoc(i,1,2) = bioem(i,2)*AVOGNO*1.e-10/3600. ! c10h16
+       xbvoc(i,1,1) = bioem(i,2)*AVOGNO*1.e-10/3600. ! isop, mol/km2/hr to molec/cm2/s
+       xbvoc(i,1,2) = bioem(i,3)*AVOGNO*1.e-10/3600. ! c10h16
      enddo
 #endif
 

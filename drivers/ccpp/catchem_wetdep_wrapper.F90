@@ -26,7 +26,7 @@
    public :: catchem_wetdep_wrapper_init, catchem_wetdep_wrapper_run, catchem_wetdep_wrapper_finalize
 
    logical :: is_initialized = .false.
-   logical :: do_cv_wetdep = .false.
+   logical :: do_cv_wetdep = .true.
    real(kind_phys),parameter :: rhow = 1.0e3, rhor = 1.0e3, rhos = 1.0e2, rhog = 4.0e2
 
 contains
@@ -89,9 +89,9 @@ contains
                    imp_physics, imp_physics_gfdl, imp_physics_thompson, &
                    rain_cplchm, rainc_cpl,rlat,                         &
                    pr3d, ph3d,phl3d, prl3d, tk3d, us3d, vs3d, spechum,  &
-                   w, dqdt, lmk, cld_frac, cnvc, & 
+                   w, dqdt_qmicro,dqdti, lmk, cld_frac, cnvc, cnvw,  & 
                    ntrac,ntchs, ntchm, ndchm, ntchmdiag,                &
-                   ntcw, ntiw, pfi_lsan, pfl_lsan, &
+                   ntcw,ntiw,ntrw,ntsw,ntgl, pfi_lsan, pfl_lsan, &
                    ntso2,ntsulf,ntDMS,ntmsa,ntpp25,                     &
                    ntbc1,ntbc2,ntoc1,ntoc2,                             &
                    ntss1,ntss2,ntss3,ntss4,ntss5,                       &
@@ -106,7 +106,8 @@ contains
     integer, intent (in) :: master
 
     integer,        intent(in) :: im,kte,kme,ktau,ntchmdiag, &
-                                  ntcw,ntiw,ntchs,ntchm,ndchm
+                                  ntcw,ntiw,ntrw,ntsw,ntgl, &
+                                  ntchs,ntchm,ndchm
     integer,        intent(in) :: ntrac,ntss1,ntss2,ntss3,ntss4,ntss5
     integer,        intent(in) :: ntdust1,ntdust2,ntdust3,ntdust4,ntdust5
     integer,        intent(in) :: ntso2,ntpp25,ntbc1,ntoc1,ntpp10
@@ -124,11 +125,11 @@ contains
     real(kind_phys), dimension(im),     intent(in) :: rain_cplchm,rainc_cpl,rlat
     real(kind_phys), dimension(im,kme), intent(in) :: ph3d, pr3d
     real(kind_phys), dimension(im,kte), intent(in) :: phl3d, prl3d, tk3d,        &
-                us3d, vs3d, spechum, w, dqdt
+                us3d, vs3d, spechum, w, dqdt_qmicro,dqdti
     integer,           intent(in) :: lmk
     real(kind_phys), dimension(im,lmk), intent(in) ::  cld_frac
     real(kind_phys), dimension(im,kte), intent(in) ::  &
-                                           cnvc,pfi_lsan, pfl_lsan
+                                           cnvc,cnvw,pfi_lsan, pfl_lsan
     real(kind_phys), dimension(im,kte,ntrac), intent(inout) :: gq0, qgrs
     real(kind_phys), dimension(im,ntchmdiag), intent(inout) :: wetdpl
     real(kind_phys), optional, intent(inout) :: wdep(:,:)
@@ -137,8 +138,8 @@ contains
     integer,          intent(out) :: errflg
     integer, intent(in) :: imp_physics, imp_physics_gfdl, imp_physics_thompson
     real(kind_phys), dimension(1:im, 1:kme,jms:jme) :: rri, t_phy, u_phy, v_phy,       &
-                     p_phy, z_at_w, dz8w, p8w, t8w, rho_phy, vvel, dqdti
-    real(kind_phys), dimension(1:im, 1:kme,jms:jme) :: z_phy, sphum,cldfrac
+                     p_phy, z_at_w, dz8w, p8w, t8w, rho_phy, vvel, dqdt_mp,dqdt_cv
+    real(kind_phys), dimension(1:im, 1:kme,jms:jme) :: z_phy, sphum,cldfrac,cf_cv,cw_cv
 
     real(kind_phys), dimension(ims:im, jms:jme) :: rcav, rnav,xlat
     real(kind_phys), dimension(ims:im, jms:jme) :: surfrain, surfsnow
@@ -155,7 +156,7 @@ contains
     real(kind_phys), dimension(ims:im,jms:jme,kts:kte,1:num_chem ) :: trac_am4
     real(kind_phys), dimension(ims:im,jms:jme,kts:kte,1:ntrac) :: trac_dt
     real(kind_phys), dimension(1:im,jms:jme,1:kte) :: t_am4,    &
-                    p_am4, z_am4, sphum_am4, cldfrac_am4, dqdt_am4, &
+                    p_am4, z_am4, sphum_am4, cldfrac_am4, dqdt_am4, dqdtc_am4,&
                     cldamt_am4, drain, dsnow, pdel, f_snow_berg
     real(kind_phys), dimension(1:im,jms:jme,1:kme) :: z8w_am4, p8w_am4, &
                                            rain3d_am4, snow3d_am4 ! need in phalf level
@@ -212,9 +213,10 @@ contains
 !>- get ready for chemistry run
     call catchem_prep_wetdep(ktau,dtstep,                               &
         imp_physics, imp_physics_gfdl, imp_physics_thompson,            &
-        pr3d,ph3d,phl3d,tk3d,prl3d,us3d,vs3d,spechum,w, dqdt,           &
-        rri,t_phy,u_phy,v_phy,p_phy,rho_phy,z_phy,dz8w,p8w,lmk,cld_frac,cnvc, &
-        t8w,dqdti,cldfrac,z_at_w,vvel,rlat,xlat,                                &
+        pr3d,ph3d,phl3d,tk3d,prl3d,us3d,vs3d,spechum,w,dqdt_qmicro,dqdti,           &
+        rri,t_phy,u_phy,v_phy,p_phy,rho_phy,z_phy,dz8w,p8w,& 
+        lmk,cld_frac,cnvc,cnvw,&
+        t8w,dqdt_mp,dqdt_cv,cldfrac,cf_cv,cw_cv,z_at_w,vvel,rlat,xlat,        &
         ntso2,ntsulf,ntDMS,ntmsa,ntpp25,                                &
         ntbc1,ntbc2,ntoc1,ntoc2,                                        &
         ntss1,ntss2,ntss3,ntss4,ntss5,                                  &
@@ -245,12 +247,13 @@ contains
             call WetRemovalGOCART(kts,kte, 1,1, dt,   &
                                var_rmv(i,j,:),chem(i,:,j,:),    &
                                p_phy(i,:,j),t_phy(i,:,j),       &
-                               rho_phy(i,:,j),dqdti(i,:,j),     &
+                               rho_phy(i,:,j),dqdt_cv(i,:,j),     &
                                rcav(i,j),rnav(i,j),             &
                                kms,kme)
           enddo
         enddo
 
+        case (WDLS_OPT_AM4)
          !if (chem_rc_check(localrc, msg="Failure in NGAC wet removal scheme", &
          !  file=__FILE__, line=__LINE__, rc=rc)) return
 #ifdef AM4_CHEM
@@ -258,8 +261,14 @@ contains
     ! instead of in lower subroutines to avoid issue 
     ! for diagnostic output (required by debugger turned on)
     wdep = 0._kind_phys
+    dqdt_am4 = 0._kind_phys
+    dqdtc_am4 = 0._kind_phys
+    ls_wetdep = 0._kind_phys
+    cv_wetdep = 0._kind_phys
+    f_snow_berg = 0._kind_phys ! Thompson scheme does not address Bergeron
+                                   ! Process, set to 0 for now; 
+    var_rmv(:,:,:)=0._kind_phys
 
-      case (WDLS_OPT_AM4)
         do j = jts, jte
           do i = its, ite
            !JianHe: AM4 needs vertical level from model top to bottom
@@ -274,7 +283,7 @@ contains
               t_am4(i,j,kp) = t_phy(i,k,j)  !K
               p_am4(i,j,kp) = p_phy(i,k,j)  !Pa
               z_am4(i,j,kp) = z_phy(i,k,j)  !m
-              !cldfrac_am4(i,j,kp) = cldfrac(i,k,j)
+              cldfrac_am4(i,j,kp) = cldfrac(i,k,j)
               !cldamt_am4(i,j,kp) = gq0(i,k,ntcw)+gq0(i,k,ntiw) ! kg/kg
               rain3d_am4(i,j,kp+1) = pfl_lsan(i,k) ! kg m-2 s-1  !JianHe: is this the correct variablie?
               snow3d_am4(i,j,kp+1) = pfi_lsan(i,k) ! AM4 needs var in phalf levels    
@@ -314,8 +323,8 @@ contains
             do k = kts, kte
               kp = kte-k+1
               !not used in the new scheme
-              !not used in the new scheme
               dqdt_am4(i,j,kp) = (drain(i,j,kp)+dsnow(i,j,kp))/pdel(i,j,kp)! kg/kg/s, may include wv, liquid, ice
+              !dqdt_am4(i,j,kp) = dqdt_am4(i,j,kp) + dqdt_mp(i,k,j)  
               qls = dqdt_am4(i,j,kp)*rho_phy(i,k,j)                        ! kg/m3/s
               if (qls > 0.) then
                 !JianHe: cldfrac is not calculated from MP
@@ -323,15 +332,23 @@ contains
                 !following WetRemovalGOCART
                 ! F  = F0_ls / (1. + F0_ls*B0_ls*XL_ls/(qls(k)*cdt/Td_ls))
                 !may need a better way to calculate cloud fraction for wetdep
-                 cldfrac_am4(i,j,kp) = 1./(1.+1.*1.0e-4*5.0e-4/qls)
-              else
-                 cldfrac_am4(i,j,kp) = 0.
-              endif
-              !Need add cloud amount at end of timestep.
-              !WetRemovalGOCART has its own way to calculate cldliq and cldice
-              cldamt_am4(i,j,kp) = gq0(i,k,ntcw)+gq0(i,k,ntiw) ! kg/kg
-              cldamt_am4(i,j,kp) = cldamt_am4(i,j,kp) + dqdt_am4(i,j,kp)*dt
+                 !cldfrac_am4(i,j,kp) = 1./(1.+1.*1.0e-4*5.0e-4/qls)
 
+                if (dsnow(i,j,kp) > 0. ) then
+                   f_snow_berg(i,j,kp) = dsnow(i,j,kp)/(drain(i,j,kp)+dsnow(i,j,kp))   ! set for now
+                   f_snow_berg(i,j,kp) = min(f_snow_berg(i,j,kp), 1.)
+                else
+                   f_snow_berg(i,j,kp) = 0.
+                endif
+              endif
+              !WetRemovalGOCART has its own way to calculate cldliq and cldice
+              cldamt_am4(i,j,kp) = gq0(i,k,ntcw)+gq0(i,k,ntiw)
+              if (ntrw > 0.) then
+                 cldamt_am4(i,j,kp) = cldamt_am4(i,j,kp) + gq0(i,k,ntrw)
+                 if (ntsw > 0.) then
+                     cldamt_am4(i,j,kp) = cldamt_am4(i,j,kp) + gq0(i,k,ntsw)    
+                 end if
+              end if
             end do
           end do
         end do
@@ -352,9 +369,6 @@ contains
           nt = ntchs+n-1   ! tracer index in tracer array
 
           wetdeptnd(:,:,:) = 0.0
-          f_snow_berg(:,:,:) = 0.0 ! Thompson scheme does not address Bergeron
-                                   ! Process, set to 0 for now; 
-                                   ! could be calculated in morrison scheme 
 
           !Do large-scale first
           call gfdl_wet_deposition (        &
@@ -365,7 +379,7 @@ contains
               cldfrac_am4, f_snow_berg, rain3d_am4,  &
               snow3d_am4, trac_am4(:,:,:,n),  &
               wetdeptnd, 'lscale', its, jts, dt,  &
-              sum_wdep_out=ls_wetdep(:,:,n),  &
+              sum_wdep_out=ls_wetdep(:,:,n),  &  ! would be negative
               so2_so4_out=so2_so4(:,:,:))
 
 !-----------------------------------------------------------------------
@@ -375,6 +389,13 @@ contains
           ! ug/kg/s for aerosol and ppm/s for gas
           ! output in positive
           trac_dt (:,:,:,n) = wetdeptnd(:,:,:)
+
+         ! if (me == master) then
+         !    if (minval(trac_dt (:,:,:,n)) < 0.) then
+         !        print *, "Found negative wetdep for ", tracer_names(nt)
+         !    end if
+         !    print *, "min/max ls_wetdep: ", tracer_names(nt), minval(ls_wetdep(:,:,n)),maxval(ls_wetdep(:,:,n))
+         ! endif
 
           if (tracer_names(nt) .eq. 'so2') then
             so2_so4_evap = so2_so4
@@ -398,55 +419,79 @@ contains
      ! C2ls_mp%cloud_frac = 0.1
      ! C2ls_mp%cloud_wet = 1.e-3
 
-        do n = 1,ntchm  ! for gas+aerosol, tracer index in chem array
-          nt = ntchs+n-1   ! tracer index in tracer array
-
-          wetdeptnd(:,:,:) = 0.0
           f_snow_berg(:,:,:) = 0.0 ! Thompson scheme does not address Bergeron
-                                   ! Process, set to 0 for now; 
-                                   ! could be calculated in morrison scheme 
-          cldfrac_am4(:,:,:) = 0.1   !Based on AM4
-          cldamt_am4(:,:,:) = 1.e-3
-          surfrain(:,:) = rcav/1000.*rho_phy(:,kts,:)/dt    ! kg/m2/s
+                                   ! Process, set to 0 for now;
+                                   ! could be calculated in morrison scheme
+
+           
+          !cldfrac_am4(:,:,:) = min(0.1,cldfrac_am4(:,:,:))   !Based on AM4
+          !cldamt_am4(:,:,:) = min(1.e-3,cldamt_am4(:,:,:)*2.)
+
+          surfrain(:,:) = rcav(:,:)/1000.*rho_phy(:,kts,:)/dt    ! kg/m2/s
           surfsnow(:,:) = 0.
           !we need convective precip in kg/m2/s
           rain3d_am4(:,:,:) = 0.  ! kg/m2/s, we need convective precip in kg/m2/s
           snow3d_am4(:,:,:) = 0.
+          rain3d_am4(:,:,kte+1) = surfrain(:,:)    ! accumulated surface rain
+
+        do j = jts, jte
+         do i = its, ite
 
           do k = kts, kte
             kp = kte-k+1
+            cldfrac_am4(i,j,kp) = cf_cv(i,k,j)
+            cldfrac_am4(i,j,kp) =  max(0.05,cldfrac_am4(i,j,kp) )
+           
+            cldamt_am4(i,j,kp) = cw_cv(i,k,j) 
+            cldamt_am4(i,j,kp) = max(1.e-4,cldamt_am4(i,j,kp))
+
             !not used in the new scheme
-            dqdt_am4(i,j,kp) = dqdti(i,k,j)! kg/kg/s, may include wv, liquid, ice
-            qcv = -dqdt_am4(i,j,kp)*rho_phy(i,k,j)                        ! kg/m3/s
+            dqdtc_am4(i,j,kp) = -dqdt_cv(i,k,j) ! kg/kg/s, may include wv, liquid, ice
+            qcv = dqdtc_am4(i,j,kp)*rho_phy(i,k,j)                        ! kg/m3/s
+            delz = abs(z8w_am4(i,j,kp+1)-z8w_am4(i,j,kp))
+            drain(i,j,kp)=dqdtc_am4(i,j,kp)*pdel(i,j,kp)  ! kg/m2/s  ! need convective rain in layers
+
             if (qcv > 0.) then
               !JianHe: cldfrac is not calculated from MP
               !fraction of grid box covered by precipitating clouds.
               !following WetRemovalGOCART
               ! F  = F0_cv / (1. + F0_cv*B0_cv*XL_cv/(Qcv(k)*cdt/Td_cv))
               !may need a better way to calculate cloud fraction for wetdep
-               cldfrac_am4(i,j,kp) = 0.3/(1.+0.3*1.5e-3*2.0e-3/qcv)
+               !cldfrac_am4(i,j,kp) = 0.3/(1.+0.3*1.5e-3*2.0e-3/qcv) ! use prescribed
+               !delz = abs(z8w_am4(i,j,kp+1)-z8w_am4(i,j,kp))
+               !drain(i,j,kp)=qcv*delz    ! kg/m2/s
             else
-               cldfrac_am4(i,j,kp) = 0.
+               !cldfrac_am4(i,j,kp) = 0.  ! use prescribed
+               drain(i,j,kp)=0.
             endif
 
-            delz = abs(z8w_am4(i,j,kp+1)-z8w_am4(i,j,kp))
-            drain(i,j,kp)=qcv*delz    ! kg/m2/s
-          end do
+            rain3d_am4(i,j,kp) = rain3d_am4(i,j,kp+1) - drain(i,j,kp)
+ 
+          end do        
+         end do
+        end do
 
-          do k = 2,kte+1
-            rain3d_am4(:,:,k) = rain3d_am4(:,:,k-1)+drain(i,j,k)
-          enddo
+
+        do n = 1,ntchm  ! for gas+aerosol, tracer index in chem array
+          nt = ntchs+n-1   ! tracer index in tracer array
+
+          wetdeptnd(:,:,:) = 0.0
 
           call gfdl_wet_deposition (        &
               me, master, tracer_names,&
               nt, t_am4, p_am4, p8w_am4,   &
               z_am4, z8w_am4, surfrain,  &
-              surfsnow, dqdt_am4, cldamt_am4, &
+              surfsnow, dqdtc_am4, cldamt_am4, &
               cldfrac_am4, f_snow_berg, rain3d_am4,  &
               snow3d_am4, trac_am4(:,:,:,n),  &
-              wetdeptnd, 'convect', its, jts, dt)
+              wetdeptnd, 'convect', its, jts, dt, &
+              sum_wdep_out=cv_wetdep(:,:,n))
 
           trac_dt (:,:,:,n) = trac_dt (:,:,:,n) + wetdeptnd(:,:,:)
+
+          !if (me == master) then
+          !   print *, "min/max cv_wetdep: ", tracer_names(nt), minval(cv_wetdep(:,:,n)),maxval(cv_wetdep(:,:,n))
+          !endif
 
         end do
      end if
@@ -480,7 +525,7 @@ contains
             !JianHe: need attension on the conversion
             !ls_wetdep: kg/m2/s for aerosol and mol/m2/s for gas
             !kg/m2/s (if MMR) or mole/m2/s (if VMR)
-            var_rmv(i,j,1:num_chem) = abs(ls_wetdep(i,j,1:num_chem))
+            var_rmv(i,j,1:num_chem) = abs(ls_wetdep(i,j,1:num_chem)) + abs(cv_wetdep(i,j,1:num_chem)) 
             wdep(i,1) = var_rmv(i,j,p_so2)*1.e-3*64. ! kg/m2/s
             wdep(i,2) = var_rmv(i,j,p_nh3)*1.e-3*17. ! kg/m2/s
             wdep(i,3) = var_rmv(i,j,p_so4)*1.e-3*96. ! kg/m2/s
@@ -514,9 +559,10 @@ contains
 
   subroutine catchem_prep_wetdep(ktau,dtstep,                          &
         imp_physics, imp_physics_gfdl, imp_physics_thompson,           &
-        pr3d,ph3d,phl3d,tk3d,prl3d,us3d,vs3d,spechum,w,dqdt,           &
-        rri,t_phy,u_phy,v_phy,p_phy,rho_phy,z_phy,dz8w,p8w,lmk,cld_frac,cnvc,&
-        t8w,dqdti,cldfrac,z_at_w,vvel,rlat,xlat,                               &
+        pr3d,ph3d,phl3d,tk3d,prl3d,us3d,vs3d,spechum,w,dqdt_qmicro,dqdti,           &
+        rri,t_phy,u_phy,v_phy,p_phy,rho_phy,z_phy,dz8w,p8w, &
+        lmk,cld_frac,cnvc,cnvw,&
+        t8w,dqdt_mp,dqdt_cv,cldfrac,cf_cv,cw_cv,z_at_w,vvel,rlat,xlat,                        &
         ntso2,ntsulf,ntDMS,ntmsa,ntpp25,                               &
         ntbc1,ntbc2,ntoc1,ntoc2,                                       &
         ntss1,ntss2,ntss3,ntss4,ntss5,                                 &
@@ -542,10 +588,10 @@ contains
     real(kind=kind_phys), dimension(ims:ime), intent(in) ::rlat
     real(kind=kind_phys), dimension(ims:ime, kms:kme), intent(in) :: pr3d,ph3d
     real(kind=kind_phys), dimension(ims:ime, kts:kte), intent(in) ::       &
-         phl3d,tk3d,prl3d,us3d,vs3d,spechum,w,dqdt
+         phl3d,tk3d,prl3d,us3d,vs3d,spechum,w,dqdt_qmicro,dqdti
     integer,        intent(in) :: lmk
-    real(kind=kind_phys), dimension(ims:ime,lmk) :: cld_frac
-    real(kind=kind_phys), dimension(ims:ime, kts:kte), intent(in) ::  cnvc
+    real(kind=kind_phys), dimension(ims:ime,lmk), intent(in) :: cld_frac
+    real(kind=kind_phys), dimension(ims:ime, kts:kte), intent(in) ::  cnvc,cnvw
     real(kind=kind_phys), dimension(ims:ime, kts:kte,ntrac), intent(in) :: gq0
 
 
@@ -558,7 +604,8 @@ contains
     real(kind_phys), dimension(1:num_chem), intent(in) :: ppm2ugkg
     
     real(kind_phys), dimension(ims:ime, kms:kme, jms:jme), intent(out) ::              & 
-         rri, t_phy, u_phy, v_phy, p_phy, rho_phy, z_phy, dz8w, p8w, t8w, vvel, dqdti, cldfrac
+         rri, t_phy, u_phy, v_phy, p_phy, rho_phy, z_phy, dz8w, p8w, t8w, vvel, &
+         dqdt_mp,dqdt_cv, cldfrac, cf_cv, cw_cv
     real(kind_phys), dimension(ims:ime, kms:kme, jms:jme, 1:num_moist), intent(out) :: moist
     real(kind_phys), dimension(ims:ime, kms:kme, jms:jme, 1:num_chem),  intent(out) :: chem
 
@@ -583,12 +630,15 @@ contains
     p8w            = 0._kind_phys
     t8w            = 0._kind_phys
     vvel           = 0._kind_phys
-    dqdti          = 0._kind_phys
+    dqdt_mp        = 0._kind_phys
+    dqdt_cv        = 0._kind_phys
     moist          = 0._kind_phys  
     chem           = 0._kind_phys
     z_at_w         = 0._kind_phys
     xlat           = 0._kind_phys
     cldfrac        = 0._kind_phys
+    cf_cv          = 0._kind_phys
+    cw_cv          = 0._kind_phys
 
     do i=its,ite
     xlat (i,1)=rlat(i)*180./pi
@@ -613,6 +663,10 @@ contains
           z_at_w(i,k+1,j)=z_at_w(i,k,j)+dz8w(i,k,j)
           ! Geopotential height in m2 s-2 to height in m
           z_phy(i,k,j) = phl3d(ip,kp)/g
+          cw_cv(i,k,j) = cnvw(ip,kp)
+          cw_cv(i,k,j) = max(0.0,cw_cv(i,k,j))
+          cf_cv(i,k,j) = cnvc(ip,kp)
+          cf_cv(i,k,j) = max(0.0,cf_cv(i,k,j))
         enddo
       enddo
     enddo
@@ -626,6 +680,7 @@ contains
            cldfrac(i,k,j) = cld_frac(ip,kp)
            cldfrac(i,k,j) = max(0.0,cldfrac(i,k,j))
            cldfrac(i,k,j) = min(cldfrac(i,k,j),1.)
+           cf_cv(i,k,j) = min(cf_cv(i,k,j),cldfrac(i,k,j))
         enddo
       enddo
     enddo
@@ -652,7 +707,8 @@ contains
           t_phy(i,k,j)=tk3d(ip,kkp)
           p_phy(i,k,j)=prl3d(ip,kkp)
           u_phy(i,k,j)=us3d(ip,kkp)
-          dqdti(i,k,j)=dqdt(ip,kkp)
+          dqdt_mp(i,k,j)=dqdt_qmicro(ip,kkp)
+          dqdt_cv(i,k,j)=dqdti(ip,kkp)
           v_phy(i,k,j)=vs3d(ip,kkp)
           rho_phy(i,k,j)=p_phy(i,k,j)/(287.04*t_phy(i,k,j)*(1.+.608*spechum(ip,kkp)))
           rri(i,k,j)=1./rho_phy(i,k,j)

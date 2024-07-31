@@ -1,7 +1,7 @@
 [ccpp-table-properties]
   name = catchem_anthropogenic_wrapper
   type = scheme
-  dependencies = ../../parameters/catchem_config.F90,../../parameters/catchem_constants.F90,../../parameters/seas_data_mod.F90,../../src/gfdlam4chem/mo_vinterp.F90
+  dependencies = ../../parameters/catchem_config.F90,../../parameters/catchem_constants.F90,../../parameters/seas_data_mod.F90,../../src/gfdlam4chem/mo_vinterp.F90,../../src/gfdlam4chem/gfdl_astronomy.F90,../../src/gfdlam4chem/gfdl_time_utls.F90,../../src/gfdlam4chem/mo_chem_utls.F90
 
 ########################################################################
 [ccpp-arg-table]
@@ -159,6 +159,33 @@
   long_name = chemical initial conditions 3d input
   units = various
   dimensions = (horizontal_loop_extent,49,number_of_tracers_in_chemical_ic_input)
+  type = real
+  kind = kind_phys
+  active = (flag_for_am4_chemistry)
+  intent = in
+[emi3d_in]
+  standard_name = vertically_distributed_biomassburning_input_cplchp
+  long_name = vertically distributed biomassburning input cplchp
+  units = various
+  dimensions = (horizontal_loop_extent,7,16)
+  type = real
+  kind = kind_phys
+  active = (flag_for_am4_chemistry)
+  intent = in
+[emiairc_in]
+  standard_name = aircraft_emission_input_cplchp
+  long_name = aircraft emission input cplchp
+  units = various
+  dimensions = (horizontal_loop_extent,25,3)
+  type = real
+  kind = kind_phys
+  active = (flag_for_am4_chemistry)
+  intent = in
+[emivol_in]
+  standard_name = volcanic_emission_input_cplchp
+  long_name = volcanic emission input cplchp
+  units = various
+  dimensions = (horizontal_loop_extent,12,1)
   type = real
   kind = kind_phys
   active = (flag_for_am4_chemistry)
@@ -415,9 +442,9 @@
   intent = inout
 [antem]
   standard_name = instantaneous_anthropogenic_emissions
-  long_name = instantaneous anthropogenic emissions for co, ch4, nh3, and so2
+  long_name = instantaneous anthropogenic emissions for co, ch4, nh3, so2, terp, and h2
   units = mol km-2 hr-1
-  dimensions = (horizontal_loop_extent,4)
+  dimensions = (horizontal_loop_extent,6)
   type = real
   kind = kind_phys
   active = (flag_for_am4_chemistry)
@@ -439,6 +466,13 @@
 [do_am4chem]
   standard_name = flag_for_am4_chemistry
   long_name = flag for am4 chemistry
+  units = flag
+  dimensions = ()
+  type = logical
+  intent = in
+[read_emis3d]
+  standard_name = flag_for_reading_3d_emissions
+  long_name = flag for reading 3d emissions
   units = flag
   dimensions = ()
   type = logical

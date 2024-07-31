@@ -387,7 +387,7 @@
   intent = in
 [jval]
   standard_name = instantaneous_photolysis_rates
-  long_name = instantaneous photolysis rates for o2, o1d, no2
+  long_name = instantaneous photolysis rates for n2o, o1d, no2
   units = s-1
   dimensions = (horizontal_loop_extent,vertical_layer_dimension,3)
   type = real
@@ -436,6 +436,22 @@
 [oh_loss]
   standard_name = oh_chemical_loss
   long_name = oh chemical loss
+  units = mol mol-1 s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = inout
+[h2_prod]
+  standard_name = h2_chemical_production
+  long_name = h2 chemical production
+  units = mol mol-1 s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = inout
+[h2_loss]
+  standard_name = h2_chemical_loss
+  long_name = h2 chemical loss
   units = mol mol-1 s-1
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real

@@ -219,7 +219,8 @@ integer :: sphum_ndx=0, cl_ndx=0, clo_ndx=0, hcl_ndx=0, hocl_ndx=0, clono2_ndx=0
            no_ndx=0, no2_ndx=0, no3_ndx=0, n_ndx=0, n2o5_ndx=0, ho2no2_ndx=0, &
            pan_ndx=0, onit_ndx=0, mpan_ndx=0, isopno3_ndx=0, onitr_ndx=0, &
            extinct_ndx=0, noy_ndx=0, cly_ndx=0, bry_ndx=0, ch4_ndx=0, &
-           dms_ndx=0, so4_ndx=0, co_ndx=0, n2o_ndx=0, lch4_ndx=0, oh_ndx=0
+           dms_ndx=0, so4_ndx=0, co_ndx=0, n2o_ndx=0, lch4_ndx=0, oh_ndx=0, &
+           h2_ndx=0
 !JianHe: For additional NOy component
 integer :: nh4no3_ndx=0, isn1_ndx=0, ino2_ndx=0, isnooa_ndx=0, inpn_ndx=0, &
            isopnb_ndx=0, isopnbo2_ndx=0, macrn_ndx=0, macrno2_ndx=0, &
@@ -257,11 +258,12 @@ integer :: id_sul, id_temp, id_dclydt, id_dbrydt, id_dclydt_chem, &
            id_psc_sat, id_psc_nat, id_psc_ice, id_volc_aer, &
            id_imp_slv_nonconv, id_srf_o3, id_coszen, id_h2o_chem
 integer :: inqa, inql, inqi !index of the three water species(nqa, nql, nqi)
+integer :: inqr, inqs, inqg
 integer :: age_ndx ! index of age tracer
 logical :: module_is_initialized=.false.
 logical :: use_lsc_in_fastjx
 
-integer :: jo2_ndx, jo1d_ndx, jno2_ndx
+integer :: jo2_ndx, jo1d_ndx, jno2_ndx, jn2o_ndx
 
 integer, dimension(pcnstm1) :: indices, id_prod, id_loss, id_chem_tend, &
                                id_ub, id_lb
@@ -411,7 +413,7 @@ subroutine gfdl_am4chem_driver(me,master,Time_init,Time,Time_next,dt_time,tracer
                             r, chem_dt, phalf, pfull, t, is, ie, js, je, dt, & 
                             z_half, z_full, q, cldfrac, dfdage_interp, tsurf, albedo, &
                             icoszen,solcon, area, w10m, rdiag, jvals_out, &
-                            prodox,lossox,prodlch4,lossch4,prodoh,lossoh)
+                            prodox,lossox,prodlch4,lossch4,prodoh,lossoh,prodh2,lossh2)
 
 
 !-----------------------------------------------------------------------
@@ -440,8 +442,8 @@ subroutine gfdl_am4chem_driver(me,master,Time_init,Time,Time_next,dt_time,tracer
    real, intent(in),    dimension(:,:)            :: area    ! grid box area (m^2)
    real, intent(in),    dimension(:,:)            :: w10m    ! wind speed at 10m (m/s)
    real, intent(inout), dimension(:,:,:,:)        :: rdiag   ! diagnostic tracer concentrations
-   real, intent(inout), dimension(:,:,:,:)        :: jvals_out ! jo2,j1d,jno2
-   real, intent(inout), dimension(:,:,:)          :: prodox,lossox,prodlch4,lossch4,prodoh,lossoh
+   real, intent(inout), dimension(:,:,:,:)        :: jvals_out ! jn2o,j1d,jno2
+   real, intent(inout), dimension(:,:,:)          :: prodox,lossox,prodlch4,lossch4,prodoh,lossoh,prodh2,lossh2
 !-----------------------------------------------------------------------
 ! Local variables
 !-----------------------------------------------------------------------
@@ -707,11 +709,31 @@ subroutine gfdl_am4chem_driver(me,master,Time_init,Time,Time_next,dt_time,tracer
          h2o_temp(:,:) = qlocal(:,:) * WTMAIR/WTMH2O
       end if
       cloud_water(:,:) = MAX(r(:,j,:,inql)+r(:,j,:,inqi),0.)
+      
+      !JianHe: test to include additional hydrometers
+      !if (inqr > 0.) then
+      !   cloud_water(:,:) = MAX(r(:,j,:,inql)+r(:,j,:,inqi)+r(:,j,:,inqr),0.)
+      !   if (inqs > 0.) then
+      !      cloud_water(:,:) = MAX(r(:,j,:,inql)+r(:,j,:,inqi)+r(:,j,:,inqr)+r(:,j,:,inqs),0.)     
+      !      if (inqg > 0.) then
+      !          cloud_water(:,:) = MAX(r(:,j,:,inql)+r(:,j,:,inqi)+r(:,j,:,inqr)+r(:,j,:,inqs)+r(:,j,:,inqg),0.)
+      !      end if
+      !   end if
+      !end if
+
       where ( cloud_water(:,:) .gt. 0 )
           frac_liq(:,:) =  MAX( r(:,j,:,inql) , 0.)/cloud_water
       elsewhere
       frac_liq(:,:) = 1.
       endwhere
+
+      !if (inqr > 0.) then
+      !    where ( cloud_water(:,:) .gt. 0 )
+      !        frac_liq(:,:) =  MAX((r(:,j,:,inql)+r(:,j,:,inqr)), 0.)/cloud_water
+      !    elsewhere
+      !frac_liq(:,:) = 1.
+      !endwhere
+      !end if
 
       if (repartition_water_tracers) then
          h2o_temp(:,:) = h2o_temp(:,:) + cloud_water(:,:) * WTMAIR/WTMH2O
@@ -758,10 +780,10 @@ subroutine gfdl_am4chem_driver(me,master,Time_init,Time,Time_next,dt_time,tracer
       solar_phase = solflxband(num_solar_bands)
       solar_phase = (solar_phase-solarflux_min)/(solarflux_max-solarflux_min)
 
-      if (me==master) then
-        print *, 'solar phase', solflxband(num_solar_bands), solar_phase
-        print *, 'solar data', solcon, coszen(10,j), rrsun
-      endif
+     ! if (me==master) then
+     !   print *, 'solar phase', solflxband(num_solar_bands), solar_phase
+     !   print *, 'solar data', solcon, coszen(10,j), rrsun
+     ! endif
 !-----------------------------------------------------------------------
 !     ... get e90 concentrations
 !-----------------------------------------------------------------------
@@ -825,7 +847,7 @@ subroutine gfdl_am4chem_driver(me,master,Time_init,Time,Time_next,dt_time,tracer
                   trop_diag)
 
       !JianHe: diag out
-      jvals_out(:,j,:,1) = jvals(:,j,:,jo2_ndx)
+      jvals_out(:,j,:,1) = jvals(:,j,:,jn2o_ndx) !jvals(:,j,:,jo2_ndx)
       jvals_out(:,j,:,2) = jvals(:,j,:,jo1d_ndx)
       jvals_out(:,j,:,3) = jvals(:,j,:,jno2_ndx)
 
@@ -847,6 +869,9 @@ subroutine gfdl_am4chem_driver(me,master,Time_init,Time,Time_next,dt_time,tracer
 
    prodoh = prod(:,:,:,oh_ndx)
    lossoh = loss(:,:,:,oh_ndx)
+
+   prodh2 = prod(:,:,:,h2_ndx)
+   lossh2 = loss(:,:,:,h2_ndx)
 
    do n = 1,pcnstm1
 
@@ -903,10 +928,10 @@ subroutine gfdl_am4chem_driver(me,master,Time_init,Time,Time_next,dt_time,tracer
          !if(id_lb(n)>0) then
          !   used = send_data(id_lb(n), r_lb(n), Time_next)
          !end if
-         if (me == master) then
-            print *, 'lower bound n2o: ', r_lb(n)
-            print *, 'model n2o: ', r(10,1,60,indices(n)), lat(10,1), lon(10,1)
-         end if
+        ! if (me == master) then
+        !    print *, 'lower bound n2o: ', r_lb(n),relaxed_dt_lbc
+        !    print *, 'model n2o: ', r(10,1,63,indices(n)), pfull(10,1,63),lat(10,1), lon(10,1)
+        ! end if
          where (pfull(:,:,:) > lb_pres)
             chem_dt(:,:,:,indices(n)) = (r_lb(n) - r(:,:,:,indices(n))) / relaxed_dt_lbc
          endwhere
@@ -1529,6 +1554,7 @@ end if
    co_ndx     = get_spc_ndx('CO')
    n2o_ndx    = get_spc_ndx('N2O')
    oh_ndx     = get_spc_ndx('OH')
+   h2_ndx     = get_spc_ndx('H2')
 
    o3s_ndx     = get_spc_ndx('O3S')
    o3s_e90_ndx = get_spc_ndx('O3S_E90')
@@ -1553,6 +1579,7 @@ end if
    r4n2_ndx    = get_spc_ndx('R4N2')
 
    jo2_ndx     = get_rxt_ndx( 'jo2' )
+   jn2o_ndx    = get_rxt_ndx( 'jn2o')
    jno2_ndx    = get_rxt_ndx( 'jno2' )
    jo1d_ndx    = get_rxt_ndx( 'jo1d' )
 
@@ -1603,7 +1630,7 @@ end if
 !-----------------------------------------------------------------------
 !     ... Lower boundary condition, for n2o....
 !-----------------------------------------------------------------------
-      lbc_entry(i) = Time
+      lbc_entry(i) = Time_init
 
       flb = 66
       if ( i == n2o_ndx ) then
@@ -1680,10 +1707,13 @@ end if
    !inqa = get_tracer_ndx(tracer_names,'cld_amt') ! cloud fraction
    inql = get_tracer_ndx(tracer_names,'liq_wat') ! cloud liquid specific humidity
    inqi = get_tracer_ndx(tracer_names,'ice_wat') ! cloud ice water specific humidity
+   inqr = get_tracer_ndx(tracer_names,'rainwat') ! 
+   inqs = get_tracer_ndx(tracer_names,'snowwat') ! 
+   inqg = get_tracer_ndx(tracer_names,'graupel') !
 
-   if( me == master ) then
-     print *, 'cloud water indexes: ', inql, inqi
-   end if
+   !if( me == master ) then
+   !  print *, 'cloud water indexes: ', inql, inqi
+   !end if
 
    age_ndx = get_tracer_ndx(tracer_names,'age')  ! age tracer
 

@@ -93,7 +93,7 @@ module catchem_config
   integer, parameter :: num_ebu_in         = 23 !JH, may need more in the input
   integer, parameter :: num_moist=3, num_chem=128, num_emis_seas=5, num_emis_dust=5  !JH
   integer, parameter :: num_emis_ant = 25, num_emis_vol =4    !JH
-  integer, parameter :: num_emis_bio = 4   !JH, only for dms,isop,terp, and lnox for now
+  integer, parameter :: num_emis_bio = 2   !JH, only for isop,terp for now
   integer :: numgas = 111
 
   ! prognostic
@@ -232,6 +232,30 @@ module catchem_config
   integer, parameter :: p_hcho=13
   integer, parameter :: p_ho=92
 
+  !3d emissions
+  integer, parameter :: p_ebb_ch3coch3=1
+  integer, parameter :: p_ebb_c2h4=2
+  integer, parameter :: p_ebb_c2h5oh=3
+  integer, parameter :: p_ebb_c2h6=4
+  integer, parameter :: p_ebb_c3h6=5
+  integer, parameter :: p_ebb_c3h8=6
+  integer, parameter :: p_ebb_c4h10=7
+  integer, parameter :: p_ebb_ch2o=8
+  integer, parameter :: p_ebb_ch3oh=9
+  integer, parameter :: p_ebb_ch4=10
+  integer, parameter :: p_ebb_co=11
+  integer, parameter :: p_ebb_h2=12
+  integer, parameter :: p_ebb_isop=13
+  integer, parameter :: p_ebb_nh3=14
+  integer, parameter :: p_ebb_no=15
+  integer, parameter :: p_ebb_c10h16=16
+
+  integer, parameter :: p_airc_co=1
+  integer, parameter :: p_airc_no=2
+  integer, parameter :: p_airc_so2=3
+
+  integer, parameter :: p_vol_so2=1
+
   !-- plumerise 
   integer, parameter :: p_e_bc  =1
   integer, parameter :: p_e_oc  =2
@@ -261,8 +285,8 @@ module catchem_config
 
   integer, parameter :: p_ebio_isop=1
   integer, parameter :: p_ebio_c10h16=2
-  integer, parameter :: p_ebio_lno=3
-  integer, parameter :: p_ebio_dms=4
+  !integer, parameter :: p_ebio_lno=3
+  !integer, parameter :: p_ebio_dms=4
 
   integer, parameter :: p_ebu_bc  =1
   integer, parameter :: p_ebu_oc  =2

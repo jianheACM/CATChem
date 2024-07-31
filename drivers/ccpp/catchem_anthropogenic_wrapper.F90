@@ -12,13 +12,25 @@
    use machine ,        only : kind_phys
    use catchem_config
    use catchem_constants, only: epsilc
-   use mo_vinterp,      only : vinterp
+   use mo_vinterp,      only : vinterp,interp_weighted_scalar_2D
+   use gfdl_time_utls_mod, only : time_type, &
+                                  get_date, &
+                                  set_date, &
+                                  set_time, &
+                                  days_in_year, &
+                                  real_to_time_type, &
+                                  time_type_to_real, &
+                                  operator(+), operator(-), &
+                                  time_interp
+   use mo_chem_utls_mod, only : read_2D_emis_diurnal
 
    implicit none
 
    private
 
    public :: catchem_anthropogenic_wrapper_init, catchem_anthropogenic_wrapper_run, catchem_anthropogenic_wrapper_finalize
+
+   type(time_type) :: Time
 
 contains
 
@@ -46,7 +58,7 @@ contains
 !> @{
     subroutine catchem_anthropogenic_wrapper_run(me, master, &
                    im, kte, kme, ktau, dt,               &
-                   jdate, garea, rlat, rlon,    &
+                   jdate, garea, rlat, rlon,  &
                    pr3d, ph3d,phl3d, prl3d, tk3d, spechum,emi_in,                       &
                    ntrac,ntso2,ntsulf,ntpp25,ntbc1,ntoc1,ntpp10,                        &
                    ntextinct, &
@@ -55,6 +67,7 @@ contains
                    ntch3coch3,nth2,nte90,gaschem_opt,do_am4chem, &
                    ntchs, ntche,chemic_in,chem_in_opt, &
                    nvar_emi,nvar_chemic, &
+                   emi3d_in,emiairc_in,emivol_in,read_emis3d, &
                    gq0,qgrs,abem,bioem,antem,chem_opt_in,kemit_in,pert_scale_anthro,                &
                    emis_amp_anthro,do_sppt_emis,sppt_wts,errmsg,errflg)
 
@@ -87,10 +100,13 @@ contains
     real(kind_phys), dimension(im,kte,ntrac), intent(inout) :: gq0, qgrs
     real(kind_phys), dimension(im,12), intent(inout) :: abem
     integer,         intent(in) :: chem_opt_in, kemit_in, gaschem_opt,chem_in_opt
-    logical,         intent(in) :: do_am4chem
+    logical,         intent(in) :: do_am4chem, read_emis3d
     real(kind_phys), optional, intent(inout) :: bioem(:,:)
-    real(kind_phys), optional, intent(inout) :: antem(:,:) !4 species for now
+    real(kind_phys), optional, intent(inout) :: antem(:,:) !6 species for now
     real(kind_phys), optional, intent(in) :: chemic_in(:,:,:)  !JianHe
+    real(kind_phys), optional, intent(in) :: emi3d_in(:,:,:)  !JianHe
+    real(kind_phys), optional, intent(in) :: emiairc_in(:,:,:)  !JianHe
+    real(kind_phys), optional, intent(in) :: emivol_in(:,:,:)  !JianHe
 
     character(len=*),intent(out) :: errmsg
     integer,         intent(out) :: errflg
@@ -104,6 +120,7 @@ contains
     real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:num_chem )  :: chem
     integer :: ide, ime, ite, kde
     real(kind_phys), dimension(ims:im, kms:kemit, jms:jme, 1:num_emis_ant) :: emis_ant
+
     real(kind_phys) :: dtstep
     real(kind_phys), dimension(1:num_chem) :: ppm2ugkg
     real(kind_phys), parameter :: ugkg = 1.e-09_kind_phys !lzhang
@@ -111,6 +128,16 @@ contains
     !JianHe: currently only for isop + c10h16
     real(kind_phys), dimension(ims:im, kms:kemit_in, jms:jme, 1:num_emis_bio) :: emis_bio
     integer, parameter :: nvl_am4ic = 49 ! JianHe:number of input levels from AM4 chemic
+    integer, parameter :: nvl_emi3d = 7 ! 
+    integer, parameter :: nvl_emiairc = 25 !
+    integer, parameter :: nvl_emivol = 12 ! 
+    integer, parameter :: nvar_emi3d = 16 ! 
+    integer, parameter :: nvar_emiairc = 3 ! 
+    integer, parameter :: nvar_emivol = 1 ! 
+
+    real(kind_phys), dimension(ims:im, kms:kte, jms:jme, 1:nvar_emi3d) :: emi3d_interp
+    real(kind_phys), dimension(ims:im, kms:kte, jms:jme, 1:nvar_emiairc) :: emiairc_interp
+    real(kind_phys), dimension(ims:im, kms:kte, jms:jme, nvar_emivol) :: emivol_interp
 
     integer :: i, j, jp, k, kp, n, nt
     real(kind_phys) :: random_factor(ims:im,jms:jme)
@@ -121,6 +148,9 @@ contains
 
     chem_opt          = chem_opt_in
     kemit             = kemit_in
+    emi3d_interp = 0._kind_phys
+    emiairc_interp = 0._kind_phys
+    emivol_interp = 0._kind_phys
 
     ! -- set domain
     ide=im 
@@ -164,6 +194,10 @@ contains
         ppm2ugkg,chem,random_factor,              &
         chem_in_opt, ntchs, ntche, &
         nvar_emi, chemic_in, nvl_am4ic, nvar_chemic,    &
+        emi3d_in,emiairc_in,emivol_in,read_emis3d, &
+        nvl_emi3d,nvl_emiairc,nvl_emivol, &
+        nvar_emi3d,nvar_emiairc,nvar_emivol, &
+        emi3d_interp,emiairc_interp,emivol_interp, &
         ids,ide, jds,jde, kds,kde,                                      &
         ims,ime, jms,jme, kms,kme,                                      &
         its,ite, jts,jte, kts,kte)
@@ -204,18 +238,39 @@ contains
      enddo
     enddo
 
-    abem(:,1)=ugkg*emis_ant(:,kts,1,p_e_bc )
+    abem(:,1)=ugkg*emis_ant(:,kts,1,p_e_bc )  ! ug/m2/s to kg/m2/s
     abem(:,2)=ugkg*emis_ant(:,kts,1,p_e_oc )
-    abem(:,3)=ugkg*emis_ant(:,kts,1,p_e_so2)
+    abem(:,3)=emis_ant(:,kts,1,p_e_so2)*0.064*1.e-6/3600.  ! mol/km2/hr to kg/m2/s
 
 #ifdef AM4_CHEM
     bioem(:,2)=emis_bio(:,kts,1,p_ebio_isop)
     bioem(:,3)=emis_bio(:,kts,1,p_ebio_c10h16)
 
-    antem(:,1)=emis_ant(:,kts,1,p_e_co)
-    antem(:,2)=emis_ant(:,kts,1,p_e_ch4)
-    antem(:,3)=emis_ant(:,kts,1,p_e_nh3)
-    antem(:,4)=emis_ant(:,kts,1,p_e_so2)
+    !co, ch4, nh3, so2, terp, and h2
+    if (.not. read_emis3d) then
+      antem(:,1)=emis_ant(:,kts,1,p_e_co)  
+      antem(:,2)=emis_ant(:,kts,1,p_e_ch4)
+      antem(:,3)=emis_ant(:,kts,1,p_e_nh3)
+      antem(:,4)=emis_ant(:,kts,1,p_e_so2)
+      antem(:,5)=emis_ant(:,kts,1,p_e_c10h16)
+      antem(:,6)=emis_ant(:,kts,1,p_e_h2)
+     else
+      do i=its,ite
+        antem(i,1)=emis_ant(i,kts,1,p_e_co)+SUM(emi3d_interp(i,:,1,p_ebb_co)) + &
+              SUM(emiairc_interp(i,:,1,p_airc_co))
+        antem(i,2)=emis_ant(i,kts,1,p_e_ch4)+SUM(emi3d_interp(i,:,1,p_ebb_ch4)) 
+        antem(i,3)=emis_ant(i,kts,1,p_e_nh3)+SUM(emi3d_interp(i,:,1,p_ebb_nh3))
+        antem(i,4)=emis_ant(i,kts,1,p_e_so2) !+SUM(emiairc_interp(i,:,1,p_airc_so2)) ! + &
+              !SUM(emivol_interp(i,:,1,p_vol_so2))
+        antem(i,5)=emis_ant(i,kts,1,p_e_c10h16)+SUM(emi3d_interp(i,:,1,p_ebb_c10h16))
+        antem(i,6)=emis_ant(i,kts,1,p_e_h2)+SUM(emi3d_interp(i,:,1,p_ebb_h2))
+      enddo
+
+      !if (me == master) then
+      !   write (*, *) "diag emis3d: ", SUM(emi3d_interp(18,:,1,p_ebb_co)), &
+      !   SUM(emiairc_interp(18,:,1,p_airc_co)), SUM(emivol_interp(:,:,1,p_vol_so2))
+      !endif
+     endif
 #endif
 
 !
@@ -237,6 +292,10 @@ contains
         num_emis_bio,emis_bio,ppm2ugkg,chem,random_factor,    &
         chem_in_opt, ntchs, ntche, &
         nvar_emi,chemic_in,nvl_am4ic, nvar_chemic,     &
+        emi3d_in,emiairc_in,emivol_in,read_emis3d, &
+        nvl_emi3d,nvl_emiairc,nvl_emivol, &
+        nvar_emi3d,nvar_emiairc,nvar_emivol, &
+        emi3d_interp,emiairc_interp,emivol_interp, &
         ids,ide, jds,jde, kds,kde,                                       &
         ims,ime, jms,jme, kms,kme,                                       &
         its,ite, jts,jte, kts,kte)
@@ -246,7 +305,7 @@ contains
 
     !Chem input configuration
     integer, intent(in) :: ktau,jdate(8)
-    real(kind=kind_phys), intent(in) :: dtstep
+    real(kind_phys), intent(in) :: dtstep
 
     !Stochastic physics variables
     real(kind_phys), intent(in) :: random_factor(ims:ime,jms:jme)
@@ -258,19 +317,24 @@ contains
     integer, intent(in) :: ntisop,ntno,ntno2,ntco,ntc2h4,ntc2h6,ntc3h6,ntc3h8,  &
                            ntnh3,ntch2o,ntch4,ntc4h10,ntc10h16,ntch3oh,ntc2h5oh,&
                            ntch3coch3,nth2,nte90
-    real(kind=kind_phys), dimension(ims:ime), intent(in) :: garea, rlat, rlon
-    real(kind=kind_phys), dimension(ims:ime, nvar_emi),   intent(in) :: emi_in
-    real(kind=kind_phys), dimension(ims:ime, kms:kme), intent(in) :: pr3d,ph3d
-    real(kind=kind_phys), dimension(ims:ime, kts:kte), intent(in) :: phl3d,tk3d,prl3d,spechum
-    real(kind=kind_phys), dimension(ims:ime, kts:kte,ntrac), intent(in) :: gq0
+    real(kind_phys), dimension(ims:ime), intent(in) :: garea, rlat, rlon
+    real(kind_phys), dimension(ims:ime, nvar_emi),   intent(in) :: emi_in
+    real(kind_phys), dimension(ims:ime, kms:kme), intent(in) :: pr3d,ph3d
+    real(kind_phys), dimension(ims:ime, kts:kte), intent(in) :: phl3d,tk3d,prl3d,spechum
+    real(kind_phys), dimension(ims:ime, kts:kte,ntrac), intent(in) :: gq0
 
     integer,           intent(in) :: gaschem_opt,chem_opt,chem_in_opt
-    logical,           intent(in) :: do_am4chem
+    logical,           intent(in) :: do_am4chem,read_emis3d
 
 
     !chemical IC
     integer,intent(in) :: nvl_am4ic, nvar_chemic, nvar_emi
-    real(kind=kind_phys), optional, intent(in) :: chemic_in(:,:,:)
+    integer,intent(in) :: nvl_emi3d,nvl_emiairc,nvl_emivol
+    integer,intent(in) :: nvar_emi3d,nvar_emiairc,nvar_emivol
+    real(kind_phys), optional, intent(in) :: chemic_in(:,:,:)
+    real(kind_phys), optional, intent(in) :: emi3d_in(:,:,:)  !JianHe
+    real(kind_phys), optional, intent(in) :: emiairc_in(:,:,:)  !JianHe
+    real(kind_phys), optional, intent(in) :: emivol_in(:,:,:)  !JianHe
 
     !GSD Chem variables
     integer,intent(in) ::  num_chem, num_ebu_in,num_emis_ant
@@ -291,9 +355,15 @@ contains
     real(kind_phys), dimension(ims:ime, kms:kme, jms:jme, 1:num_chem),  intent(out) :: chem
 
     real(kind_phys), dimension(ims:ime, kms:kme, jms:jme), intent(out) :: z_at_w
+    real(kind_phys), dimension(ims:ime, kms:kte, jms:jme, 1:nvar_emi3d), intent(inout) :: emi3d_interp
+    real(kind_phys), dimension(ims:ime, kms:kte, jms:jme, 1:nvar_emiairc), intent(inout) :: emiairc_interp
+    real(kind_phys), dimension(ims:ime, kms:kte, jms:jme, nvar_emivol), intent(inout) :: emivol_interp
+
     real(kind_phys), dimension(ims:ime, jms:jme, 1:num_emis_ant) :: emiss_ab
     real(kind_phys), dimension(ims:ime, jms:jme, 1:num_emis_bio) :: emiss_bio
     real(kind_phys), parameter :: frac_so2_ant = 1.0_kind_phys  ! antropogenic so2 fraction
+    logical :: Ldiurnal = .true.
+    real(kind_phys), dimension(ims:ime, jms:jme) :: rlat_in,rlon_in
 
 !>- volcanic stuff
     integer ::ko,k_final,k_initial,kl,kk4,curr_hours,curr_secs,curr_day,curr_mth,curr_yr
@@ -312,7 +382,7 @@ contains
     real(kind_phys), parameter :: base_umbrel2       = 1.0     ! evenly distribution
 
     ! -- local variables
-!   real(kind=kind_phys), dimension(ims:ime, kms:kme, jms:jme) :: p_phy
+!   real(kind_phys), dimension(ims:ime, kms:kme, jms:jme) :: p_phy
     integer i,ip,j,jp,k,kp,kk,kkp,nv,jmax,jmaxi,l,ll,n,ndystep,ixhour,igbox,jgbox,nt
     real(kind_phys), DIMENSION (ims:ime,jms:jme) :: so2_mass,emiss_ash_dtt
     real(kind_phys), dimension(ims:ime, jms:jme) :: emiss_ash_mass
@@ -320,42 +390,112 @@ contains
     real(kind_phys), dimension(ims:ime, jms:jme) :: emiss_ash_dt
     real(kind_phys) ::  factor,factor2
 
-    !--chemical IC array
-    real(kind_phys), dimension(ims:ime, jms:jme, 1:nvl_am4ic, 1:nvar_chemic) :: chemic
-    real(kind_phys), dimension(ims:ime, kms:kte, jms:jme, 1:nvar_chemic) :: chemic_interp
-    real(kind_phys), dimension(1:nvl_am4ic) :: p_am4ic
-    real(kind_phys), dimension(ims:ime, kms:kme, jms:jme) :: p_mb
+    !--3d-emis array
+    real(kind_phys), dimension(ims:ime, jms:jme, 1:nvl_emi3d, 1:nvar_emi3d) :: emi3d, &
+            emi3d_input
+    real(kind_phys), dimension(ims:ime, jms:jme, 1:nvl_emiairc, 1:nvar_emiairc) :: emiairc, &
+            emiairc_input
+    real(kind_phys), dimension(ims:ime, jms:jme, 1:nvl_emivol, nvar_emivol) :: emivol, &
+            emivol_input
+    real(kind_phys), dimension(ims:ime, kms:kte, jms:jme, 1:nvar_emi3d) :: emi3d_output
+    real(kind_phys), dimension(ims:ime, kms:kte, jms:jme, 1:nvar_emiairc) :: emiairc_output
+    real(kind_phys), dimension(ims:ime, kms:kte, jms:jme, nvar_emivol) :: emivol_output
 
-    p_am4ic = (/ 997.948596287477, 992.786752544069, 985.401223968179, &
-    975.648851831372, 963.308651425801, 948.051493845347, 929.509176539644, &
-    907.245072729549, 880.739861311195, 849.397132370557, 812.629155924972, &
-    769.874744124755, 720.696844719115, 664.880933508635, 602.621201211844, &
-    535.059070791703, 464.941771304376, 396.36295331148, 333.155174318448,  &
-    277.364765336414, 229.263219871856, 188.254870627357, 153.542046894013, &
-    124.359351881068, 99.9990654267351, 79.8128107819713, 63.2117171006669, &
-    49.6656638058622, 38.7016977185877, 29.9017286729427, 22.8996206774882, &
-    17.3778029011962, 13.0635264807004, 9.72489105230714, 7.16675888193994, &
-    5.2266642666333, 3.77081383122845, 2.6902576168577, 1.89729594414021,   &
-    1.32216980330045, 0.910066120368144, 0.618455975354221,   &
-    0.414767919596273, 0.274388498599214, 0.178752860685895,  &
-    0.11361803458164, 0.0686551589322532, 0.0380102383882785, &
-    0.0171052512649617 /)
+    !--chemical IC array
+    real(kind_phys), dimension(ims:ime, jms:jme, 1:nvl_am4ic, 1:nvar_chemic) :: chemic,chemic_input
+    real(kind_phys), dimension(ims:ime, kms:kte, jms:jme, 1:nvar_chemic) :: chemic_interp,chemic_output
+
+    real(kind_phys), dimension(1:nvl_am4ic+1) :: p_am4ic,pi_am4ic
+    real(kind_phys), dimension(1:nvl_emi3d+1) :: p_emi3d,pi_emi3d   ! interface
+    real(kind_phys), dimension(1:nvl_emiairc+1) :: p_emiairc,pi_emiairc
+    real(kind_phys), dimension(1:nvl_emivol+1) :: p_emivol,pi_emivol
+
+    real(kind_phys), dimension(ims:ime, kms:kme, jms:jme) :: p_mb, p8w_r
+    real(kind_phys), dimension(ims:ime, jms:jme) :: ps_mb, ps_phy
+
+    !pfull
+    !p_am4ic = (/ 997.948596287477, 992.786752544069, 985.401223968179, &
+    !975.648851831372, 963.308651425801, 948.051493845347, 929.509176539644, &
+    !907.245072729549, 880.739861311195, 849.397132370557, 812.629155924972, &
+    !769.874744124755, 720.696844719115, 664.880933508635, 602.621201211844, &
+    !535.059070791703, 464.941771304376, 396.36295331148, 333.155174318448,  &
+    !277.364765336414, 229.263219871856, 188.254870627357, 153.542046894013, &
+    !124.359351881068, 99.9990654267351, 79.8128107819713, 63.2117171006669, &
+    !49.6656638058622, 38.7016977185877, 29.9017286729427, 22.8996206774882, &
+    !17.3778029011962, 13.0635264807004, 9.72489105230714, 7.16675888193994, &
+    !5.2266642666333, 3.77081383122845, 2.6902576168577, 1.89729594414021,   &
+    !1.32216980330045, 0.910066120368144, 0.618455975354221,   &
+    !0.414767919596273, 0.274388498599214, 0.178752860685895,  &
+    !0.11361803458164, 0.0686551589322532, 0.0380102383882785, &
+    !0.0171052512649617 /)
+    !phalf, hPa
+    p_am4ic = (/ 1000.,995.9,989.68,981.1347983,970.1833931,956.4664631, &
+            939.6860264,919.4060705,895.1917865,866.4443202,832.5750255, &
+            793.0044191,747.1992533,694.8286462,635.806353,570.6113482, &
+            501.015122,430.6429622,363.9522552,304.1464563,252.2033875, &
+            207.7581856,170.012093,138.1716841,111.4997021,89.3178242, &
+            71.0073115,56.0087014,43.820624,33.997842,26.1486254, &
+            19.9315829,15.0520759,11.2583405,8.3374392,6.1111558, &
+            4.431935,3.178956,2.2544108,1.580046,1.0940055,0.7479993, &
+            0.5048096,0.3361283,0.2207157,0.142479,0.0889455,0.0517136,0.0269722,0.01 /)
+
+    !sigma_half
+    p_emi3d = (/1., 0.9857119, 0.930572, 0.8659644, 0.7498942, 0.6493816,  &
+    0.4216965, 0./)
+    !sigma_full
+    !(/0.9928559, 0.9581419, 0.8982682, 0.8079293, 0.6996379, &
+    !0.5355391, 0.2108483 /)
+    !sigma_half
+    p_emiairc = (/1.,0.916839301,0.839785209,0.769206988,0.704560386,0.64534689, &
+            0.591109884,0.541431129,0.495927534,0.454248206,0.416071742,0.381103749, &
+            0.349074578,0.31973724,0.292865505,0.268252156,0.245707391,0.225057361, &
+            0.206142824,0.188817925,0.172949066,0.158413876,0.14510027,0.132905582, &
+            0.121735774,0. /)
+    !sigma_full
+    !p_emiairc = (/0.957056329906393, 0.876622271175349, 0.802948146631859, &
+    !0.73546582990084, 0.6736549417552, 0.617038837293621, 0.565180930368681,& 
+    !0.517681326921738, 0.474173741263055, 0.434322671517555, &
+    !0.397820812455107, 0.364386685754774, 0.333762469429204, &
+    !0.305712009671091, 0.280018999790392, 0.256485312199452, &
+    !0.234929470583402, 0.215185250474219, 0.197100397436999, &
+    !0.180535452983928, 0.165362679162177, 0.151465073522858, &
+    !0.138735466875116, 0.127075696867845, 0.116395851026215 /)
+
+    !pfull
+    !p_emivol = (/1006.011, 991.6373, 963.702, 910.1702, 818.6343, 708.9081, 613.8892, &
+    !531.6061, 460.3519, 398.6483, 345.2152, 160.2089/)
+    !phalf, hPa
+    p_emivol = (/1050.,998.7726,984.502,942.9021,877.4384,759.8303,657.986, &
+            569.7924,493.4199,427.284,370.0127,320.4178,0.01/)
 
 !    print*,'hli into volc'
     ! -- initialize output arrays
     rri            = 0._kind_phys
     t_phy          = 0._kind_phys
     p_phy          = 0._kind_phys
+    ps_phy         = 0._kind_phys
     rho_phy        = 0._kind_phys
     dz8w           = 0._kind_phys
     p8w            = 0._kind_phys
+    p8w_r          = 0._kind_phys ! flip
     chem           = 0._kind_phys
     z_at_w         = 0._kind_phys
     xlat           = 0._kind_phys
     xlong          = 0._kind_phys
+    rlat_in        = 0._kind_phys
+    rlon_in        = 0._kind_phys
     dxy            = 0._kind_phys
     chemic_interp  = 0._kind_phys !
     chemic         = 0._kind_phys
+    emi3d          = 0._kind_phys
+    emi3d_input    = 0._kind_phys
+    emi3d_interp   = 0._kind_phys
+    emiairc        = 0._kind_phys
+    emiairc_input  = 0._kind_phys
+    emiairc_interp = 0._kind_phys
+    emivol         = 0._kind_phys
+    emivol_input   = 0._kind_phys
+    emivol_interp  = 0._kind_phys
 
     emiss_ash_dtt  = 0._kind_phys
     num_emis_voll  =0._kind_phys
@@ -416,6 +556,8 @@ contains
      dxy  (i,1)=garea(i)
      xlat (i,1)=rlat(i)*180./pi
      xlong(i,1)=rlon(i)*180./pi
+     rlat_in(i,1)=rlat(i)
+     rlon_in(i,1)=rlon(i) 
     enddo
 
     do j=jts,jte
@@ -466,7 +608,18 @@ contains
       enddo
     enddo
 
+    do j=jts,jte
+      do i=its,ite
+        ps_phy(i,j) = maxval(p8w(i,:,j))
+        do k = kts,kte+1
+          kp = kte+1-k+1
+          p8w_r(i,kp,j) = p8w(i,k,j)
+        enddo
+      enddo
+    enddo
+
     p_mb = 0.01*p_phy ! Pa to mb
+    ps_mb = 0.01*ps_phy  ! Pa to mb
 
 !lzhang
 
@@ -578,8 +731,149 @@ contains
 
             emis_bio(i,k,j,p_ebio_isop) =emiss_bio(i,j,p_ebio_isop)
             emis_bio(i,k,j,p_ebio_c10h16) =emiss_bio(i,j,p_ebio_c10h16)
+      enddo
+    enddo
+
+    if (Ldiurnal) then
+        ! Model current time
+        Time = set_date(jdate(1),jdate(2),jdate(3), &
+                        jdate(5),jdate(6),jdate(7))
+
+        if (me == master) then
+              write (*, *) "catchem_anthropogenic_wrapper-Time_current: ",jdate(1),jdate(2),jdate(3), &
+                        jdate(5),jdate(6),jdate(7)
+        endif
+
+        ! only apply for isoprene, if apply for c10h16, much lower compared to AM4
+        call read_2D_emis_diurnal(emis_bio(:,kts,:,p_ebio_isop),Time, &
+                dtstep, pi, rlat_in, rlon_in, its,ite,jts,jte)
+    endif
+
+    if (read_emis3d) then
+
+      !for 3d bb emission 
+      !Note: vertical index increases upward
+      do i=its,ite
+        do k=1,nvl_emi3d
+           emi3d(i,1,k,p_ebb_ch3coch3)=emi3d_in(i,k,1)  
+           emi3d(i,1,k,p_ebb_c2h4)=emi3d_in(i,k,2)
+           emi3d(i,1,k,p_ebb_c2h5oh)=emi3d_in(i,k,3)
+           emi3d(i,1,k,p_ebb_c2h6)=emi3d_in(i,k,4)
+           emi3d(i,1,k,p_ebb_c3h6)=emi3d_in(i,k,5)
+           emi3d(i,1,k,p_ebb_c3h8)=emi3d_in(i,k,6)
+           emi3d(i,1,k,p_ebb_c4h10)=emi3d_in(i,k,7)
+           emi3d(i,1,k,p_ebb_ch2o)=emi3d_in(i,k,8)
+           emi3d(i,1,k,p_ebb_ch3oh)=emi3d_in(i,k,9)
+           emi3d(i,1,k,p_ebb_ch4)=emi3d_in(i,k,10)
+           emi3d(i,1,k,p_ebb_co)=emi3d_in(i,k,11)
+           emi3d(i,1,k,p_ebb_h2)=emi3d_in(i,k,12)
+           emi3d(i,1,k,p_ebb_isop)=emi3d_in(i,k,13)
+           emi3d(i,1,k,p_ebb_nh3)=emi3d_in(i,k,14)
+           emi3d(i,1,k,p_ebb_no)=emi3d_in(i,k,15)
+           emi3d(i,1,k,p_ebb_c10h16)=emi3d_in(i,k,16)
+        enddo
+
+        do k=1,nvl_emiairc
+           emiairc(i,1,k,p_airc_co)=emiairc_in(i,k,1)
+           emiairc(i,1,k,p_airc_no)=emiairc_in(i,k,2)
+           emiairc(i,1,k,p_airc_so2)=emiairc_in(i,k,3)
+        enddo
+
+        do k=1,nvl_emivol
+           emivol(i,1,k,p_vol_so2)=emivol_in(i,k,1)
+        enddo
+
+      enddo
+
+      !if (me == master) then
+      !   write(*,*),"diag input emivol", maxval(emivol_in(:,:,1)), maxval(emivol(:,:,:,p_vol_so2))
+      !endif
+
+
+      !We need be careful about vertical interpolation of emissions?
+      do i=its,ite
+        do j=jts,jte
+          do l=1,nvl_emi3d
+            kp=nvl_emi3d-l+1
+            emi3d_input(i,j,kp,1:nvar_emi3d) = emi3d(i,j,l,1:nvar_emi3d)/ &
+                    (abs(p_emi3d(l)-p_emi3d(l+1))*ps_phy(i,j))
+          enddo
+          do l=1,nvl_emi3d+1
+            kp=nvl_emi3d+1-l+1
+            pi_emi3d(kp) = p_emi3d(l)*ps_phy(i,j)    !Pa, flip
+          enddo
+
+          do l=1,nvl_emiairc
+            kp=nvl_emiairc-l+1
+            emiairc_input(i,j,kp,1:nvar_emiairc) = emiairc(i,j,l,1:nvar_emiairc)/ &
+                    (abs(p_emiairc(l)-p_emiairc(l+1))*ps_phy(i,j))
+          enddo
+          do l=1,nvl_emiairc+1
+            kp=nvl_emiairc+1-l+1
+            pi_emiairc(kp) = p_emiairc(l)*ps_phy(i,j)    !Pa
+          enddo
+
+          do l=1,nvl_emivol
+            kp=nvl_emivol-l+1
+            emivol_input(i,j,kp,:) = emivol(i,j,l,:)/ &   ! only 1 var
+                    (abs(p_emivol(l)-p_emivol(l+1))*100.) !Pa
+          enddo
+          do l=1,nvl_emivol+1
+            kp=nvl_emivol+1-l+1
+            pi_emivol(kp) = p_emivol(l)*100.   !Pa
+          enddo
+
+          if (maxval(pi_emi3d) < maxval(p8w_r(i,:,j))) then
+             pi_emi3d( maxloc(pi_emi3d) ) = maxval(p8w_r(i,:,j))
+          endif
+          if (minval(pi_emi3d) > minval(p8w_r(i,:,j))) then
+             pi_emi3d( minloc(pi_emi3d) ) = minval(p8w_r(i,:,j))
+          endif
+          call interp_weighted_scalar_2D(pi_emi3d, p8w_r(i,:,j), emi3d_input(i,j,:,1:nvar_emi3d), &
+                  emi3d_output(i,:,j,1:nvar_emi3d))
+
+          if (maxval(pi_emiairc) < maxval(p8w_r(i,:,j))) then
+             pi_emiairc( maxloc(pi_emiairc) ) = maxval(p8w_r(i,:,j))
+          endif
+          if (minval(pi_emiairc) > minval(p8w_r(i,:,j))) then
+             pi_emiairc( minloc(pi_emiairc) ) = minval(p8w_r(i,:,j))
+          endif
+          call interp_weighted_scalar_2D(pi_emiairc, p8w_r(i,:,j), emiairc_input(i,j,:,1:nvar_emiairc), &
+                  emiairc_output(i,:,j,1:nvar_emiairc))
+
+          if (maxval(pi_emivol) < maxval(p8w_r(i,:,j))) then
+             pi_emivol( maxloc(pi_emivol) ) = maxval(p8w_r(i,:,j))
+          endif
+          if (minval(pi_emivol) > minval(p8w_r(i,:,j))) then
+             pi_emivol( minloc(pi_emivol) ) = minval(p8w_r(i,:,j))
+          endif
+          ! need input data with vertical index increaseing downward (start at lev=top)
+          call interp_weighted_scalar_2D(pi_emivol, p8w_r(i,:,j), emivol_input(i,j,:,:), &
+                  emivol_output(i,:,j,:))
+
+          !if (me == master) then
+          !     write(*,*), "diag vinterp_emivol", maxval(emivol_input(i,j,:,p_vol_so2)), &
+          !             maxval(emivol_output(i,:,j,p_vol_so2))
+          !     write(*,*), "diag vinterp_emiairc",maxval(emiairc_input(i,j,:,p_airc_co)), &
+          !             maxval(emiairc_output(i,:,j,p_airc_co))
+          !     write(*,*), "diag vinterp_emi3d", maxval(emi3d_input(i,j,:,p_ebb_co)), &
+          !             maxval(emi3d_output(i,:,j,p_ebb_co))
+          !endif
+
+
+          do k=kts,kte
+            kp = kte-k+1
+            emi3d_interp(i,kp,j,1:nvar_emi3d)=emi3d_output(i,k,j,1:nvar_emi3d)* &
+                    abs(p8w_r(i,k+1,j)-p8w_r(i,k,j))  ! reverse
+            emiairc_interp(i,kp,j,1:nvar_emiairc)=emiairc_output(i,k,j,1:nvar_emiairc)* &
+                    abs(p8w_r(i,k+1,j)-p8w_r(i,k,j))
+            emivol_interp(i,kp,j,:)=emivol_output(i,k,j,:)* &
+                    abs(p8w_r(i,k+1,j)-p8w_r(i,k,j))
+          enddo
+
         enddo
       enddo
+    endif  ! read_emis3d
 #endif
 
 
@@ -622,12 +916,34 @@ contains
             enddo
           enddo
 
+          do l=1,nvl_am4ic+1
+            kp=nvl_am4ic+1-l+1
+            pi_am4ic(kp) = p_am4ic(l)*100.   !Pa
+          enddo
+
           do i=its,ite
             do j=jts,jte
-              do k=kts,kte
-                call vinterp(chemic(i,j,1:nvl_am4ic,1:nvar_chemic),nvar_chemic,nvl_am4ic, &
-                    p_am4ic,p_mb(i,k,j), chemic_interp(i,k,j,1:nvar_chemic))
+              do l=1,nvl_am4ic
+                kp=nvl_am4ic-l+1
+                chemic_input(i,j,kp,1:nvar_chemic) = chemic(i,j,l,1:nvar_chemic)
               enddo
+
+              if (maxval(pi_am4ic) < maxval(p8w_r(i,:,j))) then
+                 pi_am4ic( maxloc(pi_am4ic) ) = maxval(p8w_r(i,:,j))
+              endif
+              if (minval(pi_am4ic) > minval(p8w_r(i,:,j))) then
+                 pi_am4ic( minloc(pi_am4ic) ) = minval(p8w_r(i,:,j))
+              endif
+
+              ! need input data with vertical index increaseing downward (start at lev=top)
+              call interp_weighted_scalar_2D(pi_am4ic, p8w_r(i,:,j), chemic_input(i,j,:,1:nvar_chemic), &
+                  chemic_output(i,:,j,1:nvar_chemic))
+
+              do k=kts,kte
+                kp = kte-k+1
+                chemic_interp(i,kp,j,1:nvar_chemic)=chemic_output(i,k,j,1:nvar_chemic)
+              enddo
+
               chem(i,kts:kte,j,p_co) = chemic_interp(i,kts:kte,j,1)
               chem(i,kts:kte,j,p_o3) = chemic_interp(i,kts:kte,j,2)
               chem(i,kts:kte,j,p_n2o) = chemic_interp(i,kts:kte,j,3)
@@ -635,7 +951,7 @@ contains
               chem(i,kts:kte,j,p_no2) = chemic_interp(i,kts:kte,j,5)
               chem(i,kts:kte,j,p_hno3) = chemic_interp(i,kts:kte,j,6)
               chem(i,kts:kte,j,p_n2o5) = chemic_interp(i,kts:kte,j,7)
-              chem(i,kts:kte,j,p_ch4) = chemic_interp(i,kts:kte,j,8)
+              chem(i,kts:kte,j,p_ch4) = chemic_interp(i,kts:kte,j,8)+0.02  ! bias correction, + 20ppb
               chem(i,kts:kte,j,p_pan) = chemic_interp(i,kts:kte,j,9)
               chem(i,kts:kte,j,p_c2h6) = chemic_interp(i,kts:kte,j,10)
               chem(i,kts:kte,j,p_ch3coch3) = chemic_interp(i,kts:kte,j,11)
@@ -654,7 +970,21 @@ contains
               chem(i,kts:kte,j,p_cl2o2) = chemic_interp(i,kts:kte,j,23)
               chem(i,kts:kte,j,p_br) = chemic_interp(i,kts:kte,j,24)
               chem(i,kts:kte,j,p_brcl) = chemic_interp(i,kts:kte,j,25)
-              chem(i,kts:kte,j,p_extinction) = chemic_interp(i,kts:kte,j,26)
+              chem(i,kts:kte,j,p_extinction) = chemic_interp(i,kts:kte,j,26)/10. ! testing
+              chem(i,kts:kte,j,p_h2) = chemic_interp(i,kts:kte,j,27)
+              chem(i,kts:kte,j,p_h2o2) = chemic_interp(i,kts:kte,j,28)
+              chem(i,kts:kte,j,p_ch3cho) = chemic_interp(i,kts:kte,j,29)
+              chem(i,kts:kte,j,p_ch3oh) = chemic_interp(i,kts:kte,j,30)
+              chem(i,kts:kte,j,p_c2h5oh) = chemic_interp(i,kts:kte,j,31)
+              chem(i,kts:kte,j,p_c2h4) = chemic_interp(i,kts:kte,j,32)
+              chem(i,kts:kte,j,p_c3h8) = chemic_interp(i,kts:kte,j,33)
+              chem(i,kts:kte,j,p_c4h10) = chemic_interp(i,kts:kte,j,34)
+              chem(i,kts:kte,j,p_isop) = chemic_interp(i,kts:kte,j,35)
+              chem(i,kts:kte,j,p_c10h16) = chemic_interp(i,kts:kte,j,36)
+              chem(i,kts:kte,j,p_ch3ooh) = chemic_interp(i,kts:kte,j,37)
+              chem(i,kts:kte,j,p_ch2o)  = chemic_interp(i,kts:kte,j,38)
+              chem(i,kts:kte,j,p_c3h6)  = chemic_interp(i,kts:kte,j,39)
+
             enddo
           enddo
         ! endif !(gaschem_opt)
@@ -677,10 +1007,10 @@ contains
     !
 !   emis_ant=0.
     nv=1
-    k=kts
     factor2=0.
     factor=0.
     if (p_bc2 > 1)then
+      k=kts
       if (chem_opt == CHEM_OPT_GOCART) then
         do j=jts,jte
           do i=its,ite
@@ -699,39 +1029,70 @@ contains
      !JianHe: convert aerosol to ug/kg and gas to ppm
      !if (gaschem_opt == 1 .or. do_am4chem) then
 #ifdef AM4_CHEM
+      do j=jts,jte
+        do i=its,ite
+          factor=dtstep*rri(i,k,j)/dz8w(i,k,j)
+          factor2=4.828e-4*dtstep*rri(i,k,j)/(60.*dz8w(i,k,j))
+
+          chem(i,k,j,p_bc1)=chem(i,k,j,p_bc1)+emis_ant(i,k,j,p_e_bc)*factor    !ug/kg
+          chem(i,k,j,p_oc1)=chem(i,k,j,p_oc1)+emis_ant(i,k,j,p_e_oc)*factor
+          chem(i,k,j,p_p25)=chem(i,k,j,p_p25)+emis_ant(i,k,j,p_e_pm_25)*factor
+          chem(i,k,j,p_p10)=chem(i,k,j,p_p10)+emis_ant(i,k,j,p_e_pm_10)*factor
+          chem(i,k,j,p_sulf)=chem(i,k,j,p_sulf)+emis_ant(i,k,j,p_e_sulf)*factor
+          chem(i,k,j,p_so2)=chem(i,k,j,p_so2)+emis_ant(i,k,j,p_e_so2)*factor2
+          chem(i,k,j,p_no) =chem(i,k,j,p_no) +emis_ant(i,k,j,p_e_no )*factor2
+          chem(i,k,j,p_no2) =chem(i,k,j,p_no2) +emis_ant(i,k,j,p_e_no2)*factor2
+          chem(i,k,j,p_nh3) =chem(i,k,j,p_nh3) +emis_ant(i,k,j,p_e_nh3)*factor2
+          chem(i,k,j,p_co) =chem(i,k,j,p_co) +emis_ant(i,k,j,p_e_co )*factor2
+          chem(i,k,j,p_ch4) =chem(i,k,j,p_ch4) +emis_ant(i,k,j,p_e_ch4)*factor2
+          chem(i,k,j,p_ch2o) =chem(i,k,j,p_ch2o) +emis_ant(i,k,j,p_e_ch2o)*factor2
+          chem(i,k,j,p_c2h4) =chem(i,k,j,p_c2h4) +emis_ant(i,k,j,p_e_c2h4)*factor2
+          chem(i,k,j,p_c2h6) =chem(i,k,j,p_c2h6) +emis_ant(i,k,j,p_e_c2h6)*factor2
+          chem(i,k,j,p_c3h6) =chem(i,k,j,p_c3h6) +emis_ant(i,k,j,p_e_c3h6)*factor2
+          chem(i,k,j,p_c3h8) =chem(i,k,j,p_c3h8) +emis_ant(i,k,j,p_e_c3h8)*factor2
+          chem(i,k,j,p_c4h10) =chem(i,k,j,p_c4h10) +emis_ant(i,k,j,p_e_c4h10)*factor2
+          chem(i,k,j,p_isop) =chem(i,k,j,p_isop) +emis_ant(i,k,j,p_e_isop)*factor2 + &
+                                emis_bio(i,k,j,p_ebio_isop)*factor2
+          chem(i,k,j,p_c10h16) =chem(i,k,j,p_c10h16)+emis_ant(i,k,j,p_e_c10h16 )*factor2 + &
+                                  emis_bio(i,k,j,p_ebio_c10h16)*factor2
+          chem(i,k,j,p_ch3oh) =chem(i,k,j,p_ch3oh) +emis_ant(i,k,j,p_e_ch3oh)*factor2
+          chem(i,k,j,p_c2h5oh) =chem(i,k,j,p_c2h5oh)+emis_ant(i,k,j,p_e_c2h5oh )*factor2
+          chem(i,k,j,p_ch3coch3) =chem(i,k,j,p_ch3coch3)+emis_ant(i,k,j,p_e_ch3coch3 )*factor2
+          chem(i,k,j,p_h2) =chem(i,k,j,p_h2) +emis_ant(i,k,j,p_e_h2 )*factor2
+          chem(i,k,j,p_e90) =chem(i,k,j,p_e90) +emis_ant(i,k,j,p_e_e90)*factor2
+        enddo
+      enddo
+
+      if(read_emis3d) then
         do j=jts,jte
           do i=its,ite
-            factor=dtstep*rri(i,k,j)/dz8w(i,k,j)
-            factor2=4.828e-4*dtstep*rri(i,k,j)/(60.*dz8w(i,k,j))
-
-            chem(i,k,j,p_bc1)=chem(i,k,j,p_bc1)+emis_ant(i,k,j,p_e_bc)*factor    !ug/kg
-            chem(i,k,j,p_oc1)=chem(i,k,j,p_oc1)+emis_ant(i,k,j,p_e_oc)*factor
-            chem(i,k,j,p_p25)=chem(i,k,j,p_p25)+emis_ant(i,k,j,p_e_pm_25)*factor
-            chem(i,k,j,p_p10)=chem(i,k,j,p_p10)+emis_ant(i,k,j,p_e_pm_10)*factor
-            chem(i,k,j,p_sulf)=chem(i,k,j,p_sulf)+emis_ant(i,k,j,p_e_sulf)*factor
-            chem(i,k,j,p_so2)=chem(i,k,j,p_so2)+emis_ant(i,k,j,p_e_so2)*factor2
-            chem(i,k,j,p_no) =chem(i,k,j,p_no) +emis_ant(i,k,j,p_e_no )*factor2
-            chem(i,k,j,p_no2) =chem(i,k,j,p_no2) +emis_ant(i,k,j,p_e_no2)*factor2
-            chem(i,k,j,p_nh3) =chem(i,k,j,p_nh3) +emis_ant(i,k,j,p_e_nh3)*factor2
-            chem(i,k,j,p_co) =chem(i,k,j,p_co) +emis_ant(i,k,j,p_e_co )*factor2
-            chem(i,k,j,p_ch4) =chem(i,k,j,p_ch4) +emis_ant(i,k,j,p_e_ch4)*factor2
-            chem(i,k,j,p_ch2o) =chem(i,k,j,p_ch2o) +emis_ant(i,k,j,p_e_ch2o)*factor2
-            chem(i,k,j,p_c2h4) =chem(i,k,j,p_c2h4) +emis_ant(i,k,j,p_e_c2h4)*factor2
-            chem(i,k,j,p_c2h6) =chem(i,k,j,p_c2h6) +emis_ant(i,k,j,p_e_c2h6)*factor2
-            chem(i,k,j,p_c3h6) =chem(i,k,j,p_c3h6) +emis_ant(i,k,j,p_e_c3h6)*factor2
-            chem(i,k,j,p_c3h8) =chem(i,k,j,p_c3h8) +emis_ant(i,k,j,p_e_c3h8)*factor2
-            chem(i,k,j,p_c4h10) =chem(i,k,j,p_c4h10) +emis_ant(i,k,j,p_e_c4h10)*factor2
-            chem(i,k,j,p_isop) =chem(i,k,j,p_isop) +emis_ant(i,k,j,p_e_isop)*factor2 + &
-                                emis_bio(i,k,j,p_ebio_isop)*factor2
-            chem(i,k,j,p_c10h16) =chem(i,k,j,p_c10h16)+emis_ant(i,k,j,p_e_c10h16 )*factor2 + &
-                                  emis_bio(i,k,j,p_ebio_c10h16)*factor2
-            chem(i,k,j,p_ch3oh) =chem(i,k,j,p_ch3oh) +emis_ant(i,k,j,p_e_ch3oh)*factor2
-            chem(i,k,j,p_c2h5oh) =chem(i,k,j,p_c2h5oh)+emis_ant(i,k,j,p_e_c2h5oh )*factor2
-            chem(i,k,j,p_ch3coch3) =chem(i,k,j,p_ch3coch3)+emis_ant(i,k,j,p_e_ch3coch3 )*factor2
-            chem(i,k,j,p_h2) =chem(i,k,j,p_h2) +emis_ant(i,k,j,p_e_h2 )*factor2
-            chem(i,k,j,p_e90) =chem(i,k,j,p_e90) +emis_ant(i,k,j,p_e_e90)*factor2
+            do k=kts,kte
+              !convert mol/km2/hr to ppm
+              factor2=4.828e-4*dtstep*rri(i,k,j)/(60.*dz8w(i,k,j))
+              chem(i,k,j,p_ch3coch3) =chem(i,k,j,p_ch3coch3)+emi3d_interp(i,k,j,p_ebb_ch3coch3)*factor2
+              chem(i,k,j,p_c2h4) =chem(i,k,j,p_c2h4)+emi3d_interp(i,k,j,p_ebb_c2h4)*factor2
+              chem(i,k,j,p_c2h5oh) =chem(i,k,j,p_c2h5oh)+emi3d_interp(i,k,j,p_ebb_c2h5oh)*factor2
+              chem(i,k,j,p_c2h6) =chem(i,k,j,p_c2h6)+emi3d_interp(i,k,j,p_ebb_c2h6)*factor2
+              chem(i,k,j,p_c3h6) =chem(i,k,j,p_c3h6)+emi3d_interp(i,k,j,p_ebb_c3h6)*factor2
+              chem(i,k,j,p_c3h8) =chem(i,k,j,p_c3h8)+emi3d_interp(i,k,j,p_ebb_c3h8)*factor2
+              chem(i,k,j,p_c4h10) =chem(i,k,j,p_c4h10)+emi3d_interp(i,k,j,p_ebb_c4h10)*factor2
+              chem(i,k,j,p_ch2o) =chem(i,k,j,p_ch2o)+emi3d_interp(i,k,j,p_ebb_ch2o)*factor2
+              chem(i,k,j,p_ch3oh) =chem(i,k,j,p_ch3oh)+emi3d_interp(i,k,j,p_ebb_ch3oh)*factor2
+              chem(i,k,j,p_ch4) =chem(i,k,j,p_ch4)+emi3d_interp(i,k,j,p_ebb_ch4)*factor2
+              chem(i,k,j,p_co) =chem(i,k,j,p_co)+emi3d_interp(i,k,j,p_ebb_co)*factor2 + &
+                                emiairc_interp(i,k,j,p_airc_co)*factor2
+              chem(i,k,j,p_h2) =chem(i,k,j,p_h2)+emi3d_interp(i,k,j,p_ebb_h2)*factor2
+              chem(i,k,j,p_isop) =chem(i,k,j,p_isop)+emi3d_interp(i,k,j,p_ebb_isop)*factor2
+              chem(i,k,j,p_nh3) =chem(i,k,j,p_nh3)+emi3d_interp(i,k,j,p_ebb_nh3)*factor2
+              chem(i,k,j,p_no) =chem(i,k,j,p_no)+emi3d_interp(i,k,j,p_ebb_no)*factor2 + &
+                                emiairc_interp(i,k,j,p_airc_no)*factor2
+              chem(i,k,j,p_c10h16) =chem(i,k,j,p_c10h16)+emi3d_interp(i,k,j,p_ebb_c10h16)*factor2
+              !chem(i,k,j,p_so2) = chem(i,k,j,p_so2)+emiairc_interp(i,k,j,p_airc_so2)*factor2 ! + &
+                                !emivol_interp(i,k,j,p_vol_so2)*factor2
+            enddo
           enddo
         enddo
+      endif  ! read_emis3d
 #endif
 
     else if (p_tr2 > 1)then    !co2 here

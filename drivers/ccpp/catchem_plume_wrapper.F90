@@ -50,7 +50,7 @@ contains
                    ntrac,ntso2,ntpp25,ntbc1,ntoc1,ntpp10,igb,                    &
                    ntch3coch3,ntc2h4,ntc2h5oh,ntc2h6,ntc3h6,ntc3h8,    &
                    ntc4h10,ntch2o,ntch3oh,ntch4,ntco,nth2,ntisop, &
-                   ntnh3,ntno,ntc10h16,gaschem_opt,bmbem, &
+                   ntnh3,ntno,ntc10h16,gaschem_opt,bmbem, read_emis3d, &
                    gq0,qgrs,ebu,abem,biomass_burn_opt_in,plumerise_flag_in,      &
                    plumerisefire_frq_in,pert_scale_plume,ca_emis_plume,          &
                    do_ca,ca_sgs,ca_sgs_emis,vegtype_cpl,ca_sgs_gbbepx_frp,       &
@@ -74,6 +74,7 @@ contains
     integer, parameter :: its=1,jts=1,jte=1, kts=1
 
     logical,        intent(in) :: do_sppt_emis, do_ca, ca_sgs_emis, ca_sgs
+    logical,        intent(in) :: read_emis3d
     real(kind_phys), intent(in) :: sppt_wts(:,:), ca_emis_plume(:)
     integer, dimension(im), intent(in) :: vegtype    
     integer, dimension(im), intent(out) :: vegtype_cpl
@@ -234,6 +235,7 @@ contains
         do j = jts, jp
           do i = its, ite
             ! -- factor for pm emissions, factor2 for burn emissions
+            !ebu_in in  ug/m2/s
             factor  = dt*rri(i,k,j)/dz8w(i,k,j)*random_factor(i)
             factor2 = factor * factor3
             chem(i,k,j,p_oc1) = chem(i,k,j,p_oc1) + factor  * ebu_in(i,j,p_ebu_in_oc  )
@@ -245,7 +247,8 @@ contains
         end do
 
 #ifdef AM4_CHEM
-        bmbem = 0._kind_phys
+      bmbem = 0._kind_phys
+      if (.not. read_emis3d) then
         k = kts
         do j = jts, jp
           do i = its, ite
@@ -275,7 +278,14 @@ contains
         bmbem(:,1) = ebu_in(:,1,p_ebu_in_co)/AVOGNO*1.e10*3600.
         bmbem(:,2) = ebu_in(:,1,p_ebu_in_ch4)/AVOGNO*1.e10*3600.
         bmbem(:,3) = ebu_in(:,1,p_ebu_in_nh3)/AVOGNO*1.e10*3600.
-        bmbem(:,4) = ebu_in(:,1,p_ebu_in_c10h16)/AVOGNO*1.e10*3600.
+        ! convert ug/m2/s to  mol/km2/hr
+        bmbem(:,4) = ebu_in(:,1,p_ebu_in_so2)/mw_so2_aer*3600.
+        bmbem(:,5) = ebu_in(:,1,p_ebu_in_c10h16)/AVOGNO*1.e10*3600.
+        bmbem(:,6) = ebu_in(:,1,p_ebu_in_h2)/AVOGNO*1.e10*3600.
+      else
+        ! others will be included in antem
+        bmbem(:,4) = ebu_in(:,1,p_ebu_in_so2)/mw_so2_aer*3600.
+      endif  ! read_emis3d
 #endif
 
       else
@@ -296,7 +306,8 @@ contains
         end do
 
 #ifdef AM4_CHEM
-        bmbem = 0._kind_phys
+      bmbem = 0._kind_phys
+      if (.not. read_emis3d) then
         ! -- use full-column emissions
         do j = jts, jp
           do k = kts, kp
@@ -325,12 +336,16 @@ contains
         end do
 
         ! convert molec/cm2/s to mol/km2/hr
-        do k = kts, kp
-          bmbem(:,1) = bmbem(:,1) + ebu(:,k,1,p_ebu_co)/AVOGNO*1.e10*3600.
-          bmbem(:,2) = bmbem(:,2) + ebu(:,k,1,p_ebu_ch4)/AVOGNO*1.e10*3600.
-          bmbem(:,3) = bmbem(:,3) + ebu(:,k,1,p_ebu_nh3)/AVOGNO*1.e10*3600.
-          bmbem(:,4) = bmbem(:,4) + ebu(:,k,1,p_ebu_c10h16)/AVOGNO*1.e10*3600.
-        end do
+        bmbem(:,1) = bmbem(:,1) + SUM(ebu(:,:,1,p_ebu_co), dim=2)/AVOGNO*1.e10*3600.
+        bmbem(:,2) = bmbem(:,2) + SUM(ebu(:,:,1,p_ebu_ch4), dim=2)/AVOGNO*1.e10*3600.
+        bmbem(:,3) = bmbem(:,3) + SUM(ebu(:,:,1,p_ebu_nh3), dim=2)/AVOGNO*1.e10*3600.
+        !so2 in ug/m2/s
+        bmbem(:,4) = bmbem(:,4) + SUM(ebu(:,:,1,p_ebu_so2), dim=2)/mw_so2_aer*3600.
+        bmbem(:,5) = bmbem(:,5) + SUM(ebu(:,:,1,p_ebu_c10h16), dim=2)/AVOGNO*1.e10*3600.
+        bmbem(:,6) = bmbem(:,6) + SUM(ebu(:,:,1,p_ebu_h2), dim=2)/AVOGNO*1.e10*3600.
+      else
+        bmbem(:,4) = bmbem(:,4) + SUM(ebu(:,:,1,p_ebu_so2), dim=2)/mw_so2_aer*3600.
+      endif  ! read_emis3d
 #endif
       end if
 
@@ -359,6 +374,7 @@ contains
     enddo
 
 #ifdef AM4_CHEM
+    if (.not. read_emis3d) then
     do k=kts,kte
       do i=its,ite
          gq0(i,k,ntisop )=ppm2ugkg(p_isop   ) * max(epsilc,chem(i,k,1,p_isop))
@@ -396,11 +412,12 @@ contains
          qgrs(i,k,nth2)=gq0(i,k,nth2 )
       enddo
     enddo
+    endif ! read_emis3d
 #endif
 
     abem(:,4)=ugkg*ebu_in  (:,kts,p_ebu_in_bc )*random_factor(:)
     abem(:,5)=ugkg*ebu_in  (:,kts,p_ebu_in_oc )*random_factor(:)
-    abem(:,6)=ugkg*ebu_in  (:,kts,p_ebu_in_so2)*random_factor(:)
+    abem(:,6)=ugkg*ebu_in  (:,kts,p_ebu_in_so2)*random_factor(:)  ! ug/m2/s to kg/m2/s
 
    end subroutine catchem_plume_wrapper_run
 !> @}

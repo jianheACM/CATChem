@@ -124,6 +124,9 @@ module gfdl_drydep_mod
   ! --->h1g, add a scale factor for aerosol wet deposition, 2014-04-10
   real ::                scale_aerosol_wetdep =1.0
   real ::                scale_aerosol_wetdep_snow =1.0
+  real ::                scale_gas_drydep = 1.0
+  real ::                scale_aerosol_drydep =1.0
+
   character(len=64)  :: file_dry = 'depvel.nc'  ! NetCDF file for dry deposition velocities
   logical :: drydep_exp = .true.
   real :: T_snow_dep = 263.15
@@ -205,9 +208,9 @@ contains
        allocate (Drydep(ntrace))
     endif
 
-    if (me == master) then
-      print *, "Total number of tracers passed to drydep: ", ntrace
-    endif
+    !if (me == master) then
+    !  print *, "Total number of tracers passed to drydep: ", ntrace
+    !endif
 
     do n = 1, ntrace
        !--- set tracer tendency names where tracer names have changed ---
@@ -319,7 +322,7 @@ contains
        
        if ((name=='co') .or. (name=='ch2o') .or. (name=='o3') &
           .or. (name=='no') .or. (name=='no2') .or. (name=='hno3') &
-          .or. (name=='ho2no2') .or. (name=='n2o5') & ! .or. (name=='ch4') & ! exclude ch4 for now
+          .or. (name=='ho2no2') .or. (name=='n2o5') & ! .or. (name=='ch4') & ! exclude ch4 for now !JianHe
           .or. (name=='ch3ooh') .or. (name=='h2o2') .or. (name=='pan') &
           .or. (name=='mpan') .or. (name=='ch3coch3') .or. (name=='ch3oh') &
           .or. (name=='c2h5oh') .or. (name=='glyald') .or. (name=='hyac') &
@@ -630,6 +633,9 @@ subroutine gfdl_dry_deposition( me, master, tracer_names, &
     drydep_vel(:,:) = (1./(landr2/frictv + resisa)) * (1.-frac_open_sea) &
          +     frac_open_sea * vd_ocean
 
+    !JianHe: apply scaling factor
+    drydep_vel(:,:) = drydep_vel(:,:)*scale_aerosol_drydep
+
     dsinku = drydep_vel(:,:)/dz(:,:)
 
  case('wind_driven')
@@ -801,7 +807,7 @@ subroutine gfdl_dry_deposition( me, master, tracer_names, &
     else if ((tracer_names(n)=='ch3ooh') .or. &
              (tracer_names(n)=='ch3oh') .or. &
              (tracer_names(n)=='c2h5oh') .or. &
-             (tracer_names(n)==' atooh')) then
+             (tracer_names(n)=='atooh')) then
        drydep_vel(:,:) = drydep_data(:,:,10)
     else if ((tracer_names(n)=='h2o2') .or. &
              (tracer_names(n)=='glyx') .or. &
@@ -832,6 +838,11 @@ subroutine gfdl_dry_deposition( me, master, tracer_names, &
        drydep_vel(:,:) = drydep_data(:,:,22)
     else
        drydep_vel(:,:) = 0.
+    end if
+
+    !JianHe
+    if (.not. diurnal) then
+       drydep_vel(:,:) = drydep_vel(:,:) * scale_gas_drydep
     end if
 
     if (diurnal) then

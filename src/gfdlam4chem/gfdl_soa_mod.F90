@@ -301,6 +301,9 @@ end subroutine gfdl_soa_endts
          do i=1,id
          do j=1,jd
          do k=1,kd
+            !JianHe:use dry or moist density?
+            !air_dens = rho(i,j,k)*1.e3/WTMAIR*AVOGNO*1.e-6  ! molec/cm3
+            !JianHe: use below to be consistent with that in chemistry
             air_dens = 10.*pfull(i,j,k)/(boltz*temp(i,j,k)) ! molec/cm3
             SOA_dt(i,j,k) = A_C4H10_OH * exp( -B_C4H10_OH/temp(i,j,k) ) * c4h10_SOA_yield &
                           * C4H10(i,j,k)*OH(i,j,k)*air_dens

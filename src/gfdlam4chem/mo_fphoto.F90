@@ -41,7 +41,7 @@
       integer ::  so4_ndx, bc1_ndx, bc2_ndx, oc1_ndx, oc2_ndx, soa_ndx, &
                   ssa_ndx(5), dust_ndx(5)   
 !jul--
-      integer ::  ox_ndx, o3_ndx, nqa, nqi, nql, nqq
+      integer ::  ox_ndx, o3_ndx, nqa, nqi, nql, nqq, nqr, nqs, nqg
 
 !j2l++  
       integer, parameter :: & 
@@ -343,6 +343,9 @@
       nqi = get_tracer_ndx(tracer_names,'ice_wat')
       nql = get_tracer_ndx(tracer_names,'liq_wat')
       nqq = get_tracer_ndx(tracer_names,'sphum')
+      nqr = get_tracer_ndx(tracer_names,'rainwat') !
+      nqs = get_tracer_ndx(tracer_names,'snowwat') !
+      nqg = get_tracer_ndx(tracer_names,'graupel') !
       
       if(  o3_ndx <1 )   call errmsg ('ATMOS: fphoto','Failed to find O3_ndx', .true.)
       if(  so4_ndx <1 )  call errmsg ('ATMOS: fphoto','Failed to find so4_ndx', .true.)
@@ -627,6 +630,16 @@
       if(use_lsc_in_fastjx)then
          clouds_lwc(:,:,1)      = max(0.,r(:,:, nql))  
          clouds_lwc(:,:,2)      = max(0.,r(:,:, nqi))  
+        ! if (nqr > 0 ) then
+        !   clouds_lwc(:,:,1) = max(0.,r(:,:, nql)) + max(0.,r(:,:, nqr))
+        ! end if
+        ! if (nqs > 0 ) then
+        !   clouds_lwc(:,:,2) = max(0.,r(:,:, nqi)) + max(0.,r(:,:, nqs))
+        !   if (nqg > 0) then
+        !     clouds_lwc(:,:,2) = max(0.,r(:,:, nqi)) + max(0.,r(:,:, nqs)) + &
+        !             max(0.,r(:,:, nqg))
+        !   end if
+        ! end if
          !clouds_fraction(:,:,1) = r(:,:, nqa)       
          clouds_fraction(:,:,1)   = clouds(:,:)
       end if

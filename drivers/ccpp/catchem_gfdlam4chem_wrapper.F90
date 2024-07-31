@@ -158,6 +158,7 @@ contains
                    u10m, v10m,idat, jdat, jval, emi2_in, bioem, &
                    ox_prod, ox_loss, lch4_prod, ch4_loss, &
                    oh_prod, oh_loss, &
+                   h2_prod, h2_loss, &
                    dfdage_in, sfalb, &
                    ntso2, ntsulf, ntDMS, ntmsa, ntpp25,                     &
                    ntdust1,ntdust2,ntdust3,ntdust4,ntdust5, &
@@ -195,9 +196,9 @@ contains
     real(kind_phys), dimension(im), intent(in) :: u10m, v10m, landfrac, oceanfrac, fice, &
                 garea, rlat,rlon, tskin, sfalb, xcosz
 
-    real(kind_phys), dimension(im,kte,3), intent(inout) :: jval  !jo2,jo1d,jno2
+    real(kind_phys), dimension(im,kte,3), intent(inout) :: jval  !jn2o,jo1d,jno2
     real(kind_phys), dimension(im,kte), intent(inout) :: ox_prod, ox_loss, lch4_prod, ch4_loss, &
-                                                         oh_prod, oh_loss
+                                                         oh_prod, oh_loss, h2_prod, h2_loss
     real(kind_phys), dimension(im,64, 3), intent(in) :: emi2_in  !JianHe: vertical
     real(kind_phys), dimension(im,3), intent(in) :: bioem
     real(kind_phys), dimension(im,72, 8), intent(in) :: dfdage_in  !JianHe
@@ -234,7 +235,8 @@ contains
     real(kind_phys), dimension(ims:im,jms:jme,kts:kte,3) :: jvals_out
     real(kind_phys), dimension(ims:im,jms:jme,kts:kte) :: prodox,lossox, &
                                                           prodlch4,lossch4, &
-                                                          prodoh,lossoh
+                                                          prodoh,lossoh, &
+                                                          prodh2,lossh2
     real(kind_phys), dimension(1:im,jms:jme,1:kte) :: t_am4,    &
                     p_am4, z_am4, sphum_am4, cldfrac_am4
     real(kind_phys), dimension(1:im,jms:jme,1:kme) :: z8w_am4, p8w_am4
@@ -312,6 +314,8 @@ if (do_am4chem) then
    lossch4 = 0._kind_phys
    prodoh = 0._kind_phys
    lossoh = 0._kind_phys
+   prodh2 = 0._kind_phys
+   lossh2 = 0._kind_phys
 
    trac_dt = 0._kind_phys 
     ! -- set domain
@@ -434,7 +438,7 @@ if (do_am4chem) then
              cldfrac_am4,dfdage_am4, &
              tsk,albedo,icoszen,solcon, &
              dxy, w10m, chem_diag, jvals_out, &
-             prodox,lossox,prodlch4,lossch4,prodoh,lossoh)
+             prodox,lossox,prodlch4,lossch4,prodoh,lossoh,prodh2,lossh2)
 
 
         do nt = ntchs, ntche
@@ -485,7 +489,8 @@ if (do_am4chem) then
               ch4_loss(i,k) = lossch4(i,j,kp)
               oh_prod(i,k) = prodoh(i,j,kp)
               oh_loss(i,k) = lossoh(i,j,kp)
-
+              h2_prod(i,k) = prodh2(i,j,kp)
+              h2_loss(i,k) = lossh2(i,j,kp)
             end do
           end do
         end do
@@ -529,6 +534,11 @@ if (do_am4chem) then
         qgrs(i,k,1:ntrac)=gq0(i,k,1:ntrac)
      enddo
     enddo
+
+    !if (me==master) then
+    !    print *, 'update n2o: ', qgrs(10,2,15)
+    !endif
+
 
 end if  ! do_am4chem
 !
@@ -709,9 +719,9 @@ end if  ! do_am4chem
         kp = k - kts + 1
         do i=its,ite
           ip = i - its + 1
-           cldfrac(i,k,j) = cld_frac(ip,kp)
-           cldfrac(i,k,j) = max(0.0,cldfrac(i,k,j))
-           cldfrac(i,k,j) = min(cldfrac(i,k,j),1.)
+          cldfrac(i,k,j) = cld_frac(ip,kp)
+          cldfrac(i,k,j) = max(0.0,cldfrac(i,k,j))
+          cldfrac(i,k,j) = min(cldfrac(i,k,j),1.)
         enddo
       enddo
     enddo
