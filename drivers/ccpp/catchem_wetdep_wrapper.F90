@@ -406,8 +406,8 @@ contains
 !    correct so2 and so4 tendency. so2 is converted to so4.
 !-----------------------------------------------------------------------
         !JianHe: this is already handled in wet_deposition sub?
-        trac_dt (:,:,:,p_so2) = trac_dt (:,:,:,p_so2) + so2_so4_evap
-        trac_dt (:,:,:,p_so4) = trac_dt (:,:,:,p_so4) - so2_so4_evap
+        !trac_dt (:,:,:,p_so2) = trac_dt (:,:,:,p_so2) + so2_so4_evap
+        !trac_dt (:,:,:,p_so4) = trac_dt (:,:,:,p_so4) - so2_so4_evap
 
       if(do_cv_wetdep) then
         !For convective removal, need fix
@@ -441,9 +441,11 @@ contains
             kp = kte-k+1
             cldfrac_am4(i,j,kp) = cf_cv(i,k,j)
             cldfrac_am4(i,j,kp) =  max(0.05,cldfrac_am4(i,j,kp) )
+            !cldfrac_am4(i,j,kp) =  max(0.1,cldfrac_am4(i,j,kp) )
            
             cldamt_am4(i,j,kp) = cw_cv(i,k,j) 
             cldamt_am4(i,j,kp) = max(1.e-4,cldamt_am4(i,j,kp))
+            !cldamt_am4(i,j,kp) = max(1.e-3,cldamt_am4(i,j,kp))
 
             !not used in the new scheme
             dqdtc_am4(i,j,kp) = -dqdt_cv(i,k,j) ! kg/kg/s, may include wv, liquid, ice
@@ -462,7 +464,9 @@ contains
                !drain(i,j,kp)=qcv*delz    ! kg/m2/s
             else
                !cldfrac_am4(i,j,kp) = 0.  ! use prescribed
-               drain(i,j,kp)=0.
+               ! JianHe: we need set this to 0 otherwise, very wrong!!!
+               ! In this case, we do not have evap
+               drain(i,j,kp)=0. 
             endif
 
             rain3d_am4(i,j,kp) = rain3d_am4(i,j,kp+1) - drain(i,j,kp)

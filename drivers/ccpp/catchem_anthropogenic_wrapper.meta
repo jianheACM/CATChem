@@ -176,7 +176,7 @@
   standard_name = aircraft_emission_input_cplchp
   long_name = aircraft emission input cplchp
   units = various
-  dimensions = (horizontal_loop_extent,25,3)
+  dimensions = (horizontal_loop_extent,25,6)
   type = real
   kind = kind_phys
   active = (flag_for_am4_chemistry)
@@ -351,6 +351,13 @@
   dimensions = ()
   type = integer
   intent = in
+[ntch3cho]
+  standard_name = index_for_ch3cho
+  long_name = index for ch3cho
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
 [nth2]
   standard_name = index_for_h2
   long_name = index for h2
@@ -473,6 +480,13 @@
 [read_emis3d]
   standard_name = flag_for_reading_3d_emissions
   long_name = flag for reading 3d emissions
+  units = flag
+  dimensions = ()
+  type = logical
+  intent = in
+[read_emiairc]
+  standard_name = flag_for_reading_aircraft_emissions
+  long_name = flag for reading aircraft emissions
   units = flag
   dimensions = ()
   type = logical

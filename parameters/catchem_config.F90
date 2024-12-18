@@ -89,8 +89,8 @@ module catchem_config
   integer, parameter :: call_chemistry     = 1
 
 #ifdef AM4_CHEM
-  integer, parameter :: num_ebu            = 23 !JH, we set for now
-  integer, parameter :: num_ebu_in         = 23 !JH, may need more in the input
+  integer, parameter :: num_ebu            = 24 !JH, we set for now
+  integer, parameter :: num_ebu_in         = 24 !JH, may need more in the input
   integer, parameter :: num_moist=3, num_chem=128, num_emis_seas=5, num_emis_dust=5  !JH
   integer, parameter :: num_emis_ant = 25, num_emis_vol =4    !JH
   integer, parameter :: num_emis_bio = 2   !JH, only for isop,terp for now
@@ -253,6 +253,10 @@ module catchem_config
   integer, parameter :: p_airc_co=1
   integer, parameter :: p_airc_no=2
   integer, parameter :: p_airc_so2=3
+  integer, parameter :: p_airc_nh3=4
+  integer, parameter :: p_airc_bc=5
+  integer, parameter :: p_airc_oc=6
+
 
   integer, parameter :: p_vol_so2=1
 
@@ -265,7 +269,7 @@ module catchem_config
   integer, parameter :: p_e_pm_10=6
   integer, parameter :: p_e_dms=7
   integer, parameter :: p_e_no=8
-  integer, parameter :: p_e_no2=9
+  integer, parameter :: p_e_ch3cho=9
   integer, parameter :: p_e_nh3=10
   integer, parameter :: p_e_co=11
   integer, parameter :: p_e_ch4=12
@@ -312,7 +316,8 @@ module catchem_config
   integer, parameter :: p_ebu_isop = 20
   integer, parameter :: p_ebu_nh3 = 21
   integer, parameter :: p_ebu_no = 22
-  integer, parameter :: p_ebu_c10h16 = 23
+  integer, parameter :: p_ebu_no2 = 23
+  integer, parameter :: p_ebu_c10h16 = 24
 
   integer, parameter :: p_ebu_in_bc  =1
   integer, parameter :: p_ebu_in_oc  =2
@@ -338,7 +343,8 @@ module catchem_config
   integer, parameter :: p_ebu_in_isop = 20
   integer, parameter :: p_ebu_in_nh3 = 21
   integer, parameter :: p_ebu_in_no = 22
-  integer, parameter :: p_ebu_in_c10h16 = 23
+  integer, parameter :: p_ebu_in_no2 = 23
+  integer, parameter :: p_ebu_in_c10h16 = 24
 
 #else
   integer, parameter :: num_ebu            = 7

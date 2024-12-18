@@ -255,6 +255,13 @@
   dimensions = ()
   type = integer
   intent = in
+[ntno2]
+  standard_name = index_for_no2
+  long_name = index for no2
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
 [ntco]
   standard_name = index_for_co
   long_name = index for co

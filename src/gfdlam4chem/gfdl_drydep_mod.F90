@@ -288,7 +288,8 @@ contains
 
        if ((name=='soa') .or. (name=='so4') .or. (name=='sulf') .or. (name=='dust1') &
           .or. (name=='seas1') .or. (name=='bc1') .or. (name=='bc2') &
-          .or. (name=='oc1') .or. (name=='oc2') .or. (name=='nh4')) then
+          .or. (name=='oc1') .or. (name=='oc2') .or. (name=='nh4') &
+          .or. (name=='pp25')) then
            Drydep(n)%Ldrydep = .True.
            !Drydep(n)%control
            Drydep(n)%scheme = "williams_wind_driven"
@@ -309,7 +310,8 @@ contains
            Drydep(n)%sear = 100.
        end if
 
-       if ((name=='seas3') .or. (name=='seas4') .or. (name=='seas5')) then
+       if ((name=='seas3') .or. (name=='seas4') .or. (name=='seas5') &
+           .or. (name=='pp10')) then
            Drydep(n)%Ldrydep = .True.
            !Drydep(n)%control
            Drydep(n)%scheme = "williams_wind_driven"
@@ -322,7 +324,7 @@ contains
        
        if ((name=='co') .or. (name=='ch2o') .or. (name=='o3') &
           .or. (name=='no') .or. (name=='no2') .or. (name=='hno3') &
-          .or. (name=='ho2no2') .or. (name=='n2o5') & ! .or. (name=='ch4') & ! exclude ch4 for now !JianHe
+          .or. (name=='ho2no2') .or. (name=='n2o5') .or. (name=='ch4') &
           .or. (name=='ch3ooh') .or. (name=='h2o2') .or. (name=='pan') &
           .or. (name=='mpan') .or. (name=='ch3coch3') .or. (name=='ch3oh') &
           .or. (name=='c2h5oh') .or. (name=='glyald') .or. (name=='hyac') &

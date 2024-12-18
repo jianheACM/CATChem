@@ -81,6 +81,7 @@ end type field_init_type
 !-----------------------------------------------------------------------
 integer, parameter :: maxinv = 100
 real               :: relaxed_dt = SECONDS_PER_DAY*10.,     & ! relaxation timescale (sec) for the upper boundary values
+                      !JianHe: testing N2O lbc, decrease relaxation time seems increase conc
                       relaxed_dt_lbc = SECONDS_PER_DAY*10., & ! relaxation timescale (sec) for the lower boundary values
                       ub_pres = 100.e2,               & ! pressure (Pa) above which to apply chemical upper boundary conditions
                       lb_pres = 950.e2                  ! pressure (Pa) below which to apply chemical lower boundary conditions
