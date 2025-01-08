@@ -449,7 +449,7 @@
   intent = inout
 [antem]
   standard_name = instantaneous_anthropogenic_emissions
-  long_name = instantaneous anthropogenic emissions for co, ch4, nh3, so2, terp, and h2
+  long_name = instantaneous anthropogenic emissions for co, ch4, nh3, so2, terp, and bc
   units = mol km-2 hr-1
   dimensions = (horizontal_loop_extent,6)
   type = real

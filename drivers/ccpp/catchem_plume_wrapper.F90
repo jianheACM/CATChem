@@ -274,7 +274,7 @@ contains
         bmbem(:,4) = ebu_in(:,1,p_ebu_in_so2)/AVOGNO*1.e10*3600.
         ! convert ug/m2/s to  mol/km2/hr
         bmbem(:,5) = ebu_in(:,1,p_ebu_in_c10h16)/AVOGNO*1.e10*3600.
-        bmbem(:,6) = ebu_in(:,1,p_ebu_in_h2)/AVOGNO*1.e10*3600.
+        bmbem(:,6) = ebu_in(:,1,p_ebu_in_bc)/12.*3600.   !ug/m2/s to mol/km2/hr
       else
         ! others will be included in antem
         bmbem(:,4) = ebu_in(:,1,p_ebu_in_so2)/mw_so2_aer*3600.
@@ -343,7 +343,7 @@ contains
         !so2 in ug/m2/s
         bmbem(:,4) = bmbem(:,4) + SUM(ebu(:,:,1,p_ebu_so2), dim=2)/mw_so2_aer*3600.
         bmbem(:,5) = bmbem(:,5) + SUM(ebu(:,:,1,p_ebu_c10h16), dim=2)/AVOGNO*1.e10*3600.
-        bmbem(:,6) = bmbem(:,6) + SUM(ebu(:,:,1,p_ebu_h2), dim=2)/AVOGNO*1.e10*3600.
+        bmbem(:,6) = bmbem(:,6) + SUM(ebu(:,:,1,p_ebu_bc), dim=2)/12.*3600.
       else
         bmbem(:,4) = bmbem(:,4) + SUM(ebu(:,:,1,p_ebu_so2), dim=2)/mw_so2_aer*3600.
       endif  ! read_emis3d

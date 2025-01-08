@@ -252,16 +252,19 @@ contains
     antem(:,3)=emis_ant(:,kts,1,p_e_nh3)
     antem(:,4)=emis_ant(:,kts,1,p_e_so2)
     antem(:,5)=emis_ant(:,kts,1,p_e_c10h16)
-    antem(:,6)=emis_ant(:,kts,1,p_e_h2)
+    antem(:,6)=emis_ant(:,kts,1,p_e_bc)
     if (read_emiairc) then
-       antem(:,1)=antem(:,1)+SUM(emiairc_interp(i,:,1,p_airc_co))
-       antem(:,3)=antem(:,3)+SUM(emiairc_interp(i,:,1,p_airc_nh3))
-       antem(:,4)=antem(:,4)+SUM(emiairc_interp(i,:,1,p_airc_so2))
+      do i=its,ite
+        antem(i,1)=antem(i,1)+SUM(emiairc_interp(i,:,1,p_airc_co))
+        antem(i,3)=antem(i,3)+SUM(emiairc_interp(i,:,1,p_airc_nh3))
+        antem(i,4)=antem(i,4)+SUM(emiairc_interp(i,:,1,p_airc_so2))
+        antem(i,6)=antem(i,6)+SUM(emiairc_interp(i,:,1,p_airc_bc))
+      enddo
 
-       if (me == master) then
-         write (*, *) "diag emiairc: ", SUM(emiairc_interp(18,:,1,p_airc_co)), &
-                 SUM(emiairc_interp(18,:,1,p_airc_nh3)), SUM(emiairc_interp(18,:,1,p_airc_so2))
-       endif
+       !if (me == master) then
+       !  write (*, *) "diag emiairc: ", SUM(emiairc_interp(18,:,1,p_airc_co)), &
+       !          SUM(emiairc_interp(18,:,1,p_airc_nh3)), SUM(emiairc_interp(18,:,1,p_airc_so2))
+       !endif
     endif
 
     if (read_emis3d) then
@@ -271,7 +274,7 @@ contains
         antem(i,3)=antem(i,3)+SUM(emi3d_interp(i,:,1,p_ebb_nh3))
         !antem(i,4)=antem(i,4)!+ SUM(emivol_interp(i,:,1,p_vol_so2))
         antem(i,5)=antem(i,5)+SUM(emi3d_interp(i,:,1,p_ebb_c10h16))
-        antem(i,6)=antem(i,6)+SUM(emi3d_interp(i,:,1,p_ebb_h2))
+        !antem(i,6)=antem(i,6)+SUM(emi3d_interp(i,:,1,p_ebb_h2))  !Not used
       enddo
 
       !if (me == master) then
@@ -279,6 +282,9 @@ contains
       !   SUM(emiairc_interp(18,:,1,p_airc_co)), SUM(emivol_interp(:,:,1,p_vol_so2))
       !endif
      endif
+
+     antem(:,6)=antem(:,6)/12.*3600.   ! ug/m2/s to mol/km2/hr
+
 #endif
 
 !
