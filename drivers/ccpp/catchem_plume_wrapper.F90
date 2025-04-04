@@ -340,8 +340,8 @@ contains
         bmbem(:,1) = bmbem(:,1) + SUM(ebu(:,:,1,p_ebu_co), dim=2)/AVOGNO*1.e10*3600.
         bmbem(:,2) = bmbem(:,2) + SUM(ebu(:,:,1,p_ebu_ch4), dim=2)/AVOGNO*1.e10*3600.
         bmbem(:,3) = bmbem(:,3) + SUM(ebu(:,:,1,p_ebu_nh3), dim=2)/AVOGNO*1.e10*3600.
-        !so2 in ug/m2/s
-        bmbem(:,4) = bmbem(:,4) + SUM(ebu(:,:,1,p_ebu_so2), dim=2)/mw_so2_aer*3600.
+        !so2 in molec/cm2/s
+        bmbem(:,4) = bmbem(:,4) + SUM(ebu(:,:,1,p_ebu_so2), dim=2)/AVOGNO*1.e10*3600.
         bmbem(:,5) = bmbem(:,5) + SUM(ebu(:,:,1,p_ebu_c10h16), dim=2)/AVOGNO*1.e10*3600.
         bmbem(:,6) = bmbem(:,6) + SUM(ebu(:,:,1,p_ebu_bc), dim=2)/12.*3600.
       else
