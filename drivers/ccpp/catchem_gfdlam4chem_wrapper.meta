@@ -1,7 +1,7 @@
 [ccpp-table-properties]
   name = catchem_gfdlam4chem_wrapper
   type = scheme
-  dependencies = ../../parameters/catchem_config.F90,../../parameters/catchem_constants.F90,../../src/gfdlam4chem/gfdl_am4chem_mod.F90,../../src/gfdlam4chem/gfdl_astronomy.F90,../../src/gfdlam4chem/gfdl_time_utls.F90,../../src/gfdlam4chem/mo_errmsg.F90,../../src/gfdlam4chem/mo_chemdr.F90,../../src/gfdlam4chem/mo_chemini.F90,../../src/gfdlam4chem/mo_chem_utls.F90,../../src/gfdlam4chem/mo_exp_slv.F90,../../src/gfdlam4chem/mo_fastjx.F90,../../src/gfdlam4chem/mo_fphoto.F90,../../src/gfdlam4chem/mo_imp_slv.F90,../../src/gfdlam4chem/mo_photo.F90,../../src/gfdlam4chem/mo_rodas_slv.F90,../../src/gfdlam4chem/mo_setinv.F90,../../src/gfdlam4chem/mo_setsox.F90,../../src/gfdlam4chem/mo_usrrxt.F90,../../src/gfdlam4chem/moz.mat.F90,../../src/gfdlam4chem/moz.mods.F90,../../src/gfdlam4chem/moz.subs.F90,../../src/gfdlam4chem/strat_chem_utilities.F90,../../src/gfdlam4chem/tropchem_types_mod.F90,../../src/gfdlam4chem/m_tracname.F90,../../src/gfdlam4chem/mo_jpl.F90,../../src/gfdlam4chem/mo_read_sim_chm.F90,../../src/gfdlam4chem/gfdl_sat_vapor_pres.F90,../../src/gfdlam4chem/gfdl_sat_vapor_pres_k.F90,../../src/gfdlam4chem/cloud_chem.F90,../../src/gfdlam4chem/aerosol_thermodynamics.F90,../../src/gfdlam4chem/isoropiaIIcode.F,../../src/gfdlam4chem/isrpia.inc,../../src/gfdlam4chem/mo_vinterp.F90,../../src/gfdlam4chem/atmos_age_tracer.F90,../../src/gfdlam4chem/atmos_radon.F90,../../src/gfdlam4chem/atmos_regional_tracer_driver.F90,../../src/gocart_aerosols_mod.F90
+  dependencies = ../../parameters/catchem_config.F90,../../parameters/catchem_constants.F90,../../src/gfdlam4chem/gfdl_am4chem_mod.F90,../../src/gfdlam4chem/gfdl_astronomy.F90,../../src/gfdlam4chem/gfdl_time_utls.F90,../../src/gfdlam4chem/mo_errmsg.F90,../../src/gfdlam4chem/mo_chemdr.F90,../../src/gfdlam4chem/mo_chemini.F90,../../src/gfdlam4chem/mo_chem_utls.F90,../../src/gfdlam4chem/mo_exp_slv.F90,../../src/gfdlam4chem/mo_fastjx.F90,../../src/gfdlam4chem/mo_fphoto.F90,../../src/gfdlam4chem/mo_imp_slv.F90,../../src/gfdlam4chem/mo_photo.F90,../../src/gfdlam4chem/mo_rodas_slv.F90,../../src/gfdlam4chem/mo_setinv.F90,../../src/gfdlam4chem/mo_setsox.F90,../../src/gfdlam4chem/mo_usrrxt.F90,../../src/gfdlam4chem/moz.mat.F90,../../src/gfdlam4chem/moz.mods.F90,../../src/gfdlam4chem/moz.subs.F90,../../src/gfdlam4chem/strat_chem_utilities.F90,../../src/gfdlam4chem/tropchem_types_mod.F90,../../src/gfdlam4chem/m_tracname.F90,../../src/gfdlam4chem/mo_jpl.F90,../../src/gfdlam4chem/mo_read_sim_chm.F90,../../src/gfdlam4chem/gfdl_sat_vapor_pres.F90,../../src/gfdlam4chem/gfdl_sat_vapor_pres_k.F90,../../src/gfdlam4chem/cloud_chem.F90,../../src/gfdlam4chem/aerosol_thermodynamics.F90,../../src/gfdlam4chem/isoropiaIIcode.F,../../src/gfdlam4chem/isrpia.inc,../../src/gfdlam4chem/mo_vinterp.F90,../../src/gfdlam4chem/atmos_age_tracer.F90,../../src/gfdlam4chem/atmos_radon.F90,../../src/gfdlam4chem/atmos_regional_tracer_driver.F90,../../src/gfdlam4chem/gfdl_am4aero_mod.F90
 
 ########################################################################
 [ccpp-arg-table]
@@ -363,6 +363,22 @@
   type = real
   kind = kind_phys
   intent = in
+[us3d]
+  standard_name = x_wind_of_new_state
+  long_name = zonal wind updated by physics
+  units = m s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = in
+[vs3d]
+  standard_name = y_wind_of_new_state
+  long_name = meridional wind updated by physics
+  units = m s-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = in
 [spechum]
   standard_name = specific_humidity_of_new_state
   long_name = water vapor specific humidity updated by physics
@@ -385,6 +401,22 @@
   dimensions = (8)
   type = integer
   intent = in
+[ptrop]
+  standard_name = instantaneous_tropopause_pressure
+  long_name = instantaneous tropopause pressure
+  units = Pa
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = inout
+[tropoz]
+  standard_name = instantaneous_tropospheric_ozone_column
+  long_name = instantaneous tropospheric ozone column
+  units = DU
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = inout
 [jval]
   standard_name = instantaneous_photolysis_rates
   long_name = instantaneous photolysis rates for n2o, o1d, no2
@@ -659,6 +691,20 @@
 [ntso4]
   standard_name = index_for_so4
   long_name = index for so4
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[nto3]
+  standard_name = index_for_o3
+  long_name = index for o3
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[ntoh]
+  standard_name = index_for_oh
+  long_name = index for oh
   units = index
   dimensions = ()
   type = integer

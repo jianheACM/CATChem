@@ -6,7 +6,8 @@ implicit none
                 get_spc_ndx, get_het_ndx, get_extfrc_ndx, &
                 has_drydep, has_srfems, get_rxt_ndx, get_grp_ndx, &
                 get_grp_mem_ndx, chem_utls_init, &
-                get_solar_flux_by_band, read_2D_emis_diurnal
+                get_solar_flux_by_band, read_2D_emis_diurnal, &
+                atmos_tropopause
 
       integer, parameter :: NO_TRACER = -99
 
@@ -895,6 +896,98 @@ subroutine read_2D_emis_diurnal( emis, Time, &
 
 end subroutine read_2D_emis_diurnal
 !</SUBROUTINE>
+
+!#######################################################################
+
+!<SUBROUTINE NAME ="atmos_tropopause">
+!<OVERVIEW>
+!  A subroutine to calculate tropopause diagnostics.
+!
+! do_co2_restore   = logical to turn co2_restore on/off: default = .false.
+! restore_co2_dvmr = partial pressure of co2 to which to restore  (mol/mol)
+! restore_klimit   = atmospheric level to which to restore starting from top
+! restore_tscale   = timescale in seconds with which to restore
+!
+!</OVERVIEW>
+!<DESCRIPTION>
+! A routine to calculate tropopause diagnostics.
+!</DESCRIPTION>
+!<TEMPLATE>
+!call atmos_tropopause (Time, Time_next, t, pfull)
+!</TEMPLATE>
+!
+!   <IN NAME="Time" TYPE="type(time_type)">
+!     Model time.
+!   </IN>
+!   <IN NAME="Time_next" TYPE="type(time_type)">
+!     Model time.
+!   </IN>
+!   <IN NAME="t" TYPE="real" DIM="(:,:,:)">
+!     Temperature.
+!   </IN>
+!   <IN NAME="pfull" TYPE="real" DIM="(:,:,:)">
+!     Pressures on the model full levels.
+!   </IN>
+!   <IN NAME="z_full" TYPE="real" DIM="(:,:,:)">
+!     Height of the model full levels.
+!   </IN>
+
+subroutine atmos_tropopause(is, ie, js, je, Time, t, pfull, z_full, &
+                            tropopause_ind)
+use gfdl_time_utls_mod, only : time_type
+
+real, parameter    :: ztrop_low = 5.e3   ! lowest tropopause level allowed (m)
+real, parameter    :: ztrop_high = 20.e3 ! highest tropopause level allowed (m)
+real, parameter    :: max_dtdz   = 2.e-3  ! max dt/dz for tropopause level (K/m)
+
+   integer, intent(in)                   :: is, ie, js, je
+   type(time_type), intent(in)          :: Time
+   real,    intent(in), dimension(:,:,:) :: t            ! K
+   real,    intent(in), dimension(:,:,:) :: pfull        ! Pa
+   real,    intent(in), dimension(:,:,:) :: z_full       ! m
+   integer, intent(out), dimension(:,:)  :: tropopause_ind ! 1
+!
+!-----------------------------------------------------------------------
+!     local parameters
+!-----------------------------------------------------------------------
+!
+integer   :: i,j,k,id,jd,kd
+real      :: dtemp
+logical   :: sent
+logical   :: used
+
+real, dimension(size(t,1),size(t,2)) :: ptp, tatp, ztp
+
+!-----------------------------------------------------------------------
+
+    id=size(t,1); jd=size(t,2); kd=size(t,3)
+
+    do j=1,jd
+    do i=1,id
+
+       do k = kd-1,2,-1
+          if (z_full(i,j,k) < ztrop_low ) then
+              cycle
+          else if( z_full(i,j,k) > ztrop_high ) then
+              tropopause_ind(i,j)    = k
+              exit
+          end if
+          dtemp = t(i,j,k) - t(i,j,k-1)
+          if( dtemp < max_dtdz*(z_full(i,j,k-1) - z_full(i,j,k)) ) then
+             tropopause_ind(i,j)    = k
+             exit
+          end if
+       end do
+
+       ptp(i,j) = pfull(i,j,tropopause_ind(i,j))
+       tatp(i,j) = t(i,j,tropopause_ind(i,j))
+       ztp(i,j) = z_full(i,j,tropopause_ind(i,j))
+
+    enddo
+    enddo
+
+end subroutine atmos_tropopause
+!</SUBROUTINE >
 
 
       end module mo_chem_utls_mod

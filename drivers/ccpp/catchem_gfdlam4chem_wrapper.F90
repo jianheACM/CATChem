@@ -8,7 +8,8 @@
    use machine ,        only : kind_phys
    use catchem_config
    use catchem_constants, only : AVOGNO,WTMAIR,epsilc
-   use gocart_aerosols_mod
+   use gfdl_am4aero_mod,  only : gfdl_carbon_aerosol_driver, &
+                                 sum_pm_gocart
    use dust_data_mod
    use gfdl_am4chem_mod
    use mo_vinterp,  only : vinterp
@@ -21,7 +22,7 @@
                                   time_type_to_real, &
                                   operator(+), operator(-), &
                                   time_interp
-   use mo_chem_utls_mod, only : sjl_fillz
+   use mo_chem_utls_mod, only : sjl_fillz,atmos_tropopause
 
    implicit none
 
@@ -31,6 +32,10 @@
 
    logical :: is_initialized = .false.
    logical :: do_positive_adjust = .false.
+
+   real, parameter      :: o3_column_factor = 2.687e25 ! Molecular density (molec/m3) of air at STP (T=0C, P=1atm)
+                                                     ! Used to convert from molec/m2 to equivalent depth (in m) at STP
+
 
    type(time_type) :: Time_init,Time,Time_next,dt_time
 
@@ -155,16 +160,18 @@ contains
                    land, landfrac,oceanfrac, fice, lmk, cld_frac, rlat, rlon, &
                    tskin, julian, xcosz,solcon,&
                    pr3d,ph3d,phl3d,prl3d, tk3d, spechum,&
+                   us3d, vs3d, &
                    u10m, v10m,idat, jdat, jval, emi2_in, bioem, &
                    ox_prod, ox_loss, lch4_prod, ch4_loss, &
                    oh_prod, oh_loss, &
                    h2_prod, h2_loss, &
+                   ptrop, tropoz, &
                    dfdage_in, sfalb, &
                    ntso2, ntsulf, ntDMS, ntmsa, ntpp25,                     &
                    ntdust1,ntdust2,ntdust3,ntdust4,ntdust5, &
                    ntss1,ntss2,ntss3,ntss4,ntss5, ntsoa, ntso4, &
-                   ntbc1, ntbc2, ntoc1, ntoc2, ntpp10, ntage, ntaoanh, &
-                   ntextinct,ntoz, &
+                   ntbc1,ntbc2, ntoc1, ntoc2, ntpp10, ntage, ntaoanh, &
+                   ntoh,nto3,ntextinct,ntoz, &
                    gaschem_opt, do_am4chem, tracer_names,   &               
                    chem_in_opt,chem_opt,phot_opt,                    &
                    aer_ra_frq_in,        &
@@ -182,7 +189,7 @@ contains
     integer,        intent(in) :: ntsulf,ntbc2,ntoc2,ntDMS,ntmsa
     integer,        intent(in) :: ntdust1,ntdust2,ntdust3,ntdust4,ntdust5
     integer,        intent(in) :: ntss1,ntss2,ntss3,ntss4,ntss5
-    integer,        intent(in) :: ntoz, ntage, ntsoa, ntaoanh, ntextinct,ntso4
+    integer,        intent(in) :: ntoz, ntage, ntsoa, ntaoanh, ntextinct,ntso4, nto3, ntoh
     character(len=32), dimension(ntrac), intent(in) :: tracer_names
     logical,        intent(in)  :: do_am4chem
 
@@ -199,11 +206,13 @@ contains
     real(kind_phys), dimension(im,kte,3), intent(inout) :: jval  !jn2o,jo1d,jno2
     real(kind_phys), dimension(im,kte), intent(inout) :: ox_prod, ox_loss, lch4_prod, ch4_loss, &
                                                          oh_prod, oh_loss, h2_prod, h2_loss
+    real(kind_phys), dimension(im), intent(inout) :: ptrop, &  !Pa
+                                                     tropoz  ! DU   
     real(kind_phys), dimension(im,64, 3), intent(in) :: emi2_in  !JianHe: vertical
     real(kind_phys), dimension(im,3), intent(in) :: bioem
     real(kind_phys), dimension(im,72, 8), intent(in) :: dfdage_in  !JianHe
     real(kind_phys), dimension(im,kme), intent(in) :: ph3d, pr3d
-    real(kind_phys), dimension(im,kte), intent(in) :: prl3d,phl3d,tk3d, spechum
+    real(kind_phys), dimension(im,kte), intent(in) :: prl3d,phl3d,tk3d,us3d,vs3d,spechum
     integer,           intent(in) :: lmk
     real(kind_phys), dimension(im,lmk), intent(in) ::  cld_frac
     real(kind_phys), dimension(im,kte,ntrac), intent(inout) :: gq0, qgrs
@@ -214,6 +223,7 @@ contains
     integer,          intent(out) :: errflg
 
     real(kind_phys), dimension(1:im, 1:kme,jms:jme) :: rri, t_phy,        &
+                     u_phy, v_phy, &
                      p_phy, z_at_w, z_phy, dz8w, p8w, t8w, rho_phy, pwt, &
                      sphum,cldfrac
 
@@ -222,6 +232,8 @@ contains
                                                    frac_open_sea,w10m, &
                                                    albedo,icoszen, &
                                                    rlat_in,rlon_in
+    real(kind_phys), dimension(ims:im, jms:jme) :: ptp,tatp,ztp
+    integer,         dimension(ims:im, jms:jme) :: tropopause_ind
 
 !>- chemistry variables
     real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:num_moist)  :: moist 
@@ -237,8 +249,14 @@ contains
                                                           prodlch4,lossch4, &
                                                           prodoh,lossoh, &
                                                           prodh2,lossh2
+    real(kind_phys), dimension(ims:im,jms:jme,kts:kte) :: bcphob,bcphil, &
+                                                         bcphob_dt,bcphil_dt, &
+                                                         ocphob,ocphil, &
+                                                         ocphob_dt,ocphil_dt, &
+                                                         ohconc
+
     real(kind_phys), dimension(1:im,jms:jme,1:kte) :: t_am4,    &
-                    p_am4, z_am4, sphum_am4, cldfrac_am4
+                    p_am4, z_am4, sphum_am4, cldfrac_am4, pwt_am4
     real(kind_phys), dimension(1:im,jms:jme,1:kme) :: z8w_am4, p8w_am4
 
     integer :: ide, ime, ite, kde
@@ -316,6 +334,19 @@ if (do_am4chem) then
    lossoh = 0._kind_phys
    prodh2 = 0._kind_phys
    lossh2 = 0._kind_phys
+   bcphob = 0._kind_phys
+   bcphil = 0._kind_phys
+   ocphob = 0._kind_phys
+   ocphil = 0._kind_phys
+   bcphob_dt = 0._kind_phys
+   bcphil_dt = 0._kind_phys
+   ocphob_dt = 0._kind_phys
+   ocphil_dt = 0._kind_phys
+   ohconc = 0._kind_phys
+
+   ptrop = 0._kind_phys
+   tropoz = 0._kind_phys
+   
 
    trac_dt = 0._kind_phys 
     ! -- set domain
@@ -355,11 +386,11 @@ if (do_am4chem) then
         readrestart,chem_in_opt,ktau,dtstep,xcosz,                      &
         garea,land,rlat,rlon,u10m,v10m,                    &
         landfrac,oceanfrac, fice, tskin, sfalb, &
-        pr3d,ph3d,phl3d,tk3d,prl3d,spechum,lmk,cld_frac,                 &
+        pr3d,ph3d,phl3d,tk3d,prl3d,us3d,vs3d,spechum,lmk,cld_frac,                 &
         sphum,cldfrac,emi2_in,bioem,dfdage_in,                               &
         xlat,xlong,dxy,xland,frac_open_sea,tsk,w10m,                    &
         rlat_in,rlon_in, &
-        rri,t_phy,p_phy,rho_phy,dz8w,p8w,                  &
+        rri,t_phy,p_phy,u_phy,v_phy,rho_phy,dz8w,p8w,                  &
         t8w,z_at_w, z_phy, pwt,albedo,icoszen,                  &
         ntso2,ntsulf,ntDMS,ntmsa,ntpp25,                                &
         ntbc1,ntbc2,ntoc1,ntoc2,ntpp10,ntoz,                      &
@@ -427,6 +458,11 @@ if (do_am4chem) then
               z8w_am4(i,j,kp) = z_at_w(i,k,j)
               p8w_am4(i,j,kp) = p8w(i,k,j)
             end do
+
+            do k=kts,kte
+              pwt_am4(i,j,k) = (p8w_am4(i,j,k+1)-p8w_am4(i,j,k))/g
+            enddo
+
           end do
         end do
 
@@ -440,11 +476,27 @@ if (do_am4chem) then
              dxy, w10m, chem_diag, jvals_out, &
              prodox,lossox,prodlch4,lossch4,prodoh,lossoh,prodh2,lossh2)
 
+        call atmos_tropopause(its, ite, jts, jte, Time, t_am4, p_am4, z_am4, &
+                            tropopause_ind)
+         do i = its, ite
+            ptrop(i) = p_am4(i,1,tropopause_ind(i,1))  ! jts=jte=1
+         end do
 
         do nt = ntchs, ntche
           trac_prog(its:ite,jts:jte,kts:kte,nt) = trac_prog(its:ite,jts:jte,kts:kte,nt) + &
                                    trac_dt(its:ite,jts:jte,kts:kte,nt)*dtstep 
         enddo                 
+
+        !calculate tropospheric o3 column
+        do j = jts, jte
+          do i = its, ite
+            do k = tropopause_ind(i,j),kte
+               tropoz(i) = tropoz(i) + pwt_am4(i,j,k)*trac_prog(i,j,k,nto3)
+            end do
+          end do
+        end do
+
+        tropoz = tropoz * AVOGNO / (WTMAIR*1.e-3 * o3_column_factor)
 
         do j = jts, jte
           do i = its, ite
@@ -495,12 +547,58 @@ if (do_am4chem) then
           end do
         end do
 
+#ifdef AM4_CHEM
+      bcphob(:,:,:) = trac_prog(:,:,:,ntbc1)  ! kg/kg
+      bcphil(:,:,:) = trac_prog(:,:,:,ntbc2)
+      ocphob(:,:,:) = trac_prog(:,:,:,ntoc1)
+      ocphob(:,:,:) = trac_prog(:,:,:,ntoc2)
+      ohconc(:,:,:) = chem_diag(:,:,:,ntoh-ntche) ! vmr, mol/mol
+
+      call gfdl_carbon_aerosol_driver( rlon_in, rlat_in, frac_open_sea, &
+              p_am4, p8w_am4, z8w_am4, &
+              tsk, w10m, t_am4, pwt_am4, &
+              bcphob, bcphob_dt,  &
+              bcphil, bcphil_dt,  &
+              ocphob, ocphob_dt, &
+              ocphil, ocphil_dt, &
+              ohconc, its, ite, jts, jte)
+
+      bcphob(:,:,:) = bcphob(:,:,:)+bcphob_dt*dtstep
+      bcphil(:,:,:) = bcphil(:,:,:)+bcphil_dt*dtstep
+      ocphob(:,:,:) = ocphob(:,:,:)+ocphob_dt*dtstep
+      ocphil(:,:,:) = ocphil(:,:,:)+ocphil_dt*dtstep
+
+      trac_prog(:,:,:,ntbc1) = bcphob(:,:,:)
+      trac_prog(:,:,:,ntbc2) = bcphil(:,:,:)
+      trac_prog(:,:,:,ntoc1) = ocphob(:,:,:)
+      trac_prog(:,:,:,ntoc2) = ocphil(:,:,:)
+
+      do j = jts, jte
+         do i = its, ite
+           do k = kts, kte
+              kp = kte-k+1
+              do nt = ntchs, ntche
+                if ( (nt==ntoc1) .or. (nt==ntoc2) &
+                  .or. (nt==ntbc1) .or. (nt==ntbc2) ) then
+                  gq0(i,k,nt) = trac_prog(i,j,kp,nt)*1.e9  ! reverse, kg/kg to ug/kg
+                  gq0(i,k,nt) =  max(epsilc,gq0(i,k,nt))
+                endif
+              end do
+  
+              ! update chem array
+              chem(i,k,j,1:num_chem) = gq0(i,k,ntchs:ntrac)/ppm2ugkg(1:num_chem)
+           end do
+        end do
+      end do
+
+#else
       call gocart_aerosols_driver(ktau,dtstep,t_phy,moist,              &
            chem,rho_phy,dz8w,p8w,dxy,g,                              &
            chem_opt,num_chem,num_moist,                                 &
            ids,ide, jds,jde, kds,kde,                                   &
            ims,ime, jms,jme, kms,kme,                                   &
            its,ite, jts,jte, kts,kte                        )
+#endif
     endif  ! call_chem
 
     call sum_pm_gocart (                                                &
@@ -549,11 +647,11 @@ end if  ! do_am4chem
         readrestart,chem_in_opt,ktau,dtstep,xcosz,                 &
         garea,land,rlat,rlon,u10m,v10m,                   &
         landfrac, oceanfrac, fice, ts2d, sfalb,    &
-        pr3d,ph3d,phl3d,tk3d,prl3d,spechum,lmk,cld_frac,                &
+        pr3d,ph3d,phl3d,tk3d,prl3d,us3d,vs3d,spechum,lmk,cld_frac,                &
         sphum,cldfrac,emi2_in,bioem,dfdage_in,                               &
         xlat,xlong,dxy,xland,frac_open_sea,tsk,w10m,           &
         rlat_in, rlon_in, &
-        rri,t_phy,p_phy,rho_phy,dz8w,p8w,                 &
+        rri,t_phy,p_phy,u_phy,v_phy,rho_phy,dz8w,p8w,                 &
         t8w,z_at_w,z_phy,pwt,albedo,icoszen,                  &
         ntso2,ntsulf,ntDMS,ntmsa,ntpp25,                               &
         ntbc1,ntbc2,ntoc1,ntoc2,ntpp10,ntoz,                             &
@@ -589,7 +687,7 @@ end if  ! do_am4chem
 
     real(kind=kind_phys), dimension(ims:ime, kms:kme), intent(in) :: pr3d,ph3d
     real(kind=kind_phys), dimension(ims:ime, kts:kte), intent(in) ::       &
-         tk3d,prl3d,spechum,phl3d
+         tk3d,prl3d,spechum,phl3d,us3d,vs3d
     real(kind=kind_phys), dimension(ims:ime, lmk), intent(in) :: cld_frac
     real(kind=kind_phys), dimension(ims:ime, kts:kte,ntrac), intent(in) :: gq0
 
@@ -604,7 +702,7 @@ end if  ! do_am4chem
     real(kind_phys), dimension(1:num_chem), intent(in) :: ppm2ugkg
     
     real(kind_phys), dimension(ims:ime, kms:kme, jms:jme), intent(out) ::              & 
-         rri, t_phy, p_phy, rho_phy, dz8w, p8w, t8w, sphum, cldfrac
+         rri, t_phy, p_phy,u_phy, v_phy, rho_phy, dz8w, p8w, t8w, sphum, cldfrac
     real(kind_phys), dimension(ims:ime, kms:kme, jms:jme), intent(out) ::  z_at_w, pwt, & 
                                                                            z_phy
 
@@ -648,6 +746,8 @@ end if  ! do_am4chem
     ! -- initialize output arrays
     rri            = 0._kind_phys
     t_phy          = 0._kind_phys
+    u_phy          = 0._kind_phys
+    v_phy          = 0._kind_phys
     p_phy          = 0._kind_phys
     rho_phy        = 0._kind_phys
     dz8w           = 0._kind_phys
@@ -748,6 +848,8 @@ end if  ! do_am4chem
           dz8w(i,k,j)=z_at_w(i,kk+1,j)-z_at_w(i,kk,j)
           t_phy(i,k,j)=tk3d(ip,kkp)
           p_phy(i,k,j)=prl3d(ip,kkp)
+          u_phy(i,k,j)=us3d(ip,kkp)
+          v_phy(i,k,j)=vs3d(ip,kkp)
           rho_phy(i,k,j)=p_phy(i,k,j)/(287.04*t_phy(i,k,j)*(1.+.608*spechum(ip,kkp)))
           rri(i,k,j)=1./rho_phy(i,k,j)
           moist(i,k,j,:)=0.

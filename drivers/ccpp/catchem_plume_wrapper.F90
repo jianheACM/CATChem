@@ -47,7 +47,7 @@ contains
     subroutine catchem_plume_wrapper_run(im, kte, kme, ktau, dt, julian,         &
                    pr3d, ph3d,phl3d, prl3d, tk3d, us3d, vs3d, spechum,           &
                    w,vegtype,fire_GBBEPx,nvar_gbbepx,nvar_gbbepxp2,fire_MODIS,   &
-                   ntrac,ntso2,ntpp25,ntbc1,ntoc1,ntpp10,igb,                    &
+                   ntrac,ntso2,ntpp25,ntbc1,ntbc2,ntoc1,ntoc2,ntpp10,igb,        &
                    ntch3coch3,ntc2h4,ntc2h5oh,ntc2h6,ntc3h6,ntc3h8,    &
                    ntc4h10,ntch2o,ntch3oh,ntch4,ntco,nth2,ntisop, &
                    ntnh3,ntno,ntno2,ntc10h16,gaschem_opt,bmbem, read_emis3d, &
@@ -60,7 +60,8 @@ contains
 
 
     integer,        intent(in) :: im,kte,kme,ktau,igb
-    integer,        intent(in) :: ntrac,ntso2,ntpp25,ntbc1,ntoc1,ntpp10
+    integer,        intent(in) :: ntrac,ntso2,ntpp25,ntbc1,ntoc1,ntpp10, &
+            ntbc2,ntoc2
     real(kind_phys),intent(in) :: dt, emis_amp_plume, pert_scale_plume,julian
     integer,        intent(in) :: nvar_gbbepx, nvar_gbbepxp2
     integer,        intent(in) :: ntisop,ntno,ntno2,ntco,ntc2h4,ntc2h6,ntc3h6,ntc3h8,  &
@@ -164,7 +165,7 @@ contains
         vegtype,fire_GBBEPx,fire_MODIS,                                 &
         rri,t_phy,u_phy,v_phy,p_phy,rho_phy,dz8w,p8w,                   &
         z_at_w,vvel,                                                    &
-        ntso2,ntpp25,ntbc1,ntoc1,ntpp10,igb,ntrac,gq0,                  &
+        ntso2,ntpp25,ntbc1,ntbc2,ntoc1,ntoc2,ntpp10,igb,ntrac,gq0,      &
         ntch3coch3,ntc2h4,ntc2h5oh,ntc2h6,ntc3h6,ntc3h8,    &
         ntc4h10,ntch2o,ntch3oh,ntch4,ntco,nth2,ntisop, &
         ntnh3,ntno,ntno2,ntc10h16,gaschem_opt,nvar_gbbepx, &
@@ -242,8 +243,10 @@ contains
             ! -- factor for pm emissions, factor2 for burn emissions
             factor  = dt*rri(i,k,j)/dz8w(i,k,j)*random_factor(i)
             factor2 = factor * factor3
-            chem(i,k,j,p_oc1) = chem(i,k,j,p_oc1) + factor  * ebu_in(i,j,p_ebu_in_oc  )
-            chem(i,k,j,p_bc1) = chem(i,k,j,p_bc1) + factor  * ebu_in(i,j,p_ebu_in_bc  )
+            chem(i,k,j,p_oc1) = chem(i,k,j,p_oc1) + factor  * ebu_in(i,j,p_ebu_in_oc  )*0.5
+            chem(i,k,j,p_oc2) = chem(i,k,j,p_oc2) + factor  * ebu_in(i,j,p_ebu_in_oc  )*0.5
+            chem(i,k,j,p_bc1) = chem(i,k,j,p_bc1) + factor  * ebu_in(i,j,p_ebu_in_bc  )*0.4 ! Following AM4
+            chem(i,k,j,p_bc2) = chem(i,k,j,p_bc2) + factor  * ebu_in(i,j,p_ebu_in_bc  )*0.6
             chem(i,k,j,p_p25) = chem(i,k,j,p_p25) + factor  * ebu_in(i,j,p_ebu_in_pm25)
             chem(i,k,j,p_p10) = chem(i,k,j,p_p10) + factor  * ebu_in(i,j,p_ebu_in_pm10)
             chem(i,k,j,p_so2) = chem(i,k,j,p_so2) + factor*ebu_in(i,j,p_ebu_in_so2)*factor4*1.e6
@@ -310,8 +313,10 @@ contains
               ! -- factor for pm emissions, factor2 for burn emissions
               factor  = dt*rri(i,k,j)/dz8w(i,k,j)*random_factor(i)
               factor2 = factor * factor3
-              chem(i,k,j,p_oc1) = chem(i,k,j,p_oc1) + factor  * ebu(i,k,j,p_ebu_oc  )
-              chem(i,k,j,p_bc1) = chem(i,k,j,p_bc1) + factor  * ebu(i,k,j,p_ebu_bc  )
+              chem(i,k,j,p_oc1) = chem(i,k,j,p_oc1) + factor  * ebu(i,k,j,p_ebu_oc  )*0.5
+              chem(i,k,j,p_oc2) = chem(i,k,j,p_oc2) + factor  * ebu(i,k,j,p_ebu_oc  )*0.5
+              chem(i,k,j,p_bc1) = chem(i,k,j,p_bc1) + factor  * ebu(i,k,j,p_ebu_bc  )*0.4
+              chem(i,k,j,p_bc2) = chem(i,k,j,p_bc2) + factor  * ebu(i,k,j,p_ebu_bc  )*0.6
               chem(i,k,j,p_p25) = chem(i,k,j,p_p25) + factor  * ebu(i,k,j,p_ebu_pm25)
               chem(i,k,j,p_p10) = chem(i,k,j,p_p10) + factor  * ebu(i,k,j,p_ebu_pm10)
               chem(i,k,j,p_so2) = chem(i,k,j,p_so2) + factor * ebu(i,k,j,p_ebu_so2 )*factor4*1.e6
@@ -376,7 +381,9 @@ contains
        gq0(i,k,ntso2  )=ppm2ugkg(p_so2   ) * max(epsilc,chem(i,k,1,p_so2))
        gq0(i,k,ntpp25 )=ppm2ugkg(p_p25   ) * max(epsilc,chem(i,k,1,p_p25))
        gq0(i,k,ntbc1  )=ppm2ugkg(p_bc1   ) * max(epsilc,chem(i,k,1,p_bc1))
+       gq0(i,k,ntbc2  )=ppm2ugkg(p_bc2   ) * max(epsilc,chem(i,k,1,p_bc2))
        gq0(i,k,ntoc1  )=ppm2ugkg(p_oc1   ) * max(epsilc,chem(i,k,1,p_oc1))
+       gq0(i,k,ntoc2  )=ppm2ugkg(p_oc2   ) * max(epsilc,chem(i,k,1,p_oc2))
        gq0(i,k,ntpp10 )=ppm2ugkg(p_p10   ) * max(epsilc,chem(i,k,1,p_p10))
      enddo
     enddo
@@ -386,7 +393,9 @@ contains
        qgrs(i,k,ntso2 )=gq0(i,k,ntso2  )
        qgrs(i,k,ntpp25)=gq0(i,k,ntpp25 )
        qgrs(i,k,ntbc1 )=gq0(i,k,ntbc1  )
+       qgrs(i,k,ntbc2 )=gq0(i,k,ntbc2  )
        qgrs(i,k,ntoc1 )=gq0(i,k,ntoc1  )
+       qgrs(i,k,ntoc2 )=gq0(i,k,ntoc2  )
        qgrs(i,k,ntpp10)=gq0(i,k,ntpp10 )
      enddo
     enddo
@@ -450,7 +459,7 @@ contains
         rri,t_phy,u_phy,v_phy,p_phy,rho_phy,dz8w,p8w,                  &
         z_at_w,vvel,                                              &
         ntso2,ntpp25,                               &
-        ntbc1,ntoc1,                                       &
+        ntbc1,ntbc2,ntoc1,ntoc2,                                       &
         ntpp10,igb,                &
         ntrac,gq0,                                                     &
         ntch3coch3,ntc2h4,ntc2h5oh,ntc2h6,ntc3h6,ntc3h8,    &
@@ -474,7 +483,8 @@ contains
     !FV3 input variables
     integer, dimension(ims:ime), intent(in) :: vegtype
     integer, intent(in) :: ntrac,igb
-    integer, intent(in) :: ntso2,ntpp25,ntbc1,ntoc1,ntpp10
+    integer, intent(in) :: ntso2,ntpp25,ntbc1,ntoc1,ntpp10, &
+            ntbc2,ntoc2
     integer, intent(in) :: ntisop,ntno,ntno2,ntco,ntc2h4,ntc2h6,ntc3h6,ntc3h8, &
                            ntnh3,ntch2o,ntch4,ntc4h10,ntc10h16,ntch3oh,ntc2h5oh,&
                            ntch3coch3,nth2,gaschem_opt
@@ -777,7 +787,9 @@ contains
        chem(i,k,jts,p_so2   )=max(epsilc,gq0(i,k,ntso2  )/ppm2ugkg(p_so2))
        chem(i,k,jts,p_p25   )=max(epsilc,gq0(i,k,ntpp25 )/ppm2ugkg(p_p25))
        chem(i,k,jts,p_bc1   )=max(epsilc,gq0(i,k,ntbc1  )/ppm2ugkg(p_bc1))
+       chem(i,k,jts,p_bc2   )=max(epsilc,gq0(i,k,ntbc2  )/ppm2ugkg(p_bc2))
        chem(i,k,jts,p_oc1   )=max(epsilc,gq0(i,k,ntoc1  )/ppm2ugkg(p_oc1))
+       chem(i,k,jts,p_oc2   )=max(epsilc,gq0(i,k,ntoc2  )/ppm2ugkg(p_oc2))
        chem(i,k,jts,p_p10   )=max(epsilc,gq0(i,k,ntpp10 )/ppm2ugkg(p_p10))
 !       if (gaschem_opt == 1) then
 #ifdef AM4_CHEM

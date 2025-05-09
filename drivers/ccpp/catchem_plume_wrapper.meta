@@ -227,9 +227,24 @@
   dimensions = ()
   type = integer
   intent = in
+[ntbc2]
+  standard_name = index_for_bcphilic
+  long_name = index for bcphilic
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
 [ntoc1]
   standard_name = index_for_ocphobic
   long_name = index for ocphobic
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+ intent = in
+[ntoc2]
+  standard_name = index_for_ocphilic
+  long_name = index for ocphilic
   units = index
   dimensions = ()
   type = integer

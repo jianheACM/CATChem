@@ -60,7 +60,7 @@ contains
                    im, kte, kme, ktau, dt,               &
                    jdate, garea, rlat, rlon,  &
                    pr3d, ph3d,phl3d, prl3d, tk3d, spechum,emi_in,                       &
-                   ntrac,ntso2,ntsulf,ntpp25,ntbc1,ntoc1,ntpp10,                        &
+                   ntrac,ntso2,ntsulf,ntpp25,ntbc1,ntbc2,ntoc1,ntoc2,ntpp10,           &
                    ntextinct, &
                    ntisop,ntno,ntno2,ntco,ntc2h4,ntc2h6,ntc3h6,ntc3h8,                 &
                    ntnh3,ntch2o,ntch4,ntc4h10,ntc10h16,ntch3oh,ntc2h5oh,               &
@@ -78,7 +78,8 @@ contains
 
     integer,        intent(in) :: im,kte,kme,ktau, jdate(8)
     integer,        intent(in) :: ntrac,ntchs,ntche
-    integer,        intent(in) :: ntso2,ntpp25,ntbc1,ntoc1,ntpp10
+    integer,        intent(in) :: ntso2,ntpp25,ntbc1,ntoc1,ntpp10, &
+            ntbc2,ntoc2
     integer,        intent(in) :: ntsulf
     integer,        intent(in) :: ntisop,ntno,ntno2,ntco,ntc2h4,ntc2h6,ntc3h6,ntc3h8,  &
                                   ntnh3,ntch2o,ntch4,ntc4h10,ntc10h16,ntch3oh,ntc2h5oh,&
@@ -188,7 +189,7 @@ contains
         ntisop,ntno,ntno2,ntco,ntc2h4,ntc2h6,ntc3h6,ntc3h8,             &
         ntnh3,ntch2o,ntch4,ntc4h10,ntc10h16,ntch3oh,ntc2h5oh,           &
         ntch3coch3,ntch3cho,nth2,nte90,gaschem_opt,do_am4chem,chem_opt,  &
-        ntso2,ntsulf,ntpp25,ntbc1,ntoc1,ntpp10,ntrac,gq0,               &
+        ntso2,ntsulf,ntpp25,ntbc1,ntbc2,ntoc1,ntoc2,ntpp10,ntrac,gq0,    &
         num_chem, num_ebu_in,num_emis_ant,emis_ant,                     &
         num_emis_bio,emis_bio, &
         ppm2ugkg,chem,random_factor,              &
@@ -216,7 +217,9 @@ contains
          gq0(i,k,ntsulf )=ppm2ugkg(p_sulf  ) * max(epsilc,chem(i,k,1,p_sulf))
          gq0(i,k,ntpp25 )=ppm2ugkg(p_p25   ) * max(epsilc,chem(i,k,1,p_p25))
          gq0(i,k,ntbc1  )=ppm2ugkg(p_bc1   ) * max(epsilc,chem(i,k,1,p_bc1))
+         gq0(i,k,ntbc2  )=ppm2ugkg(p_bc2   ) * max(epsilc,chem(i,k,1,p_bc2))
          gq0(i,k,ntoc1  )=ppm2ugkg(p_oc1   ) * max(epsilc,chem(i,k,1,p_oc1))
+         gq0(i,k,ntoc2  )=ppm2ugkg(p_oc2   ) * max(epsilc,chem(i,k,1,p_oc2))
          gq0(i,k,ntpp10 )=ppm2ugkg(p_p10   ) * max(epsilc,chem(i,k,1,p_p10))
        end if
      enddo
@@ -228,7 +231,9 @@ contains
        qgrs(i,k,ntsulf )=gq0(i,k,ntsulf )
        qgrs(i,k,ntpp25 )=gq0(i,k,ntpp25 )
        qgrs(i,k,ntbc1  )=gq0(i,k,ntbc1  )
+       qgrs(i,k,ntbc2  )=gq0(i,k,ntbc2  )
        qgrs(i,k,ntoc1  )=gq0(i,k,ntoc1  )
+       qgrs(i,k,ntoc2  )=gq0(i,k,ntoc2  )
        qgrs(i,k,ntpp10 )=gq0(i,k,ntpp10 )
        if (gaschem_opt == 1 .or. do_am4chem) then !JianHe: For AM4
          do n = ntchs,ntche  ! only prog chem
@@ -300,8 +305,8 @@ contains
         rri,t_phy,p_phy,rho_phy,dz8w,p8w,z_at_w,                         &
         ntisop,ntno,ntno2,ntco,ntc2h4,ntc2h6,ntc3h6,ntc3h8,             &
         ntnh3,ntch2o,ntch4,ntc4h10,ntc10h16,ntch3oh,ntc2h5oh,           &
-        ntch3coch3,ntch3cho,nth2,nte90,gaschem_opt,do_am4chem,chem_opt,           &
-        ntso2,ntsulf,ntpp25,ntbc1,ntoc1,ntpp10,ntrac,gq0,                &
+        ntch3coch3,ntch3cho,nth2,nte90,gaschem_opt,do_am4chem,chem_opt,       &
+        ntso2,ntsulf,ntpp25,ntbc1,ntbc2,ntoc1,ntoc2,ntpp10,ntrac,gq0,      &
         num_chem, num_ebu_in,num_emis_ant,emis_ant,                      &
         num_emis_bio,emis_bio,ppm2ugkg,chem,random_factor,    &
         chem_in_opt, ntchs, ntche, &
@@ -326,7 +331,8 @@ contains
 
     !FV3 input variables
     integer, intent(in) :: ntrac,ntchs, ntche
-    integer, intent(in) :: ntso2,ntpp25,ntbc1,ntoc1,ntpp10
+    integer, intent(in) :: ntso2,ntpp25,ntbc1,ntoc1,ntpp10, &
+            ntbc2,ntoc2
     integer, intent(in) :: ntsulf
     integer, intent(in) :: ntisop,ntno,ntno2,ntco,ntc2h4,ntc2h6,ntc3h6,ntc3h8,  &
                            ntnh3,ntch2o,ntch4,ntc4h10,ntc10h16,ntch3oh,ntc2h5oh,&
@@ -934,7 +940,9 @@ contains
          chem(i,k,jts,p_sulf  )=max(epsilc,gq0(i,k,ntsulf )/ppm2ugkg(p_sulf))
          chem(i,k,jts,p_p25   )=max(epsilc,gq0(i,k,ntpp25 )/ppm2ugkg(p_p25))
          chem(i,k,jts,p_bc1   )=max(epsilc,gq0(i,k,ntbc1  )/ppm2ugkg(p_bc1))
+         chem(i,k,jts,p_bc2   )=max(epsilc,gq0(i,k,ntbc2  )/ppm2ugkg(p_bc2))
          chem(i,k,jts,p_oc1   )=max(epsilc,gq0(i,k,ntoc1  )/ppm2ugkg(p_oc1))
+         chem(i,k,jts,p_oc2   )=max(epsilc,gq0(i,k,ntoc2  )/ppm2ugkg(p_oc2))
          chem(i,k,jts,p_p10   )=max(epsilc,gq0(i,k,ntpp10 )/ppm2ugkg(p_p10))
        end if
      enddo
@@ -1074,8 +1082,10 @@ contains
           factor=dtstep*rri(i,k,j)/dz8w(i,k,j)
           factor2=4.828e-4*dtstep*rri(i,k,j)/(60.*dz8w(i,k,j))
 
-          chem(i,k,j,p_bc1)=chem(i,k,j,p_bc1)+emis_ant(i,k,j,p_e_bc)*factor    !ug/kg
-          chem(i,k,j,p_oc1)=chem(i,k,j,p_oc1)+emis_ant(i,k,j,p_e_oc)*factor
+          chem(i,k,j,p_bc1)=chem(i,k,j,p_bc1)+emis_ant(i,k,j,p_e_bc)*factor*0.8    !ug/kg, following AM4
+          chem(i,k,j,p_bc2)=chem(i,k,j,p_bc2)+emis_ant(i,k,j,p_e_bc)*factor*0.2 
+          chem(i,k,j,p_oc1)=chem(i,k,j,p_oc1)+emis_ant(i,k,j,p_e_oc)*factor*0.5
+          chem(i,k,j,p_oc2)=chem(i,k,j,p_oc2)+emis_ant(i,k,j,p_e_oc)*factor*0.5
           chem(i,k,j,p_p25)=chem(i,k,j,p_p25)+emis_ant(i,k,j,p_e_pm_25)*factor
           chem(i,k,j,p_p10)=chem(i,k,j,p_p10)+emis_ant(i,k,j,p_e_pm_10)*factor
           chem(i,k,j,p_sulf)=chem(i,k,j,p_sulf)+emis_ant(i,k,j,p_e_sulf)*factor
@@ -1113,9 +1123,13 @@ contains
               factor2=4.828e-4*dtstep*rri(i,k,j)/(60.*dz8w(i,k,j))
 
               chem(i,k,j,p_bc1)=chem(i,k,j,p_bc1) + &
-                      emiairc_interp(i,k,j,p_airc_bc)*factor
+                      emiairc_interp(i,k,j,p_airc_bc)*factor*0.8
+              chem(i,k,j,p_bc2)=chem(i,k,j,p_bc2) + &
+                      emiairc_interp(i,k,j,p_airc_bc)*factor*0.2
               chem(i,k,j,p_oc1)=chem(i,k,j,p_oc1) + &
-                      emiairc_interp(i,k,j,p_airc_oc)*factor
+                      emiairc_interp(i,k,j,p_airc_oc)*factor*0.5
+              chem(i,k,j,p_oc2)=chem(i,k,j,p_oc2) + &
+                      emiairc_interp(i,k,j,p_airc_oc)*factor*0.5
               chem(i,k,j,p_co) =chem(i,k,j,p_co) + &
                                 emiairc_interp(i,k,j,p_airc_co)*factor2
               chem(i,k,j,p_nh3) =chem(i,k,j,p_nh3) + &
