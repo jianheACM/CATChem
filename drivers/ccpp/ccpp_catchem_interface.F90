@@ -272,24 +272,32 @@ contains
      real(kind_phys), dimension(im), intent(in)        :: psih          !> Monin-Obukhov similarity parameter for heat at 10m
      real(kind_phys), dimension(im), intent(in)        :: tskin         !> skin temperature (K)
      real(kind_phys), dimension(im), intent(in)        :: t2m           !> 2 m temperature (K)
+     real(kind_phys), dimension(im), intent(in)        :: ts            !> surface temperature (K)
      real(kind_phys), dimension(im), intent(in)        :: dpt2m         !> 2 m dew point temperature (K)
      real(kind_phys), dimension(im), intent(in)        :: hf2d          !> Sensible heat flux (W m-2)
      real(kind_phys), dimension(im), intent(in)        :: lf2d          !> Latent heat flux (W m-2)
      real(kind_phys), dimension(im), intent(in)        :: znt           !> surface roughness length in (cm)
      real(kind_phys), dimension(im), intent(in)        :: dswsfc        !> downward short wave flux (W m-2)
      real(kind_phys), dimension(im), intent(in)        :: recmol        !> one over obukhov length (m-1)
-     real(kind_phys), dimension(im), intent(in)        :: albedo        !> surface albedo
+     real(kind_phys), dimension(im), intent(in)        :: albedo_vis    !> surface visible albedo
+     real(kind_phys), dimension(im), intent(in)        :: albedo_nir    !> surface near-infrared albedo
 
-     real(kind_phys), dimension(im, kte), intent(in) :: pr3d            !> air pressure at model layer interfaces (Pa)
+     real(kind_phys), dimension(im, kme), intent(in) :: pr3d            !> air pressure at model layer interfaces (Pa)
      real(kind_phys), dimension(im, kte), intent(in) :: prl3d           !> pressure at the model level (Pa)
-     real(kind_phys), dimension(im, kte), intent(in) :: ph3d            !> geopotential at the model level (m2 s-2)
-     real(kind_phys), dimension(im, kte), intent(in) :: phl3d           !> geopotential at the model layer interfaces (m2 s-2)
+     real(kind_phys), dimension(im, kme), intent(in) :: pr3d_dry        !> dry air pressure at model layer interfaces (Pa)
+     real(kind_phys), dimension(im, kte), intent(in) :: prl3d_dry       !> dry air pressure at the model level (Pa)
+     real(kind_phys), dimension(im, kte), intent(in) :: delp            !> air pressure thickness at the model level (Pa)
+     real(kind_phys), dimension(im, kte), intent(in) :: delp_dry        !> dry air pressure thickness at the model level (Pa)
+     real(kind_phys), dimension(im, kme), intent(in) :: ph3d            !> geopotential at the model level interfaces (m2 s-2)
+     real(kind_phys), dimension(im, kte), intent(in) :: phl3d           !> geopotential at the model layer (m2 s-2)
      real(kind_phys), dimension(im, kte), intent(in) :: tk3d            !> temperature at the model level (K)
      real(kind_phys), dimension(im, kte), intent(in) :: us3d            !> zonal wind at the model level (m/s)
      real(kind_phys), dimension(im, kte), intent(in) :: vs3d            !> meridional wind at the model level (m/s)
      real(kind_phys), dimension(im, kte), intent(in) :: q3d             !> specific humidity at the model level (kg/kg)
+     real(kind_phys), dimension(im, kte), intent(in) :: airden         !> dry air density (kg/m3)
      real(kind_phys), dimension(im, kte), intent(in) :: w               !> lagrangian_tendency_of_air_pressure
      real(kind_phys), dimension(im, kte), intent(in) :: exch            !> atmospheric heat diffusivity
+     real(kind_phys), dimension(im, kte), intent(in) :: rh              !> relative humidity
 
      ! precipitation information
      real(kind_phys), dimension(im), intent(in)        :: rain_cpl        !> total rain at this time step (m)
