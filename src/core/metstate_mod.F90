@@ -45,6 +45,8 @@ MODULE MetState_Mod
       ! TIMESTEP
       !---------
       REAL(fp)              :: TSTEP             !< Time step [s]
+      INTEGER               :: YMD               ! Year, month, day
+      INTEGER               :: HMS               ! Hour, minute, second
 
       ! Logicals
       !---------
@@ -98,6 +100,9 @@ MODULE MetState_Mod
       REAL(fp), ALLOCATABLE :: SOILM(:)        !< Volumetric Soil moisture [m3/m3]
       REAL(fp), ALLOCATABLE :: FRLANDUSE(:)    !< Fractional Land Use
       REAL(fp), ALLOCATABLE :: FRLAI(:)        !< LAI in each Fractional Land use type [m2/m2]
+      real(fp)              :: LAT             !< Latitude
+      real(fp)              :: LON             !< Longitude
+      character(len=20)     :: LUCNAME         !< name of land use category
 
       ! Radiation Related Surface Fields
       !---------------------------------
@@ -127,6 +132,7 @@ MODULE MetState_Mod
       REAL(fp)              :: PBLH              !< PBL height [m]
       REAL(fp), ALLOCATABLE :: F_OF_PBL(:)       !< Fraction of box within PBL [1]
       REAL(fp), ALLOCATABLE :: F_UNDER_PBLTOP(:) !< Fraction of box under PBL top
+      real(fp)              :: OBK        !< Monin-Obhukov length [m]
 
       ! Cloud & Precipitation Related Fields
       !-------------------------------------
@@ -189,6 +195,7 @@ MODULE MetState_Mod
       REAL(fp), ALLOCATABLE :: DAIRMASS(:)    !< Dry air mass [kg] in grid box
       REAL(fp), ALLOCATABLE :: AIRVOL(:)      !< Grid box volume [m3] (dry air)
       REAL(fp), ALLOCATABLE :: PEDGE_DRY(:)   !< Dry air partial pressure @ level edges [hPa]
+      REAL(fp), ALLOCATABLE :: PEDGE(:)       !< Air partial pressure @ level edges [hPa]
       REAL(fp), ALLOCATABLE :: PMID(:)        !< Average wet air pressure [hPa] defined as arithmetic average of edge pressures
       REAL(fp), ALLOCATABLE :: PMID_DRY(:)    !< Dry air partial pressure [hPa] defined as arithmetic avg of edge pressures
 

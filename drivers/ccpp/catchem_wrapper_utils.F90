@@ -326,7 +326,7 @@ contains
 
 
       ! Emissions
-      real(kind=phys), intent(in) :: emi_in(:)         !> emissions
+      !real(kind=phys), intent(in) :: emi_in(:)         !> emissions
       ! CATChem States
       type(MetStateType),  intent(inout) :: MetState(:)    !> CATChem meteorology state
       type(ChemStateType), intent(inout) :: ChemState(:)   !> CATChem chemistry state
@@ -362,10 +362,10 @@ contains
         endif
 
         !Grid state variables
-        MetState(i)%LAT = lat
-        MetState(i)%LON = lon
+        MetState(i)%LAT = lat(i)
+        MetState(i)%LON = lon(i)
         MetState(i)%AREA_M2 = garea(i)
-        MetState(i)%TSTEP = ktau
+        MetState(i)%TSTEP = dt
         !TODO: assume the 8 dimension of jdate is something like: (/ 2025, 5, 9, 14, 30, 0, 0, 0 /)
         MetState(i)%YMD = jdate(1) * 10000 + jdate(2) * 100 + jdate(3) !YYYYMMDD
         MetState(i)%HMS = jdate(4) * 10000 + jdate(5) * 100 + jdate(6) !HHMMSS
@@ -396,8 +396,13 @@ contains
         vert: do k = 1, kme
             MetState(i)%PEDGE_DRY(k_rev) = pfull(i,k) !pr3d_dry
             MetState(i)%PEDGE(k_rev)     = pfull_wet(i,k) !pr3d TODO: PEDGE needs to be defined in MetState
-            MetState(i)%PFLLSAN(k_rev)   = pfl_lsan(i,k) !TODO: vertical_layer_dimension not vertical_interface_dimension
-            MetState(i)%PFILSAN(k_rev)   = pfl_isan(i,k)
+            if ( k == kme ) then
+                MetState(i)%PFLLSAN(k_rev)   = 0.0 !TODO: vertical_layer_dimension not found vertical_interface_dimension
+                MetState(i)%PFILSAN(k_rev)   = 0.0       ! so giving zero for the first layer for now
+            else
+                MetState(i)%PFLLSAN(k_rev)   = pfl_lsan(i,k)
+                MetState(i)%PFILSAN(k_rev)   = pfl_isan(i,k)
+            end if
             k_rev = k_rev - 1
         end do vert
 
@@ -408,7 +413,7 @@ contains
         MetState(i)%LWI      = lwi(i) ! TODO: slmsk same as lwi and slmsk can be deleted?
         MetState(i)%SNODP    = snowh(i) !snowdepth
         MetState(i)%DLUSE    = vegtype(i) !vtype
-        MetState(i)%dsoiltyp = soiltyp(i) !stype
+        MetState(i)%DSOILTYPE = soiltyp(i) !stype
         MetState(i)%FRVEG    = vegfrac(i) !gvf
         MetState(i)%LAI      = lai(i) !lai
         MetState(i)%FRLANDUSE(:) = frlanduse(i,:) !< Fraction of each land type
@@ -460,13 +465,12 @@ contains
             return
         end if
 
-        !TODO: add more below
-        SSM ! Sediment Supply Map [1]
-        RDRAG !Drag Partition [1]
-        USTAR_THRESHOLD !< Threshold friction velocity [m/s]
-        Z0H               !< Surface roughness height, for heat (thermal roughness) [m]
-        CLAYFRAC        !< Fraction of clay [1]
-        SANDFRAC        !< Fraction of sand [1]
+        !TODO: need to check the order of the five variables in dust_in
+        MetState(i)%SSM = dust_in(i, 1) ! Sediment Supply Map [1]
+        MetState(i)%RDRAG = dust_in(i, 2) !Drag Partition [1]
+        MetState(i)%USTAR_THRESHOLD = dust_in(i, 3) !< Threshold friction velocity [m/s]
+        MetState(i)%CLAYFRAC = dust_in(i, 4)        !< Fraction of clay [1]
+        MetState(i)%SANDFRAC = dust_in(i, 5)       !< Fraction of sand [1]
 
         ! Near-Surface Meteorology
         MetState(i)%U10M     = u10m(i)
@@ -477,6 +481,7 @@ contains
 
         ! Surface Fluxes
         MetState(i)%Z0 = z0(i) !znt
+        MetState(i)%Z0H = z0(i) !< roughness height, for heat (thermal roughness) [m] TODO: give the same value as z0 for now
         MetState(i)%HFLUX    = shflx(i) !hf2d
         MetState(i)%EFLUX    = lhflx(i) !lf2d
         MetState(i)%PRECLSC  = precip(i) !rain_cplchm
