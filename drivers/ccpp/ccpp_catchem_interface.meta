@@ -206,13 +206,6 @@
   dimensions = (horizontal_loop_extent)
   type = integer
   intent = in
-[ivegsrc]
-  standard_name = control_for_vegetation_dataset
-  long_name = land use dataset choice
-  units = index
-  dimensions = ()
-  type = integer
-  intent = in
 [stype]
   standard_name = soil_type_classification
   long_name = soil type at each grid cell
@@ -268,7 +261,7 @@
   type = real
   kind = kind_phys
   intent = in
-[fice]
+[seaicefrac]
   standard_name = sea_ice_area_fraction_of_sea_area_fraction
   long_name = ice fraction over open water
   units = frac
@@ -453,20 +446,6 @@
   type = real
   kind = kind_phys
   intent = in
-[psih]
-  standard_name = Monin_Obukhov_similarity_function_for_heat_at_10m
-  long_name = Monin-Obukhov similarity parameter for heat at 10m
-  units = none
-  dimensions = (horizontal_loop_extent)
-  type = real
-  kind = kind_phys
-[psim]
-  standard_name = Monin_Obukhov_similarity_function_for_momentum_at_10m
-  long_name = Monin-Obukhov similarity parameter for momentum at 10m
-  units = none
-  dimensions = (horizontal_loop_extent)
-  type = real
-  kind = kind_phys
 [soilmoist]
   standard_name = volume_fraction_of_condensed_water_in_soil
   long_name = total soil moisture
@@ -587,38 +566,6 @@
   type = real
   kind = kind_phys
   intent = in
-[geoh3d]
-  standard_name = geopotential_height_at_interfaces
-  long_name = geopotential height w.r.t. sea level at interfaces
-  units = m
-  dimensions = (horizontal_loop_extent,vertical_interface_dimension)
-  type = real
-  kind = kind_phys
-  intent = in
-[geohl3d]
-  standard_name = geopotential_height
-  long_name = geopotential height w.r.t. sea level at model layer centers
-  units = m
-  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
-  type = real
-  kind = kind_phys
-  intent = in
-[geohlc3d]
-  standard_name = geopotential_height_wrt_surface_at_interfaces
-  long_name = geopotential height w.r.t. local surface at interfaces
-  units = m
-  dimensions = (horizontal_loop_extent,vertical_interface_dimension)
-  type = real
-  kind = kind_phys
-  intent = in
-[geohlcl3d]
-  standard_name = geopotential_height_wrt_surface
-  long_name = geopotential height w.r.t. local surface at model layer centers
-  units = m
-  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
-  type = real
-  kind = kind_phys
-  intent = in
 [tk3d]
   standard_name = air_temperature_of_new_state
   long_name = updated temperature
@@ -631,6 +578,14 @@
   standard_name = specific_humidity_of_new_state
   long_name = water vapor specific humidity updated by physics
   units = kg kg-1
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = in
+[rh]
+  standard_name = relative_humidity
+  long_name = layer relative humidity
+  units = frac
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
   kind = kind_phys
@@ -802,6 +757,14 @@
   units = count
   dimensions = ()
   type = integer
+  intent = in
+[tracer_names]
+  standard_name = atmos_mod_tracer_names
+  long_name = array of atmos model tracer names
+  units = none
+  dimensions = (number_of_tracers)
+  type = character
+  kind = len=32
   intent = in
 [ntaero]
   standard_name = number_of_aerosol_tracers

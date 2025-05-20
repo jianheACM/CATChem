@@ -14,6 +14,7 @@ MODULE CCPr_Dust_mod
    USE MetState_Mod, Only : MetStateType
    USE Config_Opt_Mod, Only : ConfigType
    USE ChemState_Mod, Only : ChemStateType
+   USE EmisState_Mod, Only : EmisStateType
    USE CCPr_Dust_Common_Mod, Only : DustStateType
 
    IMPLICIT NONE
@@ -35,7 +36,7 @@ CONTAINS
    !!
    !! \ingroup catchem_dust_process
    !!!>
-   SUBROUTINE CCPR_Dust_Init( Config, DustState, ChemState, RC)
+   SUBROUTINE CCPR_Dust_Init( Config, DustState, ChemState, EmisState, RC)
       ! USES
 
       IMPLICIT NONE
@@ -45,6 +46,7 @@ CONTAINS
       TYPE(ConfigType),    intent(in)    :: Config     ! Config options
       TYPE(DustStateType), intent(inout) :: DustState  ! Nullify Dust State During INIT
       TYPE(ChemStateType), intent(in)    :: ChemState  ! Chemical State
+      TYPE(EmisStateType), intent(in)    :: EmisState  ! Emission State
 
       ! INPUT/OUTPUT PARAMETERS
       !------------------------
@@ -58,7 +60,7 @@ CONTAINS
       REAL(fp), DIMENSION(nDustBinsDefault), Parameter :: DefaultLowerBinRadius  = (/ 0.1e-6, 1.0e-6, 1.8e-6, 3.0e-6, 6.0e-6  /)
       REAL(fp), DIMENSION(nDustBinsDefault), Parameter :: DefaultUpperBinRadius  = (/ 1.0e-6, 1.8e-6, 3.0e-6, 6.0e-6, 10.0e-6  /)
 
-      INTEGER :: k ! Loop Counter
+      INTEGER :: c, k ! Loop Counter
 
       ! Error handling
       !---------------
@@ -130,6 +132,15 @@ CONTAINS
             duststate%HorizFluxOpt = Config%dust_horizflux_opt
          endif
 
+         !Find emission caterory index in EmisState for future use
+         !--------------------------------------------
+         do c = 1, EmisState%nCats
+            if (EmisState%Cats(c)%name == 'dust') then
+               DustState%CatIndex = c
+               exit
+            endif
+         end do
+
          if (DustState%nDustSpecies == 0) then
 
             ! Set default bin properties for schemes that need them
@@ -199,7 +210,7 @@ CONTAINS
    !!
    !! \ingroup catchem_dust_process
    !!!>
-   SUBROUTINE CCPr_Dust_Run( MetState, DiagState, DustState, RC )
+   SUBROUTINE CCPr_Dust_Run( MetState, DiagState, DustState, EmisState, RC )
 
       ! USE
       USE CCPr_Scheme_Fengsha_Mod, ONLY: CCPr_Scheme_Fengsha  ! Fengsha Dust Scheme
@@ -215,6 +226,7 @@ CONTAINS
       !------------------------
       TYPE(DiagStateType), INTENT(INOUT) :: DiagState   ! DiagState Instance
       TYPE(DustStateType), INTENT(INOUT) :: DustState   ! DustState Instance
+      TYPE(EmisStateType), INTENT(INOUT) :: EmisState   ! EmisState Instance
       ! TYPE(ChemStateType), INTENT(INOUT) :: ChemState  ! ChemState Instance
 
       ! OUTPUT PARAMETERS
@@ -225,6 +237,7 @@ CONTAINS
       ! LOCAL VARIABLES
       !----------------
       CHARACTER(LEN=255) :: ErrMsg, thisLoc
+      INTEGER :: i ! Loop Counter
 
       ! Initialize
       !-----------
@@ -294,6 +307,12 @@ CONTAINS
             CALL CC_Error( errMsg, RC, thisLoc )
             return
          endif
+
+         !Fill Emission State. Note only works for the default 5 bins in the Ginoux scheme; EmissionPerSpecies is zero for Fengsha
+         do i = 1, EmisState%Cats(DustState%CatIndex)%nSpecies
+            EmisState%Cats(DustState%CatIndex)%Species(i)%Flux(1) = DustState%EmissionPerSpecies(i)
+         end do
+
       endif
 
       ! Fill Diagnostic States

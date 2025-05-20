@@ -12,6 +12,9 @@ module init_mod
 
    PUBLIC :: Init_Met
    PUBLIC :: Init_Diag
+   PUBLIC :: Init_Emis
+   PUBLIC :: Init_Chem
+   PUBLIC :: Init_Process
 
 contains
 
@@ -52,6 +55,82 @@ contains
       endif
 
    end subroutine Init_Met
+
+   !> \brief Initialize the emission state
+   !!
+   !! This subroutine allocates the emission state.
+   !!
+   !! \param GridState The grid state containing information about the grid.
+   !! \param EmisState The emission state to be initialized.
+   !! \param RC The return code.
+   !!
+   !! \ingroup core_modules
+   !!!>
+   subroutine Init_Emis(GridState, EmisState, RC)
+      !
+      use GridState_Mod, Only : GridStateType
+      use EmisState_Mod
+      USE Error_Mod
+      implicit none
+
+      ! Arguments
+      TYPE(GridStateType), INTENT(IN)  :: GridState
+      TYPE(EmisStateType), INTENT(INOUT) :: EmisState
+      INTEGER,        INTENT(OUT) :: RC
+
+      ! Local variables
+      CHARACTER(LEN=255) :: ErrMsg, thisLoc
+
+      ! Initialize
+      RC = 0
+      ErrMsg = ''
+      thisLoc = ' -> at Init_Emis (in core/init_mod.F90)'
+
+      call Emis_Allocate(GridState, EmisState, RC)
+      if (RC /= CC_SUCCESS) then
+         errMsg = 'Error allocating emission state'
+         call CC_Error(errMsg, RC , thisLoc)
+      endif
+
+   end subroutine Init_Emis
+
+   !> \brief Initialize the chem state
+   !!
+   !! This subroutine allocates the chem state.
+   !!
+   !! \param GridState The grid state containing information about the grid.
+   !! \param ChemState The chem state to be initialized.
+   !! \param RC The return code.
+   !!
+   !! \ingroup core_modules
+   !!!>
+   subroutine Init_Chem(GridState, ChemState, RC)
+      !
+      use GridState_Mod, Only : GridStateType
+      use ChemState_Mod
+      USE Error_Mod
+      implicit none
+
+      ! Arguments
+      TYPE(GridStateType), INTENT(IN)  :: GridState
+      TYPE(ChemStateType), INTENT(INOUT) :: ChemState
+      INTEGER,        INTENT(OUT) :: RC
+
+      ! Local variables
+      CHARACTER(LEN=255) :: ErrMsg, thisLoc
+
+      ! Initialize
+      RC = 0
+      ErrMsg = ''
+      thisLoc = ' -> at Init_Chem (in core/init_mod.F90)'
+
+      call Chem_Allocate(GridState, ChemState, RC)
+      if (RC /= CC_SUCCESS) then
+         errMsg = 'Error allocating Chem state'
+         call CC_Error(errMsg, RC , thisLoc)
+      endif
+
+   end subroutine Init_Chem
 
    !> \brief Initialize the diag state
    !!
@@ -95,5 +174,58 @@ contains
       endif
 
    end subroutine Init_Diag
+
+   subroutine Init_Process (config, ChemState, EmisState, DustState, SeaSaltState, DryDepState, RC)
+      use Config_Opt_Mod, only: ConfigType
+      use Error_Mod
+      use ChemState_Mod,  only: ChemStateType    !< Chemical State
+      use EmisState_Mod,  only: EmisStateType    !< Emission State
+      use CCPr_Dust_Common_Mod, only: DustStateType !< Dust State
+      use CCPr_SeaSalt_Common_Mod, only: SeaSaltStateType !< SeaSalt State
+      use CCPr_DryDep_mod, only: DryDepStateType !< DryDep State
+      use CCPr_Dust_mod, only: CCPr_Dust_Init
+      use CCPr_SeaSalt_mod, only: CCPr_SeaSalt_Init
+      use CCPr_DryDep_mod, only: CCPr_DryDep_Init
+      implicit none
+
+      type(ConfigType), intent(in) :: config
+      type(ChemStateType), intent(inout) :: ChemState
+      type(EmisStateType), intent(inout) :: EmisState
+      type(DustStateType), intent(inout) :: DustState
+      type(SeaSaltStateType), intent(inout) :: SeaSaltState
+      type(DryDepStateType), intent(inout) :: DryDepState
+      integer, intent(inout) :: RC
+
+      ! Error handling
+      !---------------
+      CHARACTER(LEN=255)    :: ErrMsg
+      CHARACTER(LEN=255)    :: ThisLoc
+      ThisLoc = ' -> at init_process (in core/init_mod.F90)'
+
+      ! Initialize DustState
+      call CCPR_Dust_Init(config, DustState, ChemState, EmisState, RC)
+      if (RC /= CC_SUCCESS) then
+         ErrMsg = 'Error in CCPR_Dust_Init'
+         call CC_Error(ErrMsg, RC, ThisLoc )
+         return
+      end if
+
+      ! Initialize SealSaltState
+      call CCPr_SeaSalt_Init(config, SeaSaltState, ChemState, EmisState, RC)
+      if (RC /= CC_SUCCESS) then
+         ErrMsg = 'Error in CCPr_SeaSalt_Init'
+         call CC_Error(ErrMsg, RC, ThisLoc )
+         return
+      end if
+
+      ! Initialize DryDepState
+      call CCPr_DryDep_Init(config, DryDepState, ChemState, RC)
+      if (RC /= CC_SUCCESS) then
+         ErrMsg = 'Error in CCPr_DryDep_Init'
+         call CC_Error(ErrMsg, RC, ThisLoc )
+         return
+      end if
+
+   end subroutine Init_Process
 
 end module init_mod

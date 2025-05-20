@@ -10,6 +10,7 @@ program test_dust
 
    ! Integers
    INTEGER:: rc          ! Success or failure
+   integer :: c, s       ! loop counters
 
    character(len=:), allocatable :: title
 
@@ -45,6 +46,19 @@ program test_dust
    title = 'Dust Test 1 | Read Config'
    ! call print_info(Config, DustState, MetState, title)
 
+   !allocate emissions
+   if (EmisState%nCats > 0) then
+      do c = 1, EmisState%nCats
+         do s = 1, EmisState%Cats(c)%nSpecies
+            ALLOCATE(EmisState%Cats(c)%Species(s)%Flux(GridState%number_of_levels), STAT=RC)
+            if (RC /= CC_SUCCESS) then
+               ErrMsg = 'Error allocating "EmisState%Cats%Species%Flux"!'
+               call cc_emit_error(ErrMsg, RC, ThisLoc)
+               stop 1  !!Note here is not 'return'
+            endif
+         end do
+      end do
+   end if
 
    !----------------------------
    ! Test 2
@@ -67,14 +81,14 @@ program test_dust
 
    title = "Dust Test 2 | Test Fengsha defaults"
 
-   call cc_dust_init(Config, DustState, ChemState, rc)
+   call cc_dust_init(Config, DustState, ChemState, EmisState, rc)
    if (rc /= CC_SUCCESS) then
       errMsg = 'Error in cc_dust_init'
       call cc_emit_error(errMsg, rc, thisLoc)
       stop 1
    end if
 
-   call cc_dust_run(MetState, DiagState, DustState, rc)
+   call cc_dust_run(MetState, DiagState, DustState, EmisState, rc)
    if (rc /= CC_SUCCESS) then
       errMsg = 'Error in cc_dust_run'
       call cc_emit_error(errMsg, rc, thisLoc)
@@ -91,7 +105,7 @@ program test_dust
    title = "Dust Test 3 | ustar == ustar_threshold"
    MetState%USTAR = 0.1_fp
 
-   call cc_dust_run(MetState, DiagState, DustState, rc)
+   call cc_dust_run(MetState, DiagState, DustState, EmisState, rc)
    if (rc /= CC_SUCCESS) then
       errMsg = 'Error in cc_dust_run'
       call cc_emit_error(errMsg, rc, thisLoc)
@@ -112,7 +126,7 @@ program test_dust
    MetState%V10M = 5.0_fp
    DiagState%dust_total_flux = 0.0_fp
 
-   call cc_dust_run(MetState, DiagState, DustState, rc)
+   call cc_dust_run(MetState, DiagState, DustState, EmisState, rc)
    if (rc /= CC_SUCCESS) then
       errMsg = 'Error in cc_dust_run'
       call cc_emit_error(errMsg, rc, thisLoc)
@@ -142,14 +156,14 @@ program test_dust
    MetState%U10M = 5.0_fp
    MetState%V10M = 5.0_fp
 
-   call cc_dust_init(Config, DustState, ChemState, rc)
+   call cc_dust_init(Config, DustState, ChemState, EmisState, rc)
    if (rc /= CC_SUCCESS) then
       errMsg = 'Error in cc_dust_init'
       call cc_emit_error(errMsg, rc, thisLoc)
       stop 1
    end if
 
-   call cc_dust_run(MetState, DiagState, DustState, rc)
+   call cc_dust_run(MetState, DiagState, DustState, EmisState, rc)
    if (rc /= CC_SUCCESS) then
       errMsg = 'Error in cc_dust_run'
       call cc_emit_error(errMsg, rc, thisLoc)
@@ -194,6 +208,8 @@ contains
       write(*,*) 'MetState%USTAR =', MetState_%USTAR
       write(*,*) 'MetState%USTAR_THRESHOLD =', MetState_%USTAR_THRESHOLD
       write(*,*) 'DustState%TotalEmission = ', DustState_%TotalEmission
+      write(*,*) 'DustState%EmissionPerSpecies = ', DustState_%EmissionPerSpecies
+      write(*,*) 'DustState%CatIndex = ', DustState_%CatIndex
 
    end subroutine print_info
 

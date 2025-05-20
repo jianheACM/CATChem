@@ -16,7 +16,7 @@
 
 module catchem_types
 
-  use CATChem, only: MetStateType, ChemStateType, EmisStateType, DiagStateType
+  use CATChem, only: GridStateType, MetStateType, ChemStateType, EmisStateType, DiagStateType
 
   implicit none
   private
@@ -34,10 +34,11 @@ module catchem_types
     integer :: im = 0  !> Horizontal dimension
 
     ! State arrays
-    type(MetStateType),  allocatable :: met_state(:)    !> Meteorological state array
-    type(ChemStateType), allocatable :: chem_state(:)   !> Chemical state array
-    type(EmisStateType), allocatable :: emis_state(:)   !> Emission state array
-    type(DiagStateType), allocatable :: diag_state(:)   !> Diagnostic state array
+    type(GridStateType)  :: GridState   !> Grid state (not an array)
+    type(MetStateType),  allocatable :: MetState(:)    !> Meteorological state array
+    type(ChemStateType), allocatable :: ChemState(:)   !> Chemical state array
+    type(EmisStateType), allocatable :: EmisState(:)   !> Emission state array
+    type(DiagStateType), allocatable :: DiagState(:)   !> Diagnostic state array
 
   end type catchem_container_type
 

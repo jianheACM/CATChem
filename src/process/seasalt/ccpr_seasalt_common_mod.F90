@@ -52,6 +52,8 @@ module CCPr_SeaSalt_Common_Mod
       INTEGER, ALLOCATABLE            :: SpcIDs(:)              !< CATChem species IDs
       Logical                         :: WeibullFlag            !< Apply Weibull Distribution to 10m wind speeds following Fan and Toon 2011
       Logical                         :: HoppelFlag             !< Apply Hoppel Flag following Fan and Toon 2011
+      integer                         :: CatIndex                !< Index of emission category in EmisState
+
       ! Process Specific Parameters
       REAL(fp), ALLOCATABLE           :: LowerBinRadius(:)      !< Lower bin radius        [m]
       REAL(fp), ALLOCATABLE           :: UpperBinRadius(:)      !< Upper bin radius        [m]

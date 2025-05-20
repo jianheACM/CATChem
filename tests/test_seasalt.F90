@@ -10,6 +10,7 @@ program test_dust
 
    ! Integers
    INTEGER:: rc          ! Success or failure
+   integer :: c, s       ! loop counters
 
    character(len=:), allocatable :: title
 
@@ -48,6 +49,20 @@ program test_dust
    write(*,*) 'Config%seasalt_scalefactor = ', Config%seasalt_scalefactor
    write(*,*) 'Config%seasalt_weibull = ', Config%seasalt_weibull
 
+   !allocate emissions
+   if (EmisState%nCats > 0) then
+      do c = 1, EmisState%nCats
+         do s = 1, EmisState%Cats(c)%nSpecies
+            ALLOCATE(EmisState%Cats(c)%Species(s)%Flux(GridState%number_of_levels), STAT=RC)
+            if (RC /= CC_SUCCESS) then
+               ErrMsg = 'Error allocating "EmisState%Cats%Species%Flux"!'
+               call cc_emit_error(ErrMsg, RC, ThisLoc)
+               stop 1  !!Note here is not 'return'
+            endif
+         end do
+      end do
+   end if
+
    !----------------------------
    ! Test 2
    !----------------------------
@@ -69,14 +84,14 @@ program test_dust
 
    SeaSaltState%SchemeOpt = 3
 
-   call cc_seasalt_init(Config, SeaSaltState, ChemState, rc)
+   call cc_seasalt_init(Config, SeaSaltState, ChemState, EmisState, rc)
    if (rc /= CC_SUCCESS) then
       errMsg = 'Error in cc_seasalt_init'
       call cc_emit_error(errMsg, rc, thisLoc)
       stop 1
    end if
 
-   call cc_seasalt_run(MetState, SeaSaltState, rc)
+   call cc_seasalt_run(MetState, SeaSaltState, EmisState, rc)
    if (rc /= CC_SUCCESS) then
       errMsg = 'Error in cc_seasalt_run'
       call cc_emit_error(errMsg, rc, thisLoc)
@@ -92,7 +107,7 @@ program test_dust
    title = "SeaSalt Test 2 | Test Gong03"
    SeaSaltState%SchemeOpt = 1
 
-   call cc_seasalt_run(MetState, SeaSaltState, rc)
+   call cc_seasalt_run(MetState, SeaSaltState, EmisState, rc)
    if (rc /= CC_SUCCESS) then
       errMsg = 'Error in cc_seasalt_run'
       call cc_emit_error(errMsg, rc, thisLoc)
@@ -108,7 +123,7 @@ program test_dust
    title = "SeaSalt Test 3 | Test Gong97"
    SeaSaltState%SchemeOpt = 2
 
-   call cc_seasalt_run(MetState, SeaSaltState, rc)
+   call cc_seasalt_run(MetState, SeaSaltState, EmisState, rc)
    if (rc /= CC_SUCCESS) then
       errMsg = 'Error in cc_seasalt_run'
       call cc_emit_error(errMsg, rc, thisLoc)
@@ -145,6 +160,8 @@ contains
       write(*,*) 'MetState%USTAR =', MetState_%USTAR
       write(*,*) 'MetState%AIRDEN =', MetState_%AIRDEN
       write(*,*) 'SeaSaltState%TotalEmission = ', SeaSaltState_%TotalEmission
+      write(*,*) 'SeaSaltState%EmisPerSpecies = ', SeaSaltState_%EmissionPerSpecies
+      write(*,*) 'SeaSaltState%CatIndex = ', SeaSaltState_%CatIndex
 
    end subroutine print_info
 

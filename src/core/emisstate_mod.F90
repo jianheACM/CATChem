@@ -378,7 +378,7 @@ CONTAINS
    subroutine Apply_Emis_to_Chem(EmisState, MetState, ChemState, RC, surface_only_flag)
       USE ChemState_Mod, ONLY : ChemStateType
       USE MetState_Mod, ONLY : MetStateType
-      use constants, only : g0
+      use constants, only : g0, AIRMW
 
       TYPE(EmisStateType), INTENT(IN)    :: EmisState
       TYPE(MetStateType),  INTENT(IN)    :: MetState
@@ -421,6 +421,13 @@ CONTAINS
                scale = EmisState%Cats(c)%Species(s)%Scale(n)
                index = EmisState%Cats(c)%Species(s)%EmisMapIndex(n)
 
+               !update scale to account for the unit conversion
+               if (ChemState%ChemSpecies(index)%is_gas) then
+                  scale = scale * AIRMW / ChemState%ChemSpecies(index)%mw_g * 1.0e6_fp ! [kg/kg] to [ppmv] for gas
+               else
+                  scale = scale * 1.0e9_fp ! [kg/kg] to [ug/kg] for aerosol
+               endif
+
                associate( &
                ! current flux of the emitted species
                   emis => EmisState%Cats(c)%Species(s)%Flux, &
@@ -428,7 +435,7 @@ CONTAINS
                   conc => ChemState%ChemSpecies(index)%conc)
 
                   levs: do k = 1, MetState%NLEVS
-                     dqa = emis(k) * scale * cdt * g0 / MetState%DELP(k)
+                     dqa = emis(k) * cdt * g0 / MetState%DELP(k) * scale  ! [kg/m2/s] --> [kg/kg] --> [ppmv or ug/kg]
                      conc(k) = conc(k) + dqa
                   end do levs
 

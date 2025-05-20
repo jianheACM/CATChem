@@ -53,6 +53,11 @@ module CATChem
    !
    use init_mod, only: cc_init_diag => Init_Diag        !< Method for initializing the diag state
    use init_mod, only: cc_init_met => Init_Met          !< Method for initializing the met state
+   use init_mod, only: cc_init_chem => Init_Chem        !< Method for initializing the chem state
+   use init_mod, only: cc_init_emis => Init_Emis        !< Method for initializing the emission state
+   use init_mod, only: cc_init_process => Init_Process  !< Method for initializing the process state
+   use run_mod,  only: cc_run_process => Run_Process    !< Method for running the processes
+   use run_mod,  only: cc_finalize_process => Finalize_Process    !< Method for finalizing the processes
 
    !------------------
    ! CATChem Precision

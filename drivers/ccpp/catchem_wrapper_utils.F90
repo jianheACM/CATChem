@@ -6,7 +6,7 @@
 !> framework. Handles data transformation and management between host model and
 !> CATCHEM chemistry calculations.
 !>
-!> \author Barry Baker
+!> \author Barry Baker and Wei Li
 !>
 !> \date 11/2024
 !>
@@ -14,52 +14,30 @@
 !!!>
 module catchem_wrapper_utils
 
-    use CATChem, only: ConfigType, MetStateType, ChemStateType, &
+    use CATChem, only: ConfigType, MetStateType, ChemStateType, GridStateType, &
                       EmisStateType, DiagStateType, cc_read_config, &
                       cc_allocate_metstate, cc_allocate_chemstate, &
                       cc_allocate_diagstate, cc_allocate_emisstate, &
+                      cc_emit_error, cc_check_var, cc_emit_warning, &
+                      cc_init_met, cc_init_diag, cc_init_chem, &
+                      cc_init_emis, cc_init_process, cc_run_process, cc_finalize_process, &
                       cc_checkdeallocate, cc_checkallocate, CC_SUCCESS
     use catchem_types, only: catchem_container_type
+    !use machine, only: kind_phys
+    integer, parameter :: kind_phys = 8
+
 
     implicit none
-    private
 
-    public :: read_catchem_config
-    public :: allocate_catchem_container
     public :: transform_ccpp_to_catchem
+    public :: cc_to_ccpp, ccpp_to_cc
+    public :: catchem_init, catchem_run, catchem_finalize
+
+    ! CCPP data structure
+    type(ccpp_t), save, target :: cdata
 
 contains
 
-    !> Reads and initializes the CATChem configuration from a specified file
-    !!
-    !! This subroutine reads configuration settings and initializes the states
-    !! for meteorology, emissions, and chemistry using the CATChem interface.
-    !!
-    !! \param[inout] config         Configuration type containing CATChem settings
-    !! \param[inout] catchem_states Grid state container for CATChem components
-    !! \param[in]    config_file    Path to the CATChem configuration file
-    !! \param[out]   errflg         Error flag (0=success, non-zero=failure)
-    !! \param[out]   errmsg         Error message if errflg is non-zero
-    !!
-    !! \ingroup catchem_ccpp_group
-    !!!>
-    subroutine read_catchem_config(config, catchem_states, config_file, errflg, errmsg)
-        type(ConfigType), intent(inout) :: config
-        type(catchem_container_type), intent(inout) :: catchem_states
-        character(len=*), intent(in) :: config_file
-        integer, intent(out) :: errflg
-        character(len=*), intent(out) :: errmsg
-
-        call cc_read_config(config, &
-                          catchem_states%MetState(1), &
-                          catchem_states%EmisState(1), &
-                          catchem_states%ChemState(1), &
-                          errflg, &
-                          config_file)
-        if (errflg /= 0) then
-            errmsg = 'Error reading CATChem configuration file: '//trim(config_file)
-        end if
-    end subroutine read_catchem_config
 
     !> Allocates memory for the entire catchem container
     !!
@@ -73,21 +51,52 @@ contains
     !!
     !! \ingroup catchem_ccpp_group
     !!!>
-    subroutine allocate_catchem_container(config, catchem_states, im, kme, nsoil, nLandTypes, errflg, errmsg)
+
+    subroutine catchem_init(config, catchem_states, im, config_file, errflg, errmsg, &
+                            DustState, SeaSaltState, DryDepState)
+        use CATChem, only: DustStateType, SeaSaltStateType, DryDepStateType
+
         type(ConfigType), intent(in) :: config
         type(catchem_container_type), intent(inout) :: catchem_states
+        type(DustStateType), intent(inout) :: DustState
+        type(SeaSaltStateType), intent(inout) :: SeaSaltState
+        type(DryDepStateType), intent(inout) :: DryDepState
         integer, intent(in) :: im
-        integer, intent(in) :: kme
-        integer, intent(in) :: nsoil
-        integer, intent(in) :: nLandTypes
+        !integer, intent(in) :: kme
+        !integer, intent(in) :: nsoil
+        !integer, intent(in) :: nLandTypes
+        character(len=*), intent(in) :: config_file
         integer, intent(out) :: errflg
         character(len=*), intent(out) :: errmsg
 
+        !local variables
+        type(EmisStateType) :: EmisState !temporary type to be copied to catchem_states
+        type(ChemStateType) :: ChemState
+        type(MetStateType)  :: MetState
+        type(DiagStateType) :: DiagState
+        type(GridStateType) :: GridState
         integer :: i
 
         ! Initialize
         errflg = 0
         errmsg = ''
+
+        call cc_read_config(config, &
+                          GridState,    &
+                          EmisState, &
+                          ChemState, &
+                          errflg, &
+                          config_file)
+        if (errflg /= 0) then
+            errmsg = 'Error reading CATChem configuration file: '//trim(config_file)
+        end if
+
+        ! Initialize the States and processes
+        call cc_init_met(GridState, MetState, errflg)
+        call cc_init_emis(GridState, EmisState, errflg)
+        call cc_init_chem(GridState, ChemState, errflg)
+        call cc_init_diag( config, DiagState, ChemState, errflg)
+        call cc_init_process(config, ChemState, EmisState, DustState, SeaSaltState, DryDepState, errflg)
 
         ! Allocate State arrays in the container
         if (.not. allocated(catchem_states%MetState)) then
@@ -96,39 +105,7 @@ contains
 
             ! Initialize each MetState using CC API
             do i = 1, im
-                call CC_Allocate_MetState(catchem_states%MetState(i), errflg)
-                if (errflg /= CC_SUCCESS) then
-                    errmsg = 'Error in CC_Allocate_MetState'
-                    return
-                endif
-            end do
-        endif
-
-        if (.not. allocated(catchem_states%ChemState)) then
-            allocate(catchem_states%ChemState(im), stat=errflg)
-            if (check_allocation_error('catchem_states%ChemState', errflg, errmsg)) return
-
-            ! Initialize each ChemState using CC API
-            do i = 1, im
-                call CC_Allocate_ChemState(catchem_states%ChemState(i), config%Species_File, MetState(i), errflg)
-                if (errflg /= CC_SUCCESS) then
-                    errmsg = 'Error in CC_Allocate_ChemState'
-                    return
-                endif
-            end do
-        endif
-
-        if (.not. allocated(catchem_states%DiagState)) then
-            allocate(catchem_states%DiagState(im), stat=errflg)
-            if (check_allocation_error('catchem_states%DiagState', errflg, errmsg)) return
-
-            ! Initialize each DiagState using CC API
-            do i = 1, im
-                call CC_Allocate_DiagState(catchem_states%DiagState(i), config, MetState(i), errflg)
-                if (errflg /= CC_SUCCESS) then
-                    errmsg = 'Error in CC_Allocate_DiagState'
-                    return
-                endif
+                catchem_states%MetState(i) = MetState  !TODO: is there a better way? Duplicated information
             end do
         endif
 
@@ -138,16 +115,33 @@ contains
 
             ! Initialize each EmisState using CC API
             do i = 1, im
-                call CC_Allocate_EmisState(catchem_states%EmisState(i), MetState(i), errflg)
-                if (errflg /= CC_SUCCESS) then
-                    errmsg = 'Error in CC_Allocate_EmisState'
-                    return
-                endif
+                catchem_states%EmisState(i) = EmisState
+            end do
+        endif
+
+        if (.not. allocated(catchem_states%ChemState)) then
+            allocate(catchem_states%ChemState(im), stat=errflg)
+            if (check_allocation_error('catchem_states%ChemState', errflg, errmsg)) return
+
+            ! Initialize each ChemState using CC API
+            do i = 1, im
+                catchem_states%ChemState(i) = ChemState
+            end do
+        endif
+
+        if (.not. allocated(catchem_states%DiagState)) then
+            allocate(catchem_states%DiagState(im), stat=errflg)
+            if (check_allocation_error('catchem_states%DiagState', errflg, errmsg)) return
+
+            ! Initialize each DiagState using CC API
+            do i = 1, im
+                catchem_states%DiagState(i) = DiagState
             end do
         endif
 
 
-    end subroutine allocate_catchem_container
+    !end subroutine allocate_catchem_container
+    end subroutine catchem_init
 
     !> Transforms CCPP meteorological arrays into CATChem meteorological and chemistry states
     !!
@@ -200,24 +194,22 @@ contains
     !! \ingroup catchem_ccpp_group
     !!!>
     subroutine transform_ccpp_to_catchem(im, kme, kte, nsoil, nlndcat, nsoilcat, rlat, rlon, lat, lon, &      ! Grid Information
-                                        ktau, dt, jdate, tile_num, garea, &  ! Grid Information
-                                        aero_rad_freq_opt, aero_feedback_opt, plmrise_freq_opt, & ! Model Options
-                                        lwi, dluse, &  ! Model Options
+                                        dt, jdate, garea, &  ! Grid Information
+                                        lwi, &  ! Model Options
                                         temp, spechum, pfull,pfull_wet, phalf, rh, &  ! Meteorological Variables
-                                        u, v, delp, zh, kh, prsl, prslk, &  ! Meteorological Variables
+                                        u, v, delp, zh, &  ! Meteorological Variables
                                         u10m, v10m, tskin, ps, ts, precip, &  ! Meteorological Variables
                                         cldf, airden, delp_dry, &
                                         pfl_lsan, pfl_isan, &  ! precipitation variables
-                                        slmsk, snowh, vegtype, soiltyp, soilmoist, &  ! Surface Variables
-                                        hf, zpbl, coszen, emis, &  ! Surface Variables
+                                        snowh, vegtype, soiltyp, soilmoist, &  ! Surface Variables
+                                        zpbl, coszen, &  ! Surface Variables
                                         ustar, shflx, lhflx, &  ! Near-Surface Meteorology
                                         snowc, vegfrac, lai, frlanduse, frsoil, pores, resid, &  ! Surface Variables
                                         z0, landfrac, oceanfrac, lakefrac, landicefrac, seaicefrac, &
-                                        swdn, swup, lwdn, lwup, &  ! Radiation Fluxes
-                                        nirbmdi, nirdfdi, visbmdi, visdfdi, &  ! Radiation Fluxes
-                                        swdnc, swupc, lwdnc, lwupc, &  ! Radiation Fluxes
+                                        swdn, nirbmdi, nirdfdi, visbmdi, visdfdi, &  ! Radiation Fluxes
                                         sfc_alb_nir_dir, sfc_alb_nir_dif, sfc_alb_uvvis_dir, sfc_alb_uvvis_dif,&  ! surface albedo
-                                        MetState, ChemState, EmisState, DiagState, &  ! CATChem States
+                                        dust_in, &  ! Dust Emission Inputs
+                                        MetState, &  ! CATChem MetStates
                                         errmsg, errflg)  ! Error Handling
 
       use CATChem, only: MetStateType, ChemStateType, DiagStateType, EmisStateType
@@ -232,106 +224,107 @@ contains
       integer, intent(in)     :: nsoil           !> number of soil levels
       integer, intent(in)     :: nlndcat         !> number of land categories
       integer, intent(in)     :: nsoilcat        !> number of soil categories
-      real(kind=phys), intent(in) :: rlat(:)     !> latitude (radian)
-      real(kind=phys), intent(in) :: rlon(:)     !> longitude (radian)
-      real(kind=phys), intent(in) :: lat(:)      !> latitude (degrees)
-      real(kind=phys), intent(in) :: lon(:)      !> longitude (degrees)
-      integer, intent(in)     :: ktau            !> number of timestep
-      real(kind=phys), intent(in) :: dt          !> physics timestep (s)
+      real(kind_phys), intent(in) :: rlat(:)     !> latitude (radian)
+      real(kind_phys), intent(in) :: rlon(:)     !> longitude (radian)
+      real(kind_phys), intent(in) :: lat(:)      !> latitude (degrees)
+      real(kind_phys), intent(in) :: lon(:)      !> longitude (degrees)
+      !integer, intent(in)     :: ktau            !> number of timestep
+      real(kind_phys), intent(in) :: dt          !> physics timestep (s)
       integer, intent(in)     :: jdate           !> current forecast date and time
-      integer, intent(in)     :: tile_num        !> index of cubed sphere tile
-      real(kind=phys), intent(in) :: garea(:)    !> grid cell area
-      integer, intent(in) :: aero_rad_freq_opt   !> catchem aer radiation frequency
-      integer, intent(in) :: aero_feedback_opt   !> catchem aerosol radiation feedback option
-      integer, intent(in) :: plmrise_freq_opt    !> catchem plmrise frequency option
+      !integer, intent(in)     :: tile_num        !> index of cubed sphere tile
+      real(kind_phys), intent(in) :: garea(:)    !> grid cell area
+      !integer, intent(in) :: aero_rad_freq_opt   !> catchem aer radiation frequency
+      !integer, intent(in) :: aero_feedback_opt   !> catchem aerosol radiation feedback option
+      !integer, intent(in) :: plmrise_freq_opt    !> catchem plmrise frequency option
       integer, intent(in) :: lwi(:)               !> sea/land/ice=0/1/2 index
-      integer, intent(in) :: dluse(:)            !> land use index
-      real(kind=phys), intent(in) :: pores(30)   !> maximum soil moisture content
-      real(kind=phys), intent(in) :: resid(30)   !> minimum soil moisture content
+      !integer, intent(in) :: dluse(:)            !> land use index
+      real(kind_phys), intent(in) :: pores(30)   !> maximum soil moisture content
+      real(kind_phys), intent(in) :: resid(30)   !> minimum soil moisture content
 
       ! 3D/Layer Variables (dim(:,:))
-      real(kind=phys), intent(in) :: temp(:,:)       !> temperature (K)
-      real(kind=phys), intent(in) :: spechum(:,:)    !> specific humidity (kg/kg)
-      real(kind=phys), intent(in) :: pfull(:,:)      !> full level pressure of dry air (Pa)
-      real(kind=phys), intent(in) :: pfull_wet(:,:)  !> full level pressure of moist air (Pa)
-      real(kind=phys), intent(in) :: phalf(:,:)      !> half level pressure of dry air(Pa)
-      real(kind=phys), intent(in) :: u(:,:)          !> zonal wind (m/s)
-      real(kind=phys), intent(in) :: v(:,:)          !> meridional wind (m/s)
-      real(kind=phys), intent(in) :: delp(:,:)       !> pressure thickness (Pa)
-      real(kind=phys), intent(in) :: delp_dry(:,:)   !> dry air pressure thickness (Pa)
-      real(kind=phys), intent(in) :: zh(:,:)         !> geopotential height (m)
-      real(kind=phys), intent(in) :: kh(:,:)         !> vertical diffusivity (m2/s)
-      real(kind=phys), intent(in) :: prsl(:,:)       !> layer mean pressure (Pa)
-      real(kind=phys), intent(in) :: prslk(:,:)      !> Exner function
-      real(kind=phys), intent(in) :: rh(:,:)         !> relative humidity [fraction]
-      real(kind=phys), intent(in) :: pfl_lsan(:,:)   !>  liquid flux from large scale precipitation (kg/m2/s)
-      real(kind=phys), intent(in) :: pfl_isan(:,:)   !>  ice flux from large scale precipitation (kg/m2/s)
-        real(kind=phys), intent(in) :: airden(:,:)   !> dry air density [kg/m3]
+      real(kind_phys), intent(in) :: temp(:,:)       !> temperature (K)
+      real(kind_phys), intent(in) :: spechum(:,:)    !> specific humidity (kg/kg)
+      real(kind_phys), intent(in) :: pfull(:,:)      !> full level pressure of dry air (Pa)
+      real(kind_phys), intent(in) :: pfull_wet(:,:)  !> full level pressure of moist air (Pa)
+      real(kind_phys), intent(in) :: phalf(:,:)      !> half level pressure of dry air(Pa)
+      real(kind_phys), intent(in) :: u(:,:)          !> zonal wind (m/s)
+      real(kind_phys), intent(in) :: v(:,:)          !> meridional wind (m/s)
+      real(kind_phys), intent(in) :: delp(:,:)       !> pressure thickness (Pa)
+      real(kind_phys), intent(in) :: delp_dry(:,:)   !> dry air pressure thickness (Pa)
+      real(kind_phys), intent(in) :: zh(:,:)         !> geopotential (m2/s2)
+      !real(kind_phys), intent(in) :: kh(:,:)         !> vertical diffusivity (m2/s)
+      !real(kind_phys), intent(in) :: prsl(:,:)       !> layer mean pressure (Pa)
+      !real(kind_phys), intent(in) :: prslk(:,:)      !> Exner function
+      real(kind_phys), intent(in) :: rh(:,:)         !> relative humidity [fraction]
+      real(kind_phys), intent(in) :: pfl_lsan(:,:)   !>  liquid flux from large scale precipitation (kg/m2/s)
+      real(kind_phys), intent(in) :: pfl_isan(:,:)   !>  ice flux from large scale precipitation (kg/m2/s)
+      real(kind_phys), intent(in) :: airden(:,:)   !> dry air density [kg/m3]
 
       ! Surface Variables (dim(:))
-      real(kind=phys), intent(in) :: ps(:)           !> surface pressure (Pa)
-      real(kind=phys), intent(in) :: tskin(:)        !> skin temperature (K)
-      real(kind=phys), intent(in) :: ts(:)           !> surface temperature (K)
-      real(kind=phys), intent(in) :: slmsk(:)        !> land-sea mask (1=land,0=sea,2=ice)
-      real(kind=phys), intent(in) :: snowh(:)        !> snow depth (m)
-      real(kind=phys), intent(in) :: vegtype(:)      !> vegetation type
-      real(kind=phys), intent(in) :: lai(:)          !> leaf area index (m2/m2)
-      real(kind=phys), intent(in) :: z0(:)           !> surface roughness length (m)
-      real(kind=phys), intent(in) :: soiltyp(:)      !> soil type
-      real(kind=phys), intent(in) :: soilmoist(:)    !> soil moisture (m3/m3)
-      real(kind=phys), intent(in) :: snowc(:)        !> snow cover fraction (0-1)
-      real(kind=phys), intent(in) :: vegfrac(:)      !> green vegetation fraction (0-1)
-      real(kind=phys), intent(in) :: frlanduse(:,:)  !> fraction of each land type
-      real(kind=phys), intent(in) :: frsoil(:,:)     !> fraction of each soil type
-      real(kind=phys), intent(in) :: landfrac(:)     !> fraction of land
-      real(kind=phys), intent(in) :: oceanfrac(:)    !> fraction of ocean
-      real(kind=phys), intent(in) :: lakefrac(:)     !> fraction of lake
-      real(kind=phys), intent(in) :: landicefrac(:)  !> fraction of land ice
-      real(kind=phys), intent(in) :: seaicefrac(:)   !> fraction of sea ice
+      real(kind_phys), intent(in) :: ps(:)           !> surface pressure (Pa)
+      real(kind_phys), intent(in) :: tskin(:)        !> skin temperature (K)
+      real(kind_phys), intent(in) :: ts(:)           !> surface temperature (K)
+      !real(kind_phys), intent(in) :: slmsk(:)        !> land-sea mask (1=land,0=sea,2=ice)
+      real(kind_phys), intent(in) :: snowh(:)        !> snow depth (m)
+      real(kind_phys), intent(in) :: vegtype(:)      !> vegetation type
+      real(kind_phys), intent(in) :: lai(:)          !> leaf area index (m2/m2)
+      real(kind_phys), intent(in) :: z0(:)           !> surface roughness length (m)
+      real(kind_phys), intent(in) :: soiltyp(:)      !> soil type
+      real(kind_phys), intent(in) :: soilmoist(:)    !> soil moisture (m3/m3)
+      real(kind_phys), intent(in) :: snowc(:)        !> snow cover fraction (0-1)
+      real(kind_phys), intent(in) :: vegfrac(:)      !> green vegetation fraction (0-1)
+      real(kind_phys), intent(in) :: frlanduse(:,:)  !> fraction of each land type
+      real(kind_phys), intent(in) :: frsoil(:,:)     !> fraction of each soil type
+      real(kind_phys), intent(in) :: landfrac(:)     !> fraction of land
+      real(kind_phys), intent(in) :: oceanfrac(:)    !> fraction of ocean
+      real(kind_phys), intent(in) :: lakefrac(:)     !> fraction of lake
+      real(kind_phys), intent(in) :: landicefrac(:)  !> fraction of land ice
+      real(kind_phys), intent(in) :: seaicefrac(:)   !> fraction of sea ice
 
       ! Near-Surface Meteorology (dim(:))
-      real(kind=phys), intent(in) :: u10m(:)         !> 10m u wind (m/s)
-      real(kind=phys), intent(in) :: v10m(:)         !> 10m v wind (m/s)
-      real(kind=phys), intent(in) :: ustar(:)        !> friction velocity (m/s)
-      real(kind=phys), intent(in) :: zpbl(:)         !> PBL height (m)
+      real(kind_phys), intent(in) :: u10m(:)         !> 10m u wind (m/s)
+      real(kind_phys), intent(in) :: v10m(:)         !> 10m v wind (m/s)
+      real(kind_phys), intent(in) :: ustar(:)        !> friction velocity (m/s)
+      real(kind_phys), intent(in) :: zpbl(:)         !> PBL height (m)
 
       ! Surface Fluxes (dim(:))
-      real(kind=phys), intent(in) :: hf(:)           !> sensible heat flux (W/m2)
-      real(kind=phys), intent(in) :: shflx(:)        !> surface sensible heat flux (W/m2)
-      real(kind=phys), intent(in) :: lhflx(:)        !> surface latent heat flux (W/m2)
-      real(kind=phys), intent(in) :: precip(:)       !> precipitation rate (kg/m2/s)
+      !real(kind_phys), intent(in) :: hf(:)           !> sensible heat flux (W/m2)
+      real(kind_phys), intent(in) :: shflx(:)        !> surface sensible heat flux (W/m2)
+      real(kind_phys), intent(in) :: lhflx(:)        !> surface latent heat flux (W/m2)
+      real(kind_phys), intent(in) :: precip(:)       !> precipitation rate (kg/m2/s)
 
       ! Radiation Properties (dim(:))
-      real(kind=phys), intent(in) :: coszen(:)            !> cosine of solar zenith angle
-      real(kind=phys), intent(in) :: cldf(:)              !> fraction of grid box area in which updrafts occur
-      real(kind=phys), intent(in) :: sfc_alb_nir_dir(:)   !> surface near-infrared direct albedo
-      real(kind=phys), intent(in) :: sfc_alb_nir_dif(:)   !> surface near-infrared diffuse albedo
-      real(kind=phys), intent(in) :: sfc_alb_uvvis_dir(:) !> surface visible + uv direct albedo
-      real(kind=phys), intent(in) :: sfc_alb_uvvis_dif(:) !> surface visible + uv diffuse albedo
-      real(kind=phys), intent(in) :: emis(:)              !> surface emissivity
+      real(kind_phys), intent(in) :: coszen(:)            !> cosine of solar zenith angle
+      real(kind_phys), intent(in) :: cldf(:)              !> fraction of grid box area in which updrafts occur
+      real(kind_phys), intent(in) :: sfc_alb_nir_dir(:)   !> surface near-infrared direct albedo
+      real(kind_phys), intent(in) :: sfc_alb_nir_dif(:)   !> surface near-infrared diffuse albedo
+      real(kind_phys), intent(in) :: sfc_alb_uvvis_dir(:) !> surface visible + uv direct albedo
+      real(kind_phys), intent(in) :: sfc_alb_uvvis_dif(:) !> surface visible + uv diffuse albedo
+      !real(kind_phys), intent(in) :: emis(:)              !> surface emissivity
 
       ! Radiation Fluxes (dim(:))
-      real(kind=phys), intent(in) :: swdn(:)         !> downward shortwave radiation at surface (W/m2)
-      real(kind=phys), intent(in) :: swup(:)         !> upward shortwave radiation at surface (W/m2)
-      real(kind=phys), intent(in) :: lwdn(:)         !> downward longwave radiation at surface (W/m2)
-      real(kind=phys), intent(in) :: lwup(:)         !> upward longwave radiation at surface (W/m2)
-      real(kind=phys), intent(in) :: swdnc(:)        !> clear-sky downward shortwave radiation (W/m2)
-      real(kind=phys), intent(in) :: swupc(:)        !> clear-sky upward shortwave radiation (W/m2)
-      real(kind=phys), intent(in) :: lwdnc(:)        !> clear-sky downward longwave radiation (W/m2)2)
-      real(kind=phys), intent(in) :: lwupc(:)        !> clear-sky upward longwave radiation (W/m2)
-      real(kind=phys), intent(in) :: nirbmdi(:)      !> surface near-infrared beam shortwave radiation (W/m2)
-      real(kind=phys), intent(in) :: nirdfdi(:)      !> surface near-infrared diffuse shortwave radiation (W/m2)
-      real(kind=phys), intent(in) :: visbmdi(:)      !> surface visible + uv beam shortwave radiation (W/m2)
-      real(kind=phys), intent(in) :: visdfdi(:)      !> surface visible + uv diffuse shortwave radiation (W/m2)
+      real(kind_phys), intent(in) :: swdn(:)         !> downward shortwave radiation at surface (W/m2)
+      !real(kind_phys), intent(in) :: swup(:)         !> upward shortwave radiation at surface (W/m2)
+      !real(kind_phys), intent(in) :: lwdn(:)         !> downward longwave radiation at surface (W/m2)
+      !real(kind_phys), intent(in) :: lwup(:)         !> upward longwave radiation at surface (W/m2)
+      !real(kind_phys), intent(in) :: swdnc(:)        !> clear-sky downward shortwave radiation (W/m2)
+      !real(kind_phys), intent(in) :: swupc(:)        !> clear-sky upward shortwave radiation (W/m2)
+      !real(kind_phys), intent(in) :: lwdnc(:)        !> clear-sky downward longwave radiation (W/m2)2)
+      !real(kind_phys), intent(in) :: lwupc(:)        !> clear-sky upward longwave radiation (W/m2)
+      real(kind_phys), intent(in) :: nirbmdi(:)      !> surface near-infrared beam shortwave radiation (W/m2)
+      real(kind_phys), intent(in) :: nirdfdi(:)      !> surface near-infrared diffuse shortwave radiation (W/m2)
+      real(kind_phys), intent(in) :: visbmdi(:)      !> surface visible + uv beam shortwave radiation (W/m2)
+      real(kind_phys), intent(in) :: visdfdi(:)      !> surface visible + uv diffuse shortwave radiation (W/m2)
 
 
       ! Emissions
-      !real(kind=phys), intent(in) :: emi_in(:)         !> emissions
+      !real(kind_phys), intent(in) :: emi_in(:)         !> emissions
+      real(kind_phys), dimension(im, kte), intent(in) :: dust_in         !> dust emission inputs
       ! CATChem States
       type(MetStateType),  intent(inout) :: MetState(:)    !> CATChem meteorology state
-      type(ChemStateType), intent(inout) :: ChemState(:)   !> CATChem chemistry state
-      type(EmisStateType), intent(inout) :: EmisState(:)   !> CATChem emission state
-      type(DiagStateType), intent(inout) :: DiagState(:)   !> CATChem diagnostic state
+      !type(ChemStateType), intent(inout) :: ChemState(:)   !> CATChem chemistry state
+      !type(EmisStateType), intent(inout) :: EmisState(:)   !> CATChem emission state
+      !type(DiagStateType), intent(inout) :: DiagState(:)   !> CATChem diagnostic state
 
       ! Error handling
       character(len=*), intent(out) :: errmsg    !> error message
@@ -381,13 +374,13 @@ contains
             MetState(i)%V(k_rev)        = v(i,k)  !vs3d
             MetState(i)%DELP(k_rev)     = delp(i,k)
             MetState(i)%DELP_DRY(k_rev) = delp_dry(i,k)
-            MetState(i)%ZMID(k_rev)     = zh(i, k) !geohlcl3d (geopotential height w.r.t local surface at layer center)
+            MetState(i)%ZMID(k_rev)     = zh(i, k)/9.80665 !phl3d
             !MetState(i)%kh(k_rev)       = kh(i,k) !TODO: MetState does not have kh defined yet.
             !MetState(i)%prsl(k_rev)    = prsl(i,k) !assume the same as phalf
             !MetState(i)%prslk(k_rev)   = prslk(i,k) !TODO: MetState does not have prslk defined yet.
             MetState(i)%AIRDEN(k_rev)  = airden(i, k)    !< Dry air density [kg/m3]
-            MetState(i)%RH(k_rev)      = rh(i,k)
-            MetState(i)%BXHEIGHT(k_rev)  = delp (i,k) / 9.80
+            MetState(i)%RH(k_rev)      = rh(i,k) * 100
+            MetState(i)%BXHEIGHT(k_rev)  = delp (i,k) / 9.80665
             k_rev = k_rev - 1
         end do vert
 
@@ -407,7 +400,7 @@ contains
         end do vert
 
         ! Surface Variables
-        MetState(i)%PS       = ps(i)  !psfc
+        MetState(i)%PS       = ps(i)  !prsfc
         MetState(i)%TS       = ts(i)  !ts
         MetState(i)%TSKIN    = tskin(i) !tskin
         MetState(i)%LWI      = lwi(i) ! TODO: slmsk same as lwi and slmsk can be deleted?
@@ -466,11 +459,11 @@ contains
         end if
 
         !TODO: need to check the order of the five variables in dust_in
-        MetState(i)%SSM = dust_in(i, 1) ! Sediment Supply Map [1]
+        MetState(i)%CLAYFRAC = dust_in(i, 1)        !< Fraction of clay [1]
         MetState(i)%RDRAG = dust_in(i, 2) !Drag Partition [1]
-        MetState(i)%USTAR_THRESHOLD = dust_in(i, 3) !< Threshold friction velocity [m/s]
-        MetState(i)%CLAYFRAC = dust_in(i, 4)        !< Fraction of clay [1]
-        MetState(i)%SANDFRAC = dust_in(i, 5)       !< Fraction of sand [1]
+        MetState(i)%SANDFRAC = dust_in(i, 3)       !< Fraction of sand [1]
+        MetState(i)%SSM = dust_in(i, 4) ! Sediment Supply Map [1]
+        MetState(i)%USTAR_THRESHOLD = dust_in(i, 5) !< Threshold friction velocity [m/s]
 
         ! Near-Surface Meteorology
         MetState(i)%U10M     = u10m(i)
@@ -517,6 +510,173 @@ contains
       end do horiz
 
     end subroutine transform_ccpp_to_catchem
+
+
+
+    subroutine catchem_run (im, catchem_states, DustState, SeaSaltState, DryDepState, errflg)
+        use CATChem, only: DustStateType, SeaSaltStateType, DryDepStateType
+
+        integer, intent(in) :: im
+        type(catchem_container_type), intent(inout) :: catchem_states
+        type(DustStateType), intent(inout) :: DustState
+        type(SeaSaltStateType), intent(inout) :: SeaSaltState
+        type(DryDepStateType), intent(inout) :: DryDepState
+        integer, intent(inout) :: errflg
+
+        ! Error handling
+        !---------------
+        CHARACTER(LEN=255)    :: ErrMsg
+        CHARACTER(LEN=255)    :: ThisLoc
+        ThisLoc = ' -> at catchem_process_run (in drivers/ccpp/catchem_wrapper_utils.F90)'
+
+        do i = 1, im
+            call cc_run_process(catchem_states%MetState(i), catchem_states%DiagState(i),
+                                catchem_states%ChemState(i), catchem_states%EmisState(i),
+                                DustState, SeaSaltState, DryDepState, errflg)
+            if (errflg /= CC_SUCCESS) then
+                ErrMsg = 'Error in catchem_process_run'
+                call cc_emit_error(ErrMsg, errflg, ThisLoc ) !TODO: consider rename the subroutine
+                return
+            end if
+        end do
+
+    end subroutine catchem_run
+
+
+    subroutine catchem_finalize (catchem_states, DustState, SeaSaltState, DryDepState, errflg)
+        use CATChem, only: DustStateType, SeaSaltStateType, DryDepStateType
+
+        type(catchem_container_type), intent(inout) :: catchem_states
+        type(DustStateType), intent(inout) :: DustState
+        type(SeaSaltStateType), intent(inout) :: SeaSaltState
+        type(DryDepStateType), intent(inout) :: DryDepState
+        integer, intent(inout) :: errflg
+
+        ! Error handling
+        !---------------
+        CHARACTER(LEN=255)    :: ErrMsg
+        CHARACTER(LEN=255)    :: ThisLoc
+        ThisLoc = ' -> at catchem_finalize (in drivers/ccpp/catchem_wrapper_utils.F90)'
+
+        call cc_finalize_process(DustState, SeaSaltState, DryDepState, errflg)
+        if (errflg /= CC_SUCCESS) then
+            ErrMsg = 'Error in cc_finalize_process'
+            call cc_emit_error(ErrMsg, errflg, ThisLoc )
+            return
+        end if
+
+        ! Finalize CATChem states
+        if (allocated(catchem_states%MetState)) then
+            deallocate(catchem_states%MetState, stat=errflg)
+            if (errflg /= CC_SUCCESS) then
+                ErrMsg = 'Error in deallocate catchem_states%MetState'
+                call cc_emit_error(ErrMsg, errflg, ThisLoc )
+                return
+            end if
+        end if
+
+        if (allocated(catchem_states%EmisState)) then
+            deallocate(catchem_states%EmisState, stat=errflg)
+            if (errflg /= CC_SUCCESS) then
+                ErrMsg = 'Error in deallocate catchem_states%EmisState'
+                call cc_emit_error(ErrMsg, errflg, ThisLoc )
+                return
+            end if
+        end if
+
+        if (allocated(catchem_states%ChemState)) then
+            deallocate(catchem_states%ChemState, stat=errflg)
+            if (errflg /= CC_SUCCESS) then
+                ErrMsg = 'Error in deallocate catchem_states%ChemState'
+                call cc_emit_error(ErrMsg, errflg, ThisLoc )
+                return
+            end if
+        end if
+
+        if (allocated(catchem_states%DiagState)) then
+            deallocate(catchem_states%DiagState, stat=errflg)
+            if (errflg /= CC_SUCCESS) then
+                ErrMsg = 'Error in deallocate catchem_states%DiagState'
+                call cc_emit_error(ErrMsg, errflg, ThisLoc )
+                return
+            end if
+        end if
+
+    end subroutine catchem_finalize
+
+
+    subroutine cc_to_ccpp(im, kte, ntrac, ntchm, ChemState, chemarr)
+        use CATChem, only: ChemStateType
+        implicit none
+
+        integer, intent(in) :: im
+        integer, intent(in) :: kte
+        integer, intent(in) :: ntrac
+        integer, intent(in) :: ntchm
+        type(ChemStateType), intent(in) :: ChemState(:)
+        real(kind_phys), intent(inout) :: chemarr(:,:,:)
+
+        !local variables
+        integer :: i, n
+        integer :: ind_start
+        real(kind_phys) :: con(ket), con_rev(ket), unit_conv
+
+        !TODO: here we assume chemical tracers are placed at the end after other tracers and
+        !      the order of the chemical tracers in ChemState is the same as in chemarr
+        ind_start = ntrac - ntchm
+        do i = 1, im
+            do n = 1, ntchm
+                con = ChemState(i)%ChemSpecies(n)%conc
+                !TODO: assume ccpp and catchem have reversed vertical layer inddex
+                con_rev = con(size(con):1:-1)
+                !unite conversion
+                if(ChemState(i)%ChemSpecies(n)%is_gas) then
+                    unit_conv = 1.0e-6 * ChemState(i)%ChemSpecies(n)%mw_g / 28.9644  ! convert from ppm to kg/kg for gases
+                else
+                    unit_conv = 1.0e-9 ! convert from ug/kg to kg/kg for aerosols
+                end if
+                chemarr(i,:,n+ind_start) = con_rev * unit_conv
+            end do
+        end do
+
+    end subroutine cc_to_ccpp
+
+    subroutine ccpp_to_cc(im, kte, ntrac, ntchm, ChemState, chemarr)
+        use CATChem, only: ChemStateType
+        implicit none
+
+        integer, intent(in) :: im
+        integer, intent(in) :: kte
+        integer, intent(in) :: ntrac
+        integer, intent(in) :: ntchm
+        type(ChemStateType), intent(inout) :: ChemState(:)
+        real(kind_phys), intent(in) :: chemarr(:,:,:)
+
+        !local variables
+        integer :: i, n
+        integer :: ind_start
+        real(kind_phys) :: con(kte), con_rev(kte), unit_conv
+
+        !TODO: here we assume chemical tracers are placed at the end after other tracers and
+        !      the order of the chemical tracers in ChemState is the same as in chemarr
+        ind_start = ntrac - ntchm
+        do i = 1, im
+            do n = 1, ntchm
+                con = chemarr(i,:,n+ind_start)
+                !TODO: assume ccpp and catchem have reversed vertical layer inddex
+                con_rev = con(size(con):1:-1)
+                !unite conversion
+                if(ChemState(i)%ChemSpecies(n)%is_gas) then
+                    unit_conv = 28.9644  / ChemState%ChemSpecies(index)%mw_g * 1.0e6  ! convert from kg/kg to ppm for gases
+                else
+                    unit_conv = 1.0e9 ! convert from kg/kg to ug/kg for aerosols
+                end if
+                ChemState(i)%ChemSpecies(n)%conc = con_rev * unit_conv
+            end do
+        end do
+
+    end subroutine ccpp_to_cc
+
 
     !> Checks for allocation errors and sets error message
     !!

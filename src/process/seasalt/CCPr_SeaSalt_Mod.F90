@@ -18,6 +18,7 @@ MODULE CCPr_SeaSalt_mod
    USE MetState_Mod, Only : MetStateType
    USE Config_Opt_Mod, Only : ConfigType
    USE ChemState_Mod, Only : ChemStateType
+   USE EmisState_Mod, Only : EmisStateType
    USE CCPr_SeaSalt_Common_Mod, Only : SeaSaltStateType
 
    IMPLICIT NONE
@@ -39,7 +40,7 @@ CONTAINS
    !!
    !! \ingroup catchem_seasalt_process
    !!!>
-   SUBROUTINE CCPR_SeaSalt_Init( Config, SeaSaltState, ChemState, RC)
+   SUBROUTINE CCPR_SeaSalt_Init( Config, SeaSaltState, ChemState, EmisState, RC)
       ! USES
 
       IMPLICIT NONE
@@ -49,6 +50,7 @@ CONTAINS
       TYPE(ConfigType),    intent(in)    :: Config     ! Config options
       TYPE(SeaSaltStateType), intent(inout) :: SeaSaltState  ! Nullify SeaSalt State During INIT
       TYPE(ChemStateType), intent(in)    :: ChemState  ! Chemical State
+      TYPE(EmisStateType), intent(in)    :: EmisState  ! Emission State
 
       ! INPUT/OUTPUT PARAMETERS
       !------------------------
@@ -78,7 +80,7 @@ CONTAINS
          5.0, &
          10. /)
 
-      INTEGER :: k ! Loop Counter
+      INTEGER :: c, k ! Loop Counter
 
       ! Error handling
       !---------------
@@ -124,6 +126,15 @@ CONTAINS
 
          ! Set Hoppel Correction flag following Fan and Toon 2011 | Default = .true.
          SeaSaltState%HoppelFlag = Config%seasalt_hoppel
+
+         !Find emission caterory index in EmisState for future use
+         !--------------------------------------------
+         do c = 1, EmisState%nCats
+            if (EmisState%Cats(c)%name == 'seasalt') then
+               SeaSaltState%CatIndex = c
+               exit
+            endif
+         end do
 
          if (SeaSaltState%nSeaSaltSpecies == 0) then
 
@@ -204,7 +215,7 @@ CONTAINS
    !!
    !! \ingroup CATChem_SeaSalt_Processes
    !!!>
-   SUBROUTINE CCPr_SeaSalt_Run( MetState, SeaSaltState, RC )
+   SUBROUTINE CCPr_SeaSalt_Run( MetState, SeaSaltState, EmisState, RC )
 
       ! USE
       USE CCPr_Scheme_Gong03_mod,  ONLY: CCPr_Scheme_Gong03   !< Gong2003 SeaSalt Scheme
@@ -221,6 +232,7 @@ CONTAINS
       !------------------------
       ! TYPE(DiagStateType), INTENT(INOUT)    :: DiagState   ! DiagState Instance
       TYPE(SeaSaltStateType), INTENT(INOUT) :: SeaSaltState   ! SeaSaltState Instance
+      TYPE(EmisStateType), INTENT(INOUT) :: EmisState   ! Emission State
       ! TYPE(ChemStateType), INTENT(INOUT)    :: ChemState  ! ChemState Instance
 
       ! OUTPUT PARAMETERS
@@ -230,6 +242,7 @@ CONTAINS
 
       ! LOCAL VARIABLES
       !----------------
+      INTEGER :: i ! Loop Counter
       CHARACTER(LEN=255) :: ErrMsg, thisLoc
 
       ! Initialize
@@ -310,6 +323,12 @@ CONTAINS
             CALL CC_Error( errMsg, RC, thisLoc )
             return
          endif
+
+         !Fill Emission State.
+         do i = 1, EmisState%Cats(SeaSaltState%CatIndex)%nSpecies
+            EmisState%Cats(SeaSaltState%CatIndex)%Species(i)%Flux(1) = SeaSaltState%EmissionPerSpecies(i)
+         end do
+
       endif
 
 

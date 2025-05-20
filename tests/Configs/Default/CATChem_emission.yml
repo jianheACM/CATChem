@@ -15,10 +15,44 @@ anthro:
     map: [ISOP, TEST]
     plumerise_opt: 2
 dust:
-  DU25:
+  DU1:
+    long_name: "Dust Species Fine Mode"
+    scale: [1.0]
+    map: ["dust1"]
+  DU2:
     long_name: "Dust Species Fine Mode"
     scale: [0.7]
     map: ["dust1"]
-  DU10:
+  DU3:
+    long_name: "Dust Species Fine Mode"
+    scale: [0.7]
+    map: ["dust1"]
+  DU4:
+    long_name: "Dust Species Fine Mode"
+    scale: [1.0, 1.0]
+    map: ["dust1", "dust2"]
+  DU5:
     long_name: "Dust Species Coarse Mode"
+    scale: [1.0, 1.0]
+    map: ["dust1", "dust2"]
+seasalt:
+  SeaS1:
+    long_name: "Seasalt Species Fine Mode"
+    scale: [1.0]
+    map: ["dust1"] ##dummy mapping here for test only
+  SeaS2:
+    long_name: "Seasalt Species Fine Mode"
+    scale: [0.7]
+    map: ["dust1"]
+  SeaS3:
+    long_name: "Seasalt Species Fine Mode"
+    scale: [0.7]
+    map: ["dust1"]
+  SeaS4:
+    long_name: "Seasalt Species Fine Mode"
+    scale: [1.0, 1.0]
+    map: ["dust1", "dust2"]
+  SeaS5:
+    long_name: "Seasalt Species Coarse Mode"
+    scale: [1.0, 1.0]
     map: ["dust1", "dust2"]

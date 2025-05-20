@@ -53,6 +53,7 @@ module CCPr_Dust_Common_Mod
       INTEGER                         :: SchemeOpt               !< Scheme Option
       INTEGER, ALLOCATABLE            :: DustSpeciesIndex(:)     !< Index of dust species
       INTEGER, ALLOCATABLE            :: SpcIDs(:)               !< CATChem species IDs
+      integer                         :: CatIndex                !< Index of emission category in EmisState
 
       ! Process Specific Parameters
       REAL(fp), ALLOCATABLE           :: LowerBinRadius(:)       !< Lower bin radius        [m]
