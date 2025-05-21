@@ -11,6 +11,7 @@ module run_mod
    USE ChemState_Mod, ONLY : ChemStateType
    USE DiagState_Mod, ONLY : DiagStateType
    USE EmisState_Mod, ONLY : EmisStateType
+   use Config_Opt_Mod, only: ConfigType
    USE CCPr_Dust_Common_Mod, ONLY : DustStateType
    USE CCPr_SeaSalt_Common_Mod, ONLY : SeaSaltStateType
    USE CCPR_DryDep_Mod, ONLY : DryDepStateType
@@ -22,6 +23,7 @@ module run_mod
 
    PUBLIC :: Run_Process
    PUBLIC :: Finalize_Process
+   PUBLIC :: Init_Process
 
 contains
 
@@ -44,8 +46,8 @@ contains
 
       ! Arguments
       type(MetStateType), INTENT(IN) :: MetState
-      type(DiagStateType), INTENT(IN) :: DiagState
-      type(ChemStateType), INTENT(IN) :: ChemState
+      type(DiagStateType), INTENT(INOUT) :: DiagState
+      type(ChemStateType), INTENT(INOUT) :: ChemState
       TYPE(EmisStateType), INTENT(INOUT) :: EmisState
       type(DustStateType), INTENT(INOUT) :: DustState
       type(SeaSaltStateType), INTENT(INOUT) :: SeaSaltState
@@ -100,7 +102,7 @@ contains
       ! Arguments
       type(ChemStateType), intent(inout) :: ChemState
       type(DiagStateType), intent(inout) :: DiagState
-      type(MetStateType), intent(inout)  :: MetState
+      type(MetStateType), intent(in)  :: MetState
       type(EmisStateType), intent(inout) :: EmisState
       type(DustStateType), intent(inout) :: DustState
       type(SeaSaltStateType), intent(inout) :: SeaSaltState
@@ -189,5 +191,51 @@ contains
       !finalize wet deposition
 
    end subroutine Finalize_Process
+
+   subroutine Init_Process (config, ChemState, EmisState, DustState, SeaSaltState, DryDepState, RC)
+      use CCPr_Dust_mod, only: CCPr_Dust_Init
+      use CCPr_SeaSalt_mod, only: CCPr_SeaSalt_Init
+      use CCPr_DryDep_mod, only: CCPr_DryDep_Init
+      implicit none
+
+      type(ConfigType), intent(in) :: config
+      type(ChemStateType), intent(inout) :: ChemState
+      type(EmisStateType), intent(inout) :: EmisState
+      type(DustStateType), intent(inout) :: DustState
+      type(SeaSaltStateType), intent(inout) :: SeaSaltState
+      type(DryDepStateType), intent(inout) :: DryDepState
+      integer, intent(inout) :: RC
+
+      ! Error handling
+      !---------------
+      CHARACTER(LEN=255)    :: ErrMsg
+      CHARACTER(LEN=255)    :: ThisLoc
+      ThisLoc = ' -> at init_process (in core/init_mod.F90)'
+
+      ! Initialize DustState
+      call CCPR_Dust_Init(config, DustState, ChemState, EmisState, RC)
+      if (RC /= CC_SUCCESS) then
+         ErrMsg = 'Error in CCPR_Dust_Init'
+         call CC_Error(ErrMsg, RC, ThisLoc )
+         return
+      end if
+
+      ! Initialize SealSaltState
+      call CCPr_SeaSalt_Init(config, SeaSaltState, ChemState, EmisState, RC)
+      if (RC /= CC_SUCCESS) then
+         ErrMsg = 'Error in CCPr_SeaSalt_Init'
+         call CC_Error(ErrMsg, RC, ThisLoc )
+         return
+      end if
+
+      ! Initialize DryDepState
+      call CCPr_DryDep_Init(config, DryDepState, ChemState, RC)
+      if (RC /= CC_SUCCESS) then
+         ErrMsg = 'Error in CCPr_DryDep_Init'
+         call CC_Error(ErrMsg, RC, ThisLoc )
+         return
+      end if
+
+   end subroutine Init_Process
 
 end module run_mod

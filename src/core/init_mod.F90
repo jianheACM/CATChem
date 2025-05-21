@@ -14,7 +14,6 @@ module init_mod
    PUBLIC :: Init_Diag
    PUBLIC :: Init_Emis
    PUBLIC :: Init_Chem
-   PUBLIC :: Init_Process
 
 contains
 
@@ -175,57 +174,5 @@ contains
 
    end subroutine Init_Diag
 
-   subroutine Init_Process (config, ChemState, EmisState, DustState, SeaSaltState, DryDepState, RC)
-      use Config_Opt_Mod, only: ConfigType
-      use Error_Mod
-      use ChemState_Mod,  only: ChemStateType    !< Chemical State
-      use EmisState_Mod,  only: EmisStateType    !< Emission State
-      use CCPr_Dust_Common_Mod, only: DustStateType !< Dust State
-      use CCPr_SeaSalt_Common_Mod, only: SeaSaltStateType !< SeaSalt State
-      use CCPr_DryDep_mod, only: DryDepStateType !< DryDep State
-      use CCPr_Dust_mod, only: CCPr_Dust_Init
-      use CCPr_SeaSalt_mod, only: CCPr_SeaSalt_Init
-      use CCPr_DryDep_mod, only: CCPr_DryDep_Init
-      implicit none
-
-      type(ConfigType), intent(in) :: config
-      type(ChemStateType), intent(inout) :: ChemState
-      type(EmisStateType), intent(inout) :: EmisState
-      type(DustStateType), intent(inout) :: DustState
-      type(SeaSaltStateType), intent(inout) :: SeaSaltState
-      type(DryDepStateType), intent(inout) :: DryDepState
-      integer, intent(inout) :: RC
-
-      ! Error handling
-      !---------------
-      CHARACTER(LEN=255)    :: ErrMsg
-      CHARACTER(LEN=255)    :: ThisLoc
-      ThisLoc = ' -> at init_process (in core/init_mod.F90)'
-
-      ! Initialize DustState
-      call CCPR_Dust_Init(config, DustState, ChemState, EmisState, RC)
-      if (RC /= CC_SUCCESS) then
-         ErrMsg = 'Error in CCPR_Dust_Init'
-         call CC_Error(ErrMsg, RC, ThisLoc )
-         return
-      end if
-
-      ! Initialize SealSaltState
-      call CCPr_SeaSalt_Init(config, SeaSaltState, ChemState, EmisState, RC)
-      if (RC /= CC_SUCCESS) then
-         ErrMsg = 'Error in CCPr_SeaSalt_Init'
-         call CC_Error(ErrMsg, RC, ThisLoc )
-         return
-      end if
-
-      ! Initialize DryDepState
-      call CCPr_DryDep_Init(config, DryDepState, ChemState, RC)
-      if (RC /= CC_SUCCESS) then
-         ErrMsg = 'Error in CCPr_DryDep_Init'
-         call CC_Error(ErrMsg, RC, ThisLoc )
-         return
-      end if
-
-   end subroutine Init_Process
 
 end module init_mod

@@ -1,4 +1,4 @@
-set(_srcs catchem.F90)
+set(_srcs catchem.F90 run_mod.F90)
 
 set(_lib CATChem)
 

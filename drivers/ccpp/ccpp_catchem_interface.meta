@@ -1,7 +1,7 @@
 [ccpp-table-properties]
   name = catchem_interface
   type = scheme
-  dependencies = ../../parameters/catchem_config.F90,../../parameters/catchem_constants.F90,../../src/dep_vertmx_mod.F90,../../src/drydep_gocart_mod.F90,../../src/drydep_wesely_mod.F90
+  dependencies = ./catchem_types.F90,./catchem_wrapper_utils.F90,../../src/api/catchem.F90
 
 ########################################################################
 [ccpp-arg-table]
@@ -14,45 +14,35 @@
   dimensions = ()
   type = integer
   intent = in
-[kte]
-  standard_name = vertical_layer_dimension
-  long_name = vertical layer dimension
-  units = count
-  dimensions = ()
-  type = integer
-  intent = in
-[kme]
-  standard_name = vertical_interface_dimension
-  long_name = number of vertical levels plus one
-  units = count
-  dimensions = ()
-  type = integer
-  intent = in
-[nsoil]
-  standard_name = vertical_dimension_of_soil
-  long_name = soil vertical layer dimension
-  units = count
-  dimensions = ()
-  type = integer
-  intent = in
-[nlndcat]
-  standard_name = number_of_vegetation_categories
-  long_name = number of vegetation categories
-  units = count
-  dimensions = ()
-  type = integer
-[nsoilcat]
-  standard_name = number_of_soil_categories
-  long_name = number of soil categories
-  units = count
-  dimensions = ()
-  type = integer
 [do_catchem]
   standard_name = do_catchem_coupling
   long_name = flag controlling catchem collection (default off)
   units = flag
   dimensions = ()
   type = logical
+[catchem_configfile_in]
+  standard_name = catchem_configfile
+  long_name = catchem configuration file name
+  units = none
+  dimensions = ()
+  type = character
+  kind = len=*
+  intent = in
+[errmsg]
+  standard_name = ccpp_error_message
+  long_name = error message for error handling in CCPP
+  units = none
+  dimensions = ()
+  type = character
+  kind = len=*
+  intent = out
+[errflg]
+  standard_name = ccpp_error_code
+  long_name = error code for error handling in CCPP
+  units = 1
+  dimensions = ()
+  type = integer
+  intent = out
 ########################################################################
 [ccpp-arg-table]
   name = catchem_interface_finalize
@@ -64,7 +54,21 @@
   dimensions = ()
   type = integer
   intent = in
-
+[errmsg]
+  standard_name = ccpp_error_message
+  long_name = error message for error handling in CCPP
+  units = none
+  dimensions = ()
+  type = character
+  kind = len=*
+  intent = out
+[errflg]
+  standard_name = ccpp_error_code
+  long_name = error code for error handling in CCPP
+  units = 1
+  dimensions = ()
+  type = integer
+  intent = out
 ########################################################################
 [ccpp-arg-table]
   name = catchem_interface_run
@@ -910,7 +914,7 @@
   standard_name = fengsha_dust_input
   long_name = fengsha dust input
   units = various
-  dimensions = (horizontal_loop_extent,5)
+  dimensions = (horizontal_loop_extent,12,5)
   type = real
   kind = kind_phys
   intent = in

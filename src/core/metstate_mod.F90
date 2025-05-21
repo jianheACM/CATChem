@@ -99,6 +99,7 @@ MODULE MetState_Mod
       INTEGER,  ALLOCATABLE :: nSOIL           !< # number of soil layers
       REAL(fp), ALLOCATABLE :: SOILM(:)        !< Volumetric Soil moisture [m3/m3]
       REAL(fp), ALLOCATABLE :: FRLANDUSE(:)    !< Fractional Land Use
+      REAL(fp), ALLOCATABLE :: FRSOIL(:)       !< Fractional Soil
       REAL(fp), ALLOCATABLE :: FRLAI(:)        !< LAI in each Fractional Land use type [m2/m2]
       real(fp)              :: LAT             !< Latitude
       real(fp)              :: LON             !< Longitude

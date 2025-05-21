@@ -23,7 +23,6 @@ module catchem_interface
 
   !use physcons, only: g => con_g, pi => con_pi
   !use machine, only: kind_phys
-  integer, parameter :: kind_phys = 8
   !use catchem_config
   use CATChem
   use catchem_wrapper_utils
@@ -69,9 +68,7 @@ contains
    !!!>
    subroutine catchem_interface_init(catchem_configfile_in, do_catchem, &
                                  im, errmsg, errflg)
-
       implicit none
-
       ! Input parameters
       character(len=*), intent(in) :: catchem_configfile_in
       logical,          intent(in) :: do_catchem
@@ -85,14 +82,12 @@ contains
       ! Output parameters
       character(len=*), intent(out) :: errmsg
       integer,          intent(out) :: errflg
-      CHARACTER(LEN=255)    :: ThisLoc
-      ThisLoc = ' -> at catchem_interface_init (in drivers/ccpp/ccpp_catchem_inerface.F90)'
-
       ! Local variables
-      integer :: i
+      CHARACTER(LEN=255)    :: ThisLoc
 
       errmsg = ''
       errflg = 0
+      ThisLoc = ' -> at catchem_interface_init (in drivers/ccpp/ccpp_catchem_inerface.F90)'
 
       if (.not. do_catchem) return
 
@@ -116,20 +111,23 @@ contains
   !!
   !! \section arg_table_catchem_gocart_interface_finalize Argument Table
   !!
-  subroutine catchem_interface_finalize(errmsg, errflg)
+  subroutine catchem_interface_finalize(do_catchem, errmsg, errflg)
 
    implicit none
 
+   ! Input parameters
+   logical, intent(in) :: do_catchem
    ! Output parameters
    character(len=*), intent(out) :: errmsg
    integer, intent(out) :: errflg
+   ! Local variables
+   CHARACTER(LEN=255)    :: ThisLoc
 
    errmsg = ''
    errflg = 0
-
-   ! Local variables
-   CHARACTER(LEN=255)    :: ThisLoc
    ThisLoc = ' -> at catchem_interface_finalize (in drivers/ccpp/ccpp_catchem_inerface.F90)'
+
+   if (.not. do_catchem) return
 
    call catchem_finalize (CATChemStates, DustState, SeaSaltState, DryDepState, errflg)
    if (errflg /= CC_SUCCESS) then
@@ -138,7 +136,7 @@ contains
          return
    end if
 
-  end subroutine catchem_wrapper_finalize
+  end subroutine catchem_interface_finalize
 
   !>
   !! This is the Configurable ATmospheric Chemistry (CATChem)
@@ -147,11 +145,11 @@ contains
   !! \htmlinclude catchem_runphase1_wrapper_run.html
   !!
   !>\section catchem_phase1_group CATChem Scheme General Algorithm
-  !> @{
+  !>
   subroutine catchem_interface_run(im, kte, kme, garea, nsoil, nlndcat, nsoilcat, &
-     rlat, rlon, lat, lon, & ! Grid information
+     lat, lon, & ! Grid information
      do_catchem, & ! CATChem Flag on
-     dt, julian, jdate, & ! Time information
+     dt, jdate, & ! Time information
      xcosz, &
      lwi, frlanduse, gvf, landicefrac, seaicefrac, oceanfrac, lakefrac, landfrac, & ! land water specific variables
      stype, vtype, snowdepth, snowfrac, lai, frsoil, pores, resid, & ! land surface variables
@@ -166,7 +164,6 @@ contains
      errmsg, errflg)
 
      implicit none
-
      ! ARGUMENTS
      !----------
 
@@ -183,17 +180,17 @@ contains
      integer, intent(in) :: nlndcat !> number_of_vegetation_categories
      integer, intent(in) :: nsoilcat !> number of soil categories
      real(kind_phys), dimension(im), intent(in) :: garea !> grid area (m^2) of each grid cell
-     real(kind_phys), dimension(im), intent(in) :: rlat  !> radian latitude
-     real(kind_phys), dimension(im), intent(in) :: rlon  !> radian longitude
+     !real(kind_phys), dimension(im), intent(in) :: rlat  !> radian latitude
+     !real(kind_phys), dimension(im), intent(in) :: rlon  !> radian longitude
      real(kind_phys), dimension(im), intent(in) :: lat   !> latitude
      real(kind_phys), dimension(im), intent(in) :: lon   !> longitude
      real(kind_phys), dimension(im), intent(in) :: xcosz !> cosine of solar zenith angle
 
      ! Time information
      !integer, intent(in) :: idat(8)  ! initialization date and time (in iso order)
-     integer, intent(in) :: jdate    !> julian date
+     integer, intent(in) :: jdate(8)    !> julian date
      real(kind_phys), intent(in) :: dt      ! physics timestep (s)
-     real(kind_phys), intent(in) :: julian  ! forecast julian day (days)
+     !real(kind_phys), intent(in) :: julian  ! forecast julian day (days)
 
      ! MPI information
      !type(MPI_comm), intent(in) :: mpicomm
@@ -213,7 +210,7 @@ contains
      ! Emissions
      !real(kind_phys), dimension(im, kte, 3), intent(in) :: emi_in ! 3 should be temporary... need to replace with either an input namelist option or have it be a pointer with variable dimension
      !real(kind_phys), dimension(im, kte, ntrac), intent(in) :: kemit_in !> emission inputs
-     real(kind_phys), dimension(im, kte), intent(in) :: dust_in         !> dust emission inputs
+     real(kind_phys), dimension(im, 12, 5), intent(in) :: dust_in         !> dust emission inputs
      !real(kind_phys), dimension(im), intent(in) :: pert_scale_anthro !> anthropogenic emission perturbation scale factor
      !real(kind_phys), dimension(im), intent(in) :: pert_scale_plume !> plume emission perturbation scale factor
      !real(kind_phys), dimension(im), intent(in) :: pert_scale_dust !> dust emission perturbation scale factor
@@ -281,10 +278,10 @@ contains
      real(kind_phys), dimension(im), intent(in)        :: sfc_alb_nir_dif    !> surface near-infrared diffuse albedo
      real(kind_phys), dimension(im), intent(in)        :: sfc_alb_uvvis_dir    !> surface ultraviolet-visible direct albedo
      real(kind_phys), dimension(im), intent(in)        :: sfc_alb_uvvis_dif    !> surface ultraviolet-visible diffuse albedo
-     real(kind_phys), dimension(im), intent(in)        :: nirbmdi(:)      !> surface near-infrared beam shortwave radiation (W/m2)
-     real(kind_phys), dimension(im), intent(in)        :: nirdfdi(:)      !> surface near-infrared diffuse shortwave radiation (W/m2)
-     real(kind_phys), dimension(im), intent(in)        :: visbmdi(:)      !> surface visible beam shortwave radiation (W/m2)
-     real(kind_phys), dimension(im), intent(in)        :: visdfdi(:)      !> surface visible diffuse shortwave radiation (W/m2)
+     real(kind_phys), dimension(im), intent(in)        :: nirbmdi      !> surface near-infrared beam shortwave radiation (W/m2)
+     real(kind_phys), dimension(im), intent(in)        :: nirdfdi      !> surface near-infrared diffuse shortwave radiation (W/m2)
+     real(kind_phys), dimension(im), intent(in)        :: visbmdi      !> surface visible beam shortwave radiation (W/m2)
+     real(kind_phys), dimension(im), intent(in)        :: visdfdi      !> surface visible diffuse shortwave radiation (W/m2)
 
      real(kind_phys), dimension(im, kme), intent(in) :: pr3d            !> air pressure at model layer interfaces (Pa)
      !real(kind_phys), dimension(im, kte), intent(in) :: prl3d           !> pressure at the model level (Pa)
@@ -321,18 +318,22 @@ contains
      character(len=*), intent(out) :: errmsg
      integer, intent(out) :: errflg
      CHARACTER(LEN=255)    :: ThisLoc
+
+     errmsg = ''
+     errflg = 0
      ThisLoc = ' -> at catchem_interface_run (in drivers/ccpp/ccpp_catchem_interface.F90)'
 
      ! Local
      !------
-     integer :: mpiid
+     !integer :: mpiid
 
+     if (.not. do_catchem) return
 
      !give tracer from CCPP to CATChem
      call ccpp_to_cc(im, kte, ntrac, ntchm, CATChemStates%ChemState, chemarr_phys)
 
      ! Fill MetState Arrays
-     call transform_ccpp_to_catchem(im, kme, kte, nsoil, nlndcat, nsoilcat, rlat, rlon, lat, lon, &      ! Grid Information
+     call transform_ccpp_to_catchem(im, kme, kte, nsoil, nlndcat, nsoilcat, lat, lon, &      ! Grid Information
                                         dt, jdate, garea, &  ! Grid Information
                                         lwi, &  ! Model Options
                                         tk3d, q3d, pr3d_dry, pr3d, prl3d_dry, rh, &  ! Meteorological Variables
@@ -352,7 +353,7 @@ contains
                                         errmsg, errflg)
 
      ! Run CATChem
-     call catchem_run(im, CATChemStates, errflg)
+     call catchem_run(im, CATChemStates, DustState, SeaSaltState, DryDepState, errflg)
      if (errflg /= CC_SUCCESS) then
          ErrMsg = 'Error in catchem_run'
          call cc_emit_error(ErrMsg, errflg, ThisLoc ) !TODO: consider rename the subroutine
@@ -365,4 +366,4 @@ contains
    end subroutine catchem_interface_run
 
 
-end module catchem_gocart_wrapper
+end module catchem_interface

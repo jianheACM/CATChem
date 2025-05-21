@@ -21,10 +21,9 @@ module catchem_wrapper_utils
                       cc_emit_error, cc_check_var, cc_emit_warning, &
                       cc_init_met, cc_init_diag, cc_init_chem, &
                       cc_init_emis, cc_init_process, cc_run_process, cc_finalize_process, &
-                      cc_checkdeallocate, cc_checkallocate, CC_SUCCESS
+                      CC_SUCCESS
     use catchem_types, only: catchem_container_type
     !use machine, only: kind_phys
-    integer, parameter :: kind_phys = 8
 
 
     implicit none
@@ -34,7 +33,10 @@ module catchem_wrapper_utils
     public :: catchem_init, catchem_run, catchem_finalize
 
     ! CCPP data structure
-    type(ccpp_t), save, target :: cdata
+    !type(ccpp_t), save, target :: cdata
+
+    !temorary for testing
+    integer, parameter :: kind_phys = 4
 
 contains
 
@@ -55,8 +57,9 @@ contains
     subroutine catchem_init(config, catchem_states, im, config_file, errflg, errmsg, &
                             DustState, SeaSaltState, DryDepState)
         use CATChem, only: DustStateType, SeaSaltStateType, DryDepStateType
+        implicit none
 
-        type(ConfigType), intent(in) :: config
+        type(ConfigType), intent(inout) :: config
         type(catchem_container_type), intent(inout) :: catchem_states
         type(DustStateType), intent(inout) :: DustState
         type(SeaSaltStateType), intent(inout) :: SeaSaltState
@@ -193,7 +196,7 @@ contains
     !!
     !! \ingroup catchem_ccpp_group
     !!!>
-    subroutine transform_ccpp_to_catchem(im, kme, kte, nsoil, nlndcat, nsoilcat, rlat, rlon, lat, lon, &      ! Grid Information
+    subroutine transform_ccpp_to_catchem(im, kme, kte, nsoil, nlndcat, nsoilcat, lat, lon, &      ! Grid Information
                                         dt, jdate, garea, &  ! Grid Information
                                         lwi, &  ! Model Options
                                         temp, spechum, pfull,pfull_wet, phalf, rh, &  ! Meteorological Variables
@@ -213,8 +216,8 @@ contains
                                         errmsg, errflg)  ! Error Handling
 
       use CATChem, only: MetStateType, ChemStateType, DiagStateType, EmisStateType
-
       implicit none
+
       !! Transform CCPP meteorological arrays to CATChem states
       integer,  intent(in)    :: im              !> number of horizontal points
       integer,  intent(in)    :: kme             !> number of vertical interfaces
@@ -224,13 +227,13 @@ contains
       integer, intent(in)     :: nsoil           !> number of soil levels
       integer, intent(in)     :: nlndcat         !> number of land categories
       integer, intent(in)     :: nsoilcat        !> number of soil categories
-      real(kind_phys), intent(in) :: rlat(:)     !> latitude (radian)
-      real(kind_phys), intent(in) :: rlon(:)     !> longitude (radian)
+      !real(kind_phys), intent(in) :: rlat(:)     !> latitude (radian)
+      !real(kind_phys), intent(in) :: rlon(:)     !> longitude (radian)
       real(kind_phys), intent(in) :: lat(:)      !> latitude (degrees)
       real(kind_phys), intent(in) :: lon(:)      !> longitude (degrees)
       !integer, intent(in)     :: ktau            !> number of timestep
       real(kind_phys), intent(in) :: dt          !> physics timestep (s)
-      integer, intent(in)     :: jdate           !> current forecast date and time
+      integer, intent(in)     :: jdate(8)        !> current forecast date and time
       !integer, intent(in)     :: tile_num        !> index of cubed sphere tile
       real(kind_phys), intent(in) :: garea(:)    !> grid cell area
       !integer, intent(in) :: aero_rad_freq_opt   !> catchem aer radiation frequency
@@ -266,11 +269,11 @@ contains
       real(kind_phys), intent(in) :: ts(:)           !> surface temperature (K)
       !real(kind_phys), intent(in) :: slmsk(:)        !> land-sea mask (1=land,0=sea,2=ice)
       real(kind_phys), intent(in) :: snowh(:)        !> snow depth (m)
-      real(kind_phys), intent(in) :: vegtype(:)      !> vegetation type
+      integer,         intent(in) :: vegtype(:)      !> vegetation type
       real(kind_phys), intent(in) :: lai(:)          !> leaf area index (m2/m2)
       real(kind_phys), intent(in) :: z0(:)           !> surface roughness length (m)
-      real(kind_phys), intent(in) :: soiltyp(:)      !> soil type
-      real(kind_phys), intent(in) :: soilmoist(:)    !> soil moisture (m3/m3)
+      integer,         intent(in) :: soiltyp(:)      !> soil type
+      real(kind_phys), intent(in) :: soilmoist(:,:)    !> soil moisture (m3/m3)
       real(kind_phys), intent(in) :: snowc(:)        !> snow cover fraction (0-1)
       real(kind_phys), intent(in) :: vegfrac(:)      !> green vegetation fraction (0-1)
       real(kind_phys), intent(in) :: frlanduse(:,:)  !> fraction of each land type
@@ -319,7 +322,7 @@ contains
 
       ! Emissions
       !real(kind_phys), intent(in) :: emi_in(:)         !> emissions
-      real(kind_phys), dimension(im, kte), intent(in) :: dust_in         !> dust emission inputs
+      real(kind_phys), dimension(im, 12, 5), intent(in) :: dust_in         !> dust emission inputs
       ! CATChem States
       type(MetStateType),  intent(inout) :: MetState(:)    !> CATChem meteorology state
       !type(ChemStateType), intent(inout) :: ChemState(:)   !> CATChem chemistry state
@@ -331,7 +334,7 @@ contains
       integer,          intent(out) :: errflg    !> error flag
 
       ! Local variables
-      integer :: i, k, k_rev
+      integer :: i, k, k_rev, month_now
       real :: FRLAND_NOSNO_NOICE, FRWATER, FRICE, FRSNO
       real :: frac_temp
       ! Initialize error handling
@@ -362,11 +365,12 @@ contains
         !TODO: assume the 8 dimension of jdate is something like: (/ 2025, 5, 9, 14, 30, 0, 0, 0 /)
         MetState(i)%YMD = jdate(1) * 10000 + jdate(2) * 100 + jdate(3) !YYYYMMDD
         MetState(i)%HMS = jdate(4) * 10000 + jdate(5) * 100 + jdate(6) !HHMMSS
+        month_now = jdate(2)
 
         ! 3D/Layer center Variables; reverse vertical index for CATChem
         !TODO: make sure layer index starts from 1 not 0
         k_rev = kte
-        vert: do k = 1, kte
+        vert1: do k = 1, kte
             MetState(i)%T(k_rev)        = temp(i,k)   !tk3d
             MetState(i)%SPHU(k_rev)     = spechum(i,k) /1000.0 !q3d (kg/kg in CC --> g/kg in MetState)
             MetState(i)%PMID_DRY(k_rev) = phalf(i,k) !prl3d_dry
@@ -382,11 +386,11 @@ contains
             MetState(i)%RH(k_rev)      = rh(i,k) * 100
             MetState(i)%BXHEIGHT(k_rev)  = delp (i,k) / 9.80665
             k_rev = k_rev - 1
-        end do vert
+        end do vert1
 
         ! 3D/Layer interface Variables; reverse vertical index for CATChem
         k_rev = kme
-        vert: do k = 1, kme
+        vert2: do k = 1, kme
             MetState(i)%PEDGE_DRY(k_rev) = pfull(i,k) !pr3d_dry
             MetState(i)%PEDGE(k_rev)     = pfull_wet(i,k) !pr3d TODO: PEDGE needs to be defined in MetState
             if ( k == kme ) then
@@ -397,7 +401,7 @@ contains
                 MetState(i)%PFILSAN(k_rev)   = pfl_isan(i,k)
             end if
             k_rev = k_rev - 1
-        end do vert
+        end do vert2
 
         ! Surface Variables
         MetState(i)%PS       = ps(i)  !prsfc
@@ -427,6 +431,8 @@ contains
         MetState(i)%FRLANDIC = landicefrac(i)
         MetState(i)%FRLAKE = lakefrac(i)          !< Fraction of lake [1]
         MetState(i)%FRSNO = snowc(i) !snowfrac
+        ! Land without snow or land ice (TODO: here we assume FRLAND is without ice already)
+        FRLAND_NOSNO_NOICE = MetState(i)%FRLAND - MetState(i)%FRSNO !- MetState(i)%FRLANDIC
         ! Water without sea ice
         FRWATER = MetState(i)%FRLAKE + MetState(i)%FROCEAN - MetState(i)%FRSEAICE
         ! Land and sea ice
@@ -459,11 +465,11 @@ contains
         end if
 
         !TODO: need to check the order of the five variables in dust_in
-        MetState(i)%CLAYFRAC = dust_in(i, 1)        !< Fraction of clay [1]
-        MetState(i)%RDRAG = dust_in(i, 2) !Drag Partition [1]
-        MetState(i)%SANDFRAC = dust_in(i, 3)       !< Fraction of sand [1]
-        MetState(i)%SSM = dust_in(i, 4) ! Sediment Supply Map [1]
-        MetState(i)%USTAR_THRESHOLD = dust_in(i, 5) !< Threshold friction velocity [m/s]
+        MetState(i)%CLAYFRAC = dust_in(i, month_now, 1)        !< Fraction of clay [1]
+        MetState(i)%RDRAG = dust_in(i, month_now, 2) !Drag Partition [1]
+        MetState(i)%SANDFRAC = dust_in(i, month_now, 3)       !< Fraction of sand [1]
+        MetState(i)%SSM = dust_in(i, month_now, 4) ! Sediment Supply Map [1]
+        MetState(i)%USTAR_THRESHOLD = dust_in(i, month_now, 5) !< Threshold friction velocity [m/s]
 
         ! Near-Surface Meteorology
         MetState(i)%U10M     = u10m(i)
@@ -489,15 +495,15 @@ contains
 
         ! Radiation Properties
         MetState(i)%SUNCOS   = coszen(i) !xcosz
-        frac_temp = visbmdi / (visbmdi + visdfdi)
+        frac_temp = visbmdi(i) / (visbmdi(i) + visdfdi(i))
         MetState(i)%ALBD_VIS   = frac_temp * sfc_alb_uvvis_dir(i) + (1.0 - frac_temp) * sfc_alb_uvvis_dif(i) !albedo_vis TODO: should be vis and uv
-        frac_temp = nirbmdi / (nirbmdi + nirdfdi)
+        frac_temp = nirbmdi(i) / (nirbmdi(i) + nirdfdi(i))
         MetState(i)%ALBD_NIR   = frac_temp * sfc_alb_nir_dir(i) + (1.0 - frac_temp) * sfc_alb_nir_dif(i) !albedo_nir
         !MetState(i)%emis     = emis(i) !emissivity have not defined in MetState yet
 
         ! Radiation Fluxes
-        MetState(i)%PARDR = 0.47 * ( nirbmdi + visbmdi ) !TODO: empirical factor from papers
-        MetState(i)%PARDF = 0.57 * ( nirdfdi + visdfdi )
+        MetState(i)%PARDR = 0.47 * ( nirbmdi(i) + visbmdi(i) ) !TODO: empirical factor from papers
+        MetState(i)%PARDF = 0.57 * ( nirdfdi(i) + visdfdi(i) )
         MetState(i)%SWGDN     = swdn(i) !dswsfc
         !MetState(i)%swup     = swup(i) !not definded in MetState
         !MetState(i)%lwdn     = lwdn(i)
@@ -515,6 +521,7 @@ contains
 
     subroutine catchem_run (im, catchem_states, DustState, SeaSaltState, DryDepState, errflg)
         use CATChem, only: DustStateType, SeaSaltStateType, DryDepStateType
+        implicit none
 
         integer, intent(in) :: im
         type(catchem_container_type), intent(inout) :: catchem_states
@@ -523,6 +530,8 @@ contains
         type(DryDepStateType), intent(inout) :: DryDepState
         integer, intent(inout) :: errflg
 
+        integer:: i ! loop index
+
         ! Error handling
         !---------------
         CHARACTER(LEN=255)    :: ErrMsg
@@ -530,8 +539,8 @@ contains
         ThisLoc = ' -> at catchem_process_run (in drivers/ccpp/catchem_wrapper_utils.F90)'
 
         do i = 1, im
-            call cc_run_process(catchem_states%MetState(i), catchem_states%DiagState(i),
-                                catchem_states%ChemState(i), catchem_states%EmisState(i),
+            call cc_run_process(catchem_states%MetState(i), catchem_states%DiagState(i),   &
+                                catchem_states%ChemState(i), catchem_states%EmisState(i),  &
                                 DustState, SeaSaltState, DryDepState, errflg)
             if (errflg /= CC_SUCCESS) then
                 ErrMsg = 'Error in catchem_process_run'
@@ -545,6 +554,7 @@ contains
 
     subroutine catchem_finalize (catchem_states, DustState, SeaSaltState, DryDepState, errflg)
         use CATChem, only: DustStateType, SeaSaltStateType, DryDepStateType
+        implicit none
 
         type(catchem_container_type), intent(inout) :: catchem_states
         type(DustStateType), intent(inout) :: DustState
@@ -619,7 +629,7 @@ contains
         !local variables
         integer :: i, n
         integer :: ind_start
-        real(kind_phys) :: con(ket), con_rev(ket), unit_conv
+        real(kind_phys) :: con(kte), con_rev(kte), unit_conv
 
         !TODO: here we assume chemical tracers are placed at the end after other tracers and
         !      the order of the chemical tracers in ChemState is the same as in chemarr
@@ -667,7 +677,7 @@ contains
                 con_rev = con(size(con):1:-1)
                 !unite conversion
                 if(ChemState(i)%ChemSpecies(n)%is_gas) then
-                    unit_conv = 28.9644  / ChemState%ChemSpecies(index)%mw_g * 1.0e6  ! convert from kg/kg to ppm for gases
+                    unit_conv = 28.9644  / ChemState(i)%ChemSpecies(n)%mw_g * 1.0e6  ! convert from kg/kg to ppm for gases
                 else
                     unit_conv = 1.0e9 ! convert from kg/kg to ug/kg for aerosols
                 end if
@@ -687,6 +697,8 @@ contains
     !! \ingroup catchem_ccpp_group
     !!!>
     function check_allocation_error(state_name, errflg, errmsg) result(has_error)
+        implicit none
+
         character(len=*), intent(in) :: state_name
         integer, intent(in) :: errflg
         character(len=*), intent(out) :: errmsg
