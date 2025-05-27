@@ -230,8 +230,8 @@ CONTAINS
 
                   ! Fill Diagnostic Variables
                   !--------------------------
-                  DryDepState%drydep_frequency(ChemState%DryDepIndex(i)) = drydepf(1,1)
-                  DryDepState%drydep_vel(ChemState%DryDepIndex(i)) = MetState%ZMID(1) * drydepf(1,1)
+                  DryDepState%drydep_frequency(i) = drydepf(1,1)
+                  DryDepState%drydep_vel(i) = MetState%ZMID(1) * drydepf(1,1)
                   DiagState%drydep_frequency(i)= drydepf(1,1)
                   DiagState%drydep_vel(i) = MetState%ZMID(1) * drydepf(1,1)
 

@@ -274,7 +274,7 @@ contains
       real(kind_phys), intent(in) :: z0(:)           !> surface roughness length (m)
       integer,         intent(in) :: soiltyp(:)      !> soil type
       real(kind_phys), intent(in) :: soilmoist(:,:)    !> soil moisture (m3/m3)
-      real(kind_phys), intent(in) :: snowc(:)        !> snow cover fraction (0-1)
+      real(kind_phys), intent(in) :: snowc(:)        !> snow cover fraction over land (0-1)
       real(kind_phys), intent(in) :: vegfrac(:)      !> green vegetation fraction (0-1)
       real(kind_phys), intent(in) :: frlanduse(:,:)  !> fraction of each land type
       real(kind_phys), intent(in) :: frsoil(:,:)     !> fraction of each soil type
@@ -615,25 +615,22 @@ contains
     end subroutine catchem_finalize
 
 
-    subroutine cc_to_ccpp(im, kte, ntrac, ntchm, ChemState, chemarr)
+    subroutine cc_to_ccpp(im, kte, ind_start, ntchm, ChemState, chemarr)
         use CATChem, only: ChemStateType
         implicit none
 
         integer, intent(in) :: im
         integer, intent(in) :: kte
-        integer, intent(in) :: ntrac
+        integer, intent(in) :: ind_start
         integer, intent(in) :: ntchm
         type(ChemStateType), intent(in) :: ChemState(:)
         real(kind_phys), intent(inout) :: chemarr(:,:,:)
 
         !local variables
         integer :: i, n
-        integer :: ind_start
         real(kind_phys) :: con(kte), con_rev(kte), unit_conv
 
-        !TODO: here we assume chemical tracers are placed at the end after other tracers and
-        !      the order of the chemical tracers in ChemState is the same as in chemarr
-        ind_start = ntrac - ntchm
+        !TODO: here we assume the order of the chemical tracers in ChemState is the same as in chemarr
         do i = 1, im
             do n = 1, ntchm
                 con = ChemState(i)%ChemSpecies(n)%conc
@@ -645,34 +642,31 @@ contains
                 else
                     unit_conv = 1.0e-9 ! convert from ug/kg to kg/kg for aerosols
                 end if
-                chemarr(i,:,n+ind_start) = con_rev * unit_conv
+                chemarr(i,:,n+ind_start-1) = con_rev * unit_conv
             end do
         end do
 
     end subroutine cc_to_ccpp
 
-    subroutine ccpp_to_cc(im, kte, ntrac, ntchm, ChemState, chemarr)
+    subroutine ccpp_to_cc(im, kte, ind_start, ntchm, ChemState, chemarr)
         use CATChem, only: ChemStateType
         implicit none
 
         integer, intent(in) :: im
         integer, intent(in) :: kte
-        integer, intent(in) :: ntrac
+        integer, intent(in) :: ind_start
         integer, intent(in) :: ntchm
         type(ChemStateType), intent(inout) :: ChemState(:)
         real(kind_phys), intent(in) :: chemarr(:,:,:)
 
         !local variables
         integer :: i, n
-        integer :: ind_start
         real(kind_phys) :: con(kte), con_rev(kte), unit_conv
 
-        !TODO: here we assume chemical tracers are placed at the end after other tracers and
-        !      the order of the chemical tracers in ChemState is the same as in chemarr
-        ind_start = ntrac - ntchm
+        !TODO: here we assume the order of the chemical tracers in ChemState is the same as in chemarr
         do i = 1, im
             do n = 1, ntchm
-                con = chemarr(i,:,n+ind_start)
+                con = chemarr(i,:,n+ind_start-1)
                 !TODO: assume ccpp and catchem have reversed vertical layer inddex
                 con_rev = con(size(con):1:-1)
                 !unite conversion

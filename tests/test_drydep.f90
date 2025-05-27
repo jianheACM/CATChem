@@ -62,7 +62,7 @@ program test_drydep
    !----------------------------
    ! Set number of drydep species
 
-   ChemState%nSpeciesAerodrydep = 2
+   !ChemState%nSpeciesAerodrydep = 2
    DryDepState%Activate = .true.
 
    ! Meteorological State

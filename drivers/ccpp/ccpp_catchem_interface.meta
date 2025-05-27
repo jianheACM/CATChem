@@ -1,7 +1,7 @@
 [ccpp-table-properties]
   name = catchem_interface
   type = scheme
-  dependencies = ./catchem_types.F90,./catchem_wrapper_utils.F90,../../src/api/catchem.F90
+  dependencies = ../../src/core/charpak_mod.F90,../../src/core/chemstate_mod.F90,../../src/core/cmn_size_mod.F90,../../src/core/config_mod.F90,../../src/core/config_opt_mod.F90,../../src/core/constants.F90,../../src/core/diagstate_mod.F90,../../src/core/emisstate_mod.F90,../../src/core/error_mod.F90,../../src/core/gridstate_mod.F90,../../src/core/init_mod.F90,../../src/core/metstate_mod.F90,../../src/core/precision_mod.F90,../../src/core/qfyaml_mod.F90,../../src/core/species_mod.F90,../../src/core/state_mod.F90,../../src/external/GOCART/Process_Library/GOCART2G_Process.F90,../../src/external/GOCART/Process_Library/GOCART2G_MieMod.F90,../../src/process/dust/ccpr_dust_common_mod.F90,../../src/process/dust/ccpr_scheme_fengsha_mod.F90,../../src/process/dust/ccpr_scheme_ginoux_mod.F90,../../src/process/dust/CCPr_Dust_Mod.F90,../../src/process/seasalt/ccpr_seasalt_common_mod.F90,../../src/process/seasalt/ccpr_scheme_gong03_mod.F90,../../src/process/seasalt/ccpr_scheme_gong97_mod.F90,../../src/process/seasalt/ccpr_scheme_geos12_mod.F90,../../src/process/seasalt/CCPr_SeaSalt_Mod.F90,../../src/process/drydep/ccpr_scheme_GOCART_DryDep_mod.F90,../../src/process/drydep/CCPr_DryDep_Mod.F90,../../src/api/catchem.F90,./catchem_types.F90,./catchem_wrapper_utils.F90
 
 ########################################################################
 [ccpp-arg-table]
@@ -47,13 +47,12 @@
 [ccpp-arg-table]
   name = catchem_interface_finalize
   type = scheme
-[im]
-  standard_name = horizontal_loop_extent
-  long_name = horizontal loop extent
-  units = count
+[do_catchem]
+  standard_name = do_catchem_coupling
+  long_name = flag controlling catchem collection (default off)
+  units = flag
   dimensions = ()
-  type = integer
-  intent = in
+  type = logical
 [errmsg]
   standard_name = ccpp_error_message
   long_name = error message for error handling in CCPP
@@ -127,7 +126,7 @@
   kind = kind_phys
   intent = in
 [lat]
-  standard_name = Latitude
+  standard_name = latitude_in_degree
   long_name = latitude
   units = degree_north
   dimensions = (horizontal_loop_extent)
@@ -135,7 +134,7 @@
   kind = kind_phys
   intent = in
 [lon]
-  standard_name = Longitude
+  standard_name = longitude_in_degree
   long_name = longitude
   units = degree_east
   dimensions = (horizontal_loop_extent)
@@ -289,6 +288,7 @@
   type = real
   kind = kind_phys
   intent = in
+#TODO
 [landicefrac]
   standard_name = land_ice_area_fraction_of_cell_area
   long_name = fraction of horizontal grid area occupied by land ice
@@ -355,7 +355,7 @@
   kind = kind_phys
   intent = in
 [u10m]
-  standard_name = x_wind_at_10m_for_coupling
+  standard_name = x_wind_at_10m
   long_name = 10 meter u wind speed
   units = m s-1
   dimensions = (horizontal_loop_extent)
@@ -363,7 +363,7 @@
   kind = kind_phys
   intent = in
 [v10m]
-  standard_name = y_wind_at_10m_for_coupling
+  standard_name = y_wind_at_10m
   long_name = 10 meter v wind speed
   units = m s-1
   dimensions = (horizontal_loop_extent)
@@ -435,8 +435,8 @@
   kind = kind_phys
   intent = in
 [snowdepth]
-  standard_name = lwe_thickness_of_snow_amount_for_chemcoupling
-  long_name = total snow precipitation chem
+  standard_name = lwe_thickness_of_snow_amount_on_dynamics_timestep
+  long_name = snow fall at this time step
   units = m
   dimensions = (horizontal_loop_extent)
   type = real
@@ -484,22 +484,15 @@
   intent = inout
 # State Variables <<<<<<<<<<<<<<<<<<<<<<<<<<<
 [prsfc]
-  standard_name = air_pressure_at_surface
-  long_name = Air pressure at local surface
+  standard_name = surface_air_pressure
+  long_name = surface air_pressure
   units = Pa
   dimensions = (horizontal_loop_extent)
   type = real
   kind = kind_phys
   intent = in
-[prslp]
-  standard_name = us_standard_air_pressure_at_sea_level
-  long_name = standard atmospheric pressure at sea level
-  units = Pa
-  type = real
-  kind = kind_phys
-  intent = in
 [pr3d]
-  standard_name = air_pressure_at_interfaces
+  standard_name = air_pressure_at_interface
   long_name = air pressure at model layer interfaces
   units = Pa
   dimensions = (horizontal_loop_extent,vertical_interface_dimension)
@@ -514,33 +507,10 @@
   type = real
   kind = kind_phys
   intent = in
-[prl3d_dry]
-  standard_name = air_pressure_of_dry_air
-  long_name = Dry air midpoint pressure
-  units = Pa
-  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
-  type = real
-  kind = kind_phys
-  intent = in
-[pr3d_dry]
-  standard_name = air_pressure_of_dry_air_at_interfaces
-  long_name = air pressure of dry air at interfaces
-  units = Pa
-  dimensions = (horizontal_loop_extent,vertical_interface_dimension)
-  type = real
-  kind = kind_phys
-  intent = in
+#TODO: delete dry air pressure for now; not found in current GFS meta file
 [delp]
-  standard_name = air_pressure_thickness
-  long_name = Air pressure thickness
-  units = Pa
-  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
-  type = real
-  kind = kind_phys
-  intent = in
-[delp_dry]
-  standard_name = air_pressure_thickness_of_dry_air
-  long_name = Air pressure thickness of dry air
+  standard_name = air_pressure_difference_between_midlayers
+  long_name = air pressure difference between midlayers
   units = Pa
   dimensions = (horizontal_loop_extent,vertical_layer_dimension)
   type = real
@@ -555,7 +525,7 @@
   kind = kind_phys
   intent = in
 [ph3d]
-  standard_name = geopotential_at_interfaces
+  standard_name = geopotential_at_interface
   long_name = geopotential at model layer interfaces
   units = m2 s-2
   dimensions = (horizontal_loop_extent,vertical_interface_dimension)
@@ -675,20 +645,18 @@
   type = real
   kind = kind_phys
   intent = inout
-[aer_ra_feedback_in]
-  standard_name = catchem_aer_ra_feedback
-  long_name = catchem aer radiation feedback option
-  units = index
+[aero_ind_fdb]
+  standard_name = do_smoke_aerosol_indirect_feedback
+  long_name = flag for wfa ifa emission indirect feedback
+  units = flag
   dimensions = ()
-  type = integer
-  intent = in
-[aer_ra_frq_in]
-  standard_name = catchem_aer_ra_frq
-  long_name = catchem aer radiation frequency
-  units = index
+  type = logical
+[aero_dir_fdb]
+  standard_name = do_smoke_aerosol_direct_feedback
+  long_name = flag for smoke and dust radiation feedback
+  units = flag
   dimensions = ()
-  type = integer
-  intent = in
+  type = logical
 # Precipitation <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 [rainc_cpl]
   standard_name = cumulative_lwe_thickness_of_convective_precipitation_amount_for_coupling
@@ -698,9 +666,9 @@
   type = real
   kind = kind_phys
   intent = in
-[rain_cplchm]
-  standard_name = lwe_thickness_of_precipitation_amount_for_chemcoupling
-  long_name = total rain precipitation chem
+[rain_cpl]
+  standard_name = cumulative_lwe_thickness_of_precipitation_amount_for_coupling
+  long_name = total rain precipitation
   units = m
   dimensions = (horizontal_loop_extent)
   type = real
@@ -713,21 +681,6 @@
   dimensions = (horizontal_loop_extent)
   type = real
   kind = kind_phys
-[chem_conv_tr_in]
-  standard_name = catchem_conv_tr
-  long_name = catchem convective transport option
-  units = index
-  dimensions = ()
-  type = integer
-  intent = in
-[dqdt]
-  standard_name = instantaneous_water_vapor_specific_humidity_tendency_due_to_convection
-  long_name = instantaneous moisture tendency due to convection
-  units = kg kg-1 s-1
-  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
-  type = real
-  kind = kind_phys
-  intent = in
 #from mp_thompson.meta
 [pfi_lsan]
   standard_name = ice_flux_due_to_large_scale_precipitation
@@ -762,28 +715,37 @@
   dimensions = ()
   type = integer
   intent = in
-[tracer_names]
-  standard_name = atmos_mod_tracer_names
-  long_name = array of atmos model tracer names
-  units = none
-  dimensions = (number_of_tracers)
-  type = character
-  kind = len=32
-  intent = in
 [ntaero]
-  standard_name = number_of_aerosol_tracers
-  long_name = number of aerosol tracers
+  standard_name = number_of_aerosol_tracers_MG
+  long_name = number of aerosol tracers for Morrison Gettelman MP
   units = count
   dimensions = ()
   type = integer
   intent = in
-[ntchmdiag]
-  standard_name = number_of_chemical_tracers_for_diagnostics
-  long_name = number of chemical tracers for diagnostic output
+[ntchs]
+  standard_name = index_of_first_chemical_tracer_in_tracer_concentration_array
+  long_name = tracer index for first chemical tracer
+  units = index
+  dimensions = ()
+  type = integer
+[ntche]
+  standard_name = index_for_last_chemical_tracer
+  long_name = tracer index for last chemical tracer
+  units = index
+  dimensions = ()
+  type = integer
+[nchem]
+  standard_name = number_of_chemical_species_vertically_mixed
+  long_name = number of chemical vertically mixed
   units = count
   dimensions = ()
   type = integer
-  intent = in
+[ndvel]
+  standard_name = number_of_chemical_species_deposited
+  long_name = number of chemical pbl deposited
+  units = count
+  dimensions = ()
+  type = integer
 [chemarr_phys]
   standard_name = tracer_concentration_of_new_state
   long_name = tracer concentration updated by physics
@@ -800,208 +762,64 @@
   type = real
   kind = kind_phys
   intent = inout
-# Fires <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-[abem]
-  standard_name = instantaneous_anthopogenic_and_biomass_burning_emissions
-  long_name = instantaneous anthopogenic and biomass burning emissions for black carbon, organic carbon, and sulfur dioxide
-  units = kg m-2 s-1
-  dimensions = (horizontal_loop_extent,12)
-  type = real
-  kind = kind_phys
-  intent = inout
-[pert_scale_plume]
-  standard_name = plume_emissions_scaling_factor
-  long_name = Scaling factor for emissions of plume rising
-  units = none
-  dimensions = ()
-  type = real
-  kind = kind_phys
-  intent = in
-[ca_emis_plume]
-  standard_name = fraction_of_cellular_automata_for_plume_rise_emissions
-  long_name = fraction of cellular automata for plume rise emissions
-  units = frac
-  dimensions = (horizontal_loop_extent)
-  type = real
-  kind = kind_phys
-  intent = in
-[biomass_burn_opt_in]
-  standard_name = catchem_biomass_burn_opt
-  long_name = catchem biomass burning option
-  units = index
-  dimensions = ()
-  type = integer
-  intent = in
-[plumerise_flag_in]
-  standard_name = catchem_plumerise_flag
-  long_name = catchem plumerise flag
-  units = index
-  dimensions = ()
-  type = integer
-  intent = in
+# Fires <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 [plumerisefire_frq_in]
-  standard_name = catchem_plumerisefire_frq
+  standard_name = smoke_plumerise_frequency
   long_name = catchem plumerise fire frequency
-  units = index
+  units = min
   dimensions = ()
   type = integer
   intent = in
-[emis_amp_plume]
-  standard_name = plume_emissions_perturbation_amplitude
-  long_name = multiplier of emissions random perturbation of plume rise emissions
-  units = none
+[sc_factor]
+  standard_name = scale_factor_for_wildfire_emissions
+  long_name = scale factor for wildfire emissions
+  units = 1
   dimensions = ()
   type = real
   kind = kind_phys
-  intent = in
-[ebu]
-  standard_name = chem_buffer_ebu
-  long_name = chemistry buffer of ebu
-  units = various
-  dimensions = (horizontal_loop_extent,vertical_interface_dimension,1,7)
+[ebb_smoke_in]
+  standard_name = surface_smoke_emission
+  long_name = emission of surface smoke
+  units = ug m-2 s-1
+  dimensions = (horizontal_dimension)
   type = real
   kind = kind_phys
-  intent = inout
-[fire_GBBEPx]
-  standard_name = emission_fire_GBBEPx
-  long_name = emission fire GBBEPx
-  units = various
-  dimensions = (horizontal_loop_extent,5)
-  type = real
-  kind = kind_phys
-  intent = in
-[fire_MODIS]
-  standard_name = emission_fire_MODIS
-  long_name = emission fire MODIS
-  units = various
-  dimensions = (horizontal_loop_extent,13)
-  type = real
-  kind = kind_phys
-  intent = in
-# Emissions / Chem input <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<,
-[kemit_in]
-  standard_name = k_emit_dry_dep
-  long_name = catchem k emit dimension for dry deposition
-  units = index
-  dimensions = ()
-  type = integer
-  intent = in
-[pert_scale_anthro]
-  standard_name = anthropogenic_scaling_factor
-  long_name = Scaling factor for emissions of anthropogenic emissions
-  units = none
-  dimensions = ()
-  type = real
-  kind = kind_phys
-  intent = in
-[emis_amp_anthro]
-  standard_name = anthropogenic_emissions_perturbation_amplitude
-  long_name = multiplier of emissions random perturbation of anthropogenic emissions
-  units = none
-  dimensions = ()
-  type = real
-  kind = kind_phys
-  intent = in
+  active = (do_smoke_coupling)
+# Emissions / Chem input <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 [emi_in]
-  standard_name = anthropogenic_background_input_cplchp
-  long_name = anthropogenic background input cplchp
+  standard_name = anthropogenic_background_input
+  long_name = anthropogenic background input
   units = various
-  dimensions = (horizontal_loop_extent,10)
+  dimensions = (horizontal_loop_extent,1)
   type = real
   kind = kind_phys
   intent = in
 [dust_in]
-  standard_name = fengsha_dust_input
+  standard_name = fengsha_dust12m_input
   long_name = fengsha dust input
   units = various
-  dimensions = (horizontal_loop_extent,12,5)
+  dimensions = (horizontal_dimension,12,5)
   type = real
   kind = kind_phys
-  intent = in
 [DustFlx]
-  standard_name = instantaneous_dust_emission_flux
-  long_name = instantaneous dust emission flux
-  units = kg m-2 s-1
-  dimensions = (horizontal_loop_extent,5)
+  standard_name = emission_of_dust_for_smoke
+  long_name = emission of dust for smoke
+  units = ug m-2 s-1
+  dimensions = (horizontal_dimension)
   type = real
   kind = kind_phys
 # Chemistry Diagnostics <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 [drydep]
-  standard_name = instantaneous_dry_deposition
-  long_name = instantaneous dry deposition
-  units = kg m-2 s-1
-  dimensions = (horizontal_loop_extent,number_of_chemical_tracers_for_diagnostics)
+  standard_name = dry_deposition_flux
+  long_name = rrfs dry deposition flux
+  units = ug m-2
+  dimensions = (horizontal_dimension,number_of_chemical_species_deposited)
   type = real
   kind = kind_phys
-  intent = inout
 [wetdpl]
-  standard_name = instantaneous_large_scale_wet_deposition
-  long_name = instantaneous large-scale wet deposition
-  units = kg m-2 s-1
-  dimensions = (horizontal_loop_extent,number_of_chemical_tracers_for_diagnostics)
+  standard_name = mp_wet_deposition_smoke_dust
+  long_name = large scale wet deposition of smoke and dust
+  units = kg kg-1
+  dimensions = (horizontal_dimension,number_of_chemical_species_vertically_mixed)
   type = real
   kind = kind_phys
-  intent = inout
-# Cellular Automata <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-[ca_sgs_emis]
-  standard_name = flag_for_sgs_cellular_automata_in_chemical_tracer_emissions
-  long_name = switch for sgs ca in chemical tracer emissions
-  units = flag
-  dimensions = ()
-  type = logical
-  intent = in
-[ca_sgs]
-  standard_name = flag_for_sgs_cellular_automata
-  long_name = switch for sgs ca
-  units = flag
-  dimensions = ()
-  type = logical
-  intent = in
-# SPPT options <<<<<<<<<<<<<<<<<<<<<<<<<<<<
-[emis_amp_seas]
-  standard_name = sea_spray_emissions_perturbation_amplitude
-  long_name = multiplier of emissions random perturbation of sea salt emissions
-  units = none
-  dimensions = ()
-  type = real
-  kind = kind_phys
-  intent = in
-[do_sppt_emis]
-  standard_name = flag_for_stochastic_emissions_perturbations
-  long_name = flag for stochastic emissions perturbations
-  units = flag
-  dimensions = ()
-  type = logical
-  intent = in
-[sppt_wts]
-  standard_name = sppt_weights_from_coupled_process
-  long_name = weights for stochastic sppt perturbation
-  units = none
-  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
-  type = real
-  kind = kind_phys
-  intent = in
-[ca_sgs_gbbepx_frp]
-  standard_name = GBBEPx_fire_radiative_power_for_stochastic_physics
-  long_name = GBBEPx fire radiative power for stochastic physics
-  units = MW
-  dimensions = (horizontal_loop_extent)
-  type = real
-  kind = kind_phys
-  intent = out
-[emis_amp_dust]
-  standard_name = dust_emissions_perturbation_amplitude
-  long_name = multiplier of emissions random perturbation of dust emissions
-  units = none
-  dimensions = ()
-  type = real
-  kind = kind_phys
-  intent = in
-[pert_scale_dust]
-  standard_name = dust_emissions_scaling_factor
-  long_name = Scaling factor for emissions of dust emissions
-  units = none
-  dimensions = ()
-  type = real
-  kind = kind_phys
-  intent = in

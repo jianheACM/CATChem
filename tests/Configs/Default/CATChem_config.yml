@@ -10,15 +10,17 @@ simulation:
   name: test
   start_date: 20240501 0000
   end_date: 20240501 0100
-  species_filename: Configs/Default/CATChem_species.yml
-  emission_filename: Configs/Default/CATChem_emission.yml
+  #species_filename: ./Configs/Default/CATChem_species.yml
+  #emission_filename: ./Configs/Default/CATChem_emission.yml
+  species_filename: ../../tests/Configs/Default/CATChem_species.yml
+  emission_filename: ../../tests/Configs/Default/CATChem_emission.yml
   verbose:
     activate: true
 #============================================================================
 # Grid settings
 #============================================================================
 grid:
-  number_of_levels: 28
+  number_of_levels: 64
   number_of_soil_layers: 4
 #============================================================================
 # Timesteps settings

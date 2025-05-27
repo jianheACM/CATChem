@@ -152,15 +152,15 @@ contains
      dt, jdate, & ! Time information
      xcosz, &
      lwi, frlanduse, gvf, landicefrac, seaicefrac, oceanfrac, lakefrac, landfrac, & ! land water specific variables
-     stype, vtype, snowdepth, snowfrac, lai, frsoil, pores, resid, & ! land surface variables
+     stype, vtype, snowdepth, frsnow, lai, frsoil, pores, resid, & ! land surface variables
      ustar, u10m, v10m, tskin, ts, hf2d, lf2d, znt, prsfc, pblh, & !surface variables
      dswsfc, nirbmdi, nirdfdi, visbmdi, visdfdi, &  ! Radiation Fluxes
      sfc_alb_nir_dir, sfc_alb_nir_dif, sfc_alb_uvvis_dir, sfc_alb_uvvis_dif, & ! surface albedo
-     soilmoist, pr3d, pr3d_dry, phl3d, prl3d_dry, tk3d, q3d, us3d, vs3d, rh, & ! 3D Variables
-     delp, delp_dry, airden, pfl_lsan, pfl_isan, & ! 3D Variables
-     rain_cplchm, cldf, & ! cloud variables
+     soilmoist, pr3d, phl3d, prl3d, tk3d, q3d, us3d, vs3d, rh, & ! 3D Variables
+     delp, airden, pfl_lsan, pfl_isan, & ! 3D Variables
+     rain_cpl, cldf, & ! cloud variables
      dust_in, & ! Emissions
-     ntrac, ntchm, chemarr_phys, chemarr, & ! Chemistry Variables
+     ntrac, ntchs, ntchm, chemarr_phys, chemarr, & ! Chemistry Variables
      errmsg, errflg)
 
      implicit none
@@ -202,6 +202,7 @@ contains
 
      ! tracer information
      integer, intent(in) :: ntrac    ! total number of tracers
+     integer, intent(in) :: ntchs      ! index of first chemical tracer in tracer concentration array
      integer, intent(in) :: ntchm      ! number of chemical tracers
      !integer, intent(in) :: ntaero      ! number of aerosol tracers
      real(kind_phys), dimension(im, kte, ntrac), intent(inout) :: chemarr_phys
@@ -246,7 +247,7 @@ contains
      real(kind_phys), dimension(im), intent(in)        :: seaicefrac      !> fractin of ice cover over ocean
      real(kind_phys), dimension(im), intent(in)        :: landicefrac     !> fractin of ice cover over land
      real(kind_phys), dimension(im), intent(in)        :: oceanfrac       !> fraction of ocean cover
-     real(kind_phys), dimension(im), intent(in)        :: snowfrac        !> fraction of snow cover over land
+     real(kind_phys), dimension(im), intent(in)        :: frsnow        !> fraction of snow cover over land
      real(kind_phys), dimension(im), intent(in)        :: lakefrac        !> fraction of lake cover
      real(kind_phys), dimension(im), intent(in)        :: landfrac        !> fraction of land cover
      real(kind_phys), dimension(im), intent(in)        :: gvf             !> green vegetative fraction
@@ -284,11 +285,11 @@ contains
      real(kind_phys), dimension(im), intent(in)        :: visdfdi      !> surface visible diffuse shortwave radiation (W/m2)
 
      real(kind_phys), dimension(im, kme), intent(in) :: pr3d            !> air pressure at model layer interfaces (Pa)
-     !real(kind_phys), dimension(im, kte), intent(in) :: prl3d           !> pressure at the model level (Pa)
-     real(kind_phys), dimension(im, kme), intent(in) :: pr3d_dry        !> dry air pressure at model layer interfaces (Pa)
-     real(kind_phys), dimension(im, kte), intent(in) :: prl3d_dry       !> dry air pressure at the model level (Pa)
+     real(kind_phys), dimension(im, kte), intent(in) :: prl3d           !> pressure at the model level (Pa)
+     !real(kind_phys), dimension(im, kme), intent(in) :: pr3d_dry        !> dry air pressure at model layer interfaces (Pa)
+     !real(kind_phys), dimension(im, kte), intent(in) :: prl3d_dry       !> dry air pressure at the model level (Pa)
      real(kind_phys), dimension(im, kte), intent(in) :: delp            !> air pressure thickness at the model level (Pa)
-     real(kind_phys), dimension(im, kte), intent(in) :: delp_dry        !> dry air pressure thickness at the model level (Pa)
+     !real(kind_phys), dimension(im, kte), intent(in) :: delp_dry        !> dry air pressure thickness at the model level (Pa)
      !real(kind_phys), dimension(im, kme), intent(in) :: ph3d            !> geopotential at the model level interfaces (m2 s-2)
      real(kind_phys), dimension(im, kte), intent(in) :: phl3d           !> geopotential at the model layer (m2 s-2)
      real(kind_phys), dimension(im, kte), intent(in) :: tk3d            !> temperature at the model level (K)
@@ -303,7 +304,7 @@ contains
      real(kind_phys), dimension(im, kte), intent(in) :: pfl_isan   !>  ice flux from large scale precipitation (kg/m2/s)
 
      ! precipitation information
-     real(kind_phys), dimension(im), intent(in)        :: rain_cplchm        !> total rain at this time step (m)
+     real(kind_phys), dimension(im), intent(in)        :: rain_cpl        !> total rain at this time step (m)
      !real(kind_phys), dimension(im), intent(in)        :: rainc_cpl       !> convective rain at this time step (m)
      real(kind_phys), dimension(im), intent(in)        :: cldf            !> total cloud fraction
      !real(kind_phys), dimension(im, kte), intent(in)   :: dqdt            !> instantaneous_water_vapor_specific_humidity_tendency_due_to_convection
@@ -330,21 +331,21 @@ contains
      if (.not. do_catchem) return
 
      !give tracer from CCPP to CATChem
-     call ccpp_to_cc(im, kte, ntrac, ntchm, CATChemStates%ChemState, chemarr_phys)
+     call ccpp_to_cc(im, kte, ntchs, ntchm, CATChemStates%ChemState, chemarr_phys)
 
      ! Fill MetState Arrays
      call transform_ccpp_to_catchem(im, kme, kte, nsoil, nlndcat, nsoilcat, lat, lon, &      ! Grid Information
                                         dt, jdate, garea, &  ! Grid Information
                                         lwi, &  ! Model Options
-                                        tk3d, q3d, pr3d_dry, pr3d, prl3d_dry, rh, &  ! Meteorological Variables
+                                        tk3d, q3d, pr3d, pr3d, prl3d, rh, &  ! Meteorological Variables; TODO: not using dry air pressre and delp for now
                                         us3d, vs3d, delp, phl3d, &  ! Meteorological Variables
-                                        u10m, v10m, tskin, prsfc, ts, rain_cplchm, &  ! Meteorological Variables
-                                        cldf, airden, delp_dry, &
+                                        u10m, v10m, tskin, prsfc, ts, rain_cpl, &  ! Meteorological Variables
+                                        cldf, airden, delp, &
                                         pfl_lsan, pfl_isan, &  ! precipitation variables
                                         snowdepth, vtype, stype, soilmoist, &  ! Surface Variables
                                         pblh, xcosz, &  ! Surface Variables
                                         ustar, hf2d, lf2d, &  ! Near-Surface Meteorology
-                                        snowfrac, gvf, lai, frlanduse, frsoil, pores, resid, &  ! Surface Variables
+                                        frsnow, gvf, lai, frlanduse, frsoil, pores, resid, &  ! Surface Variables
                                         znt, landfrac, oceanfrac, lakefrac, landicefrac, seaicefrac, &
                                         dswsfc, nirbmdi, nirdfdi, visbmdi, visdfdi, &  ! Radiation Fluxes
                                         sfc_alb_nir_dir, sfc_alb_nir_dif, sfc_alb_uvvis_dir, sfc_alb_uvvis_dif,&  ! surface albedo
@@ -361,7 +362,7 @@ contains
      end if
 
      ! give chemical tracer back to CCPP
-     call cc_to_ccpp(im, kte, ntrac, ntchm, CATChemStates%ChemState, chemarr)
+     call cc_to_ccpp(im, kte, ntchs, ntchm, CATChemStates%ChemState, chemarr)
 
    end subroutine catchem_interface_run
 

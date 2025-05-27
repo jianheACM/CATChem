@@ -21,38 +21,38 @@ dust:
     map: ["dust1"]
   DU2:
     long_name: "Dust Species Fine Mode"
-    scale: [0.7]
-    map: ["dust1"]
+    scale: [1.0]
+    map: ["dust2"]
   DU3:
     long_name: "Dust Species Fine Mode"
-    scale: [0.7]
-    map: ["dust1"]
+    scale: [1.0]
+    map: ["dust3"]
   DU4:
     long_name: "Dust Species Fine Mode"
-    scale: [1.0, 1.0]
-    map: ["dust1", "dust2"]
+    scale: [1.0]
+    map: ["dust4"]
   DU5:
     long_name: "Dust Species Coarse Mode"
-    scale: [1.0, 1.0]
-    map: ["dust1", "dust2"]
+    scale: [1.0]
+    map: ["dust5"]
 seasalt:
   SeaS1:
     long_name: "Seasalt Species Fine Mode"
     scale: [1.0]
-    map: ["dust1"] ##dummy mapping here for test only
+    map: ["seas1"] ##dummy mapping here for test only
   SeaS2:
     long_name: "Seasalt Species Fine Mode"
-    scale: [0.7]
-    map: ["dust1"]
+    scale: [1.0]
+    map: ["seas2"]
   SeaS3:
     long_name: "Seasalt Species Fine Mode"
-    scale: [0.7]
-    map: ["dust1"]
+    scale: [1.0]
+    map: ["seas3"]
   SeaS4:
     long_name: "Seasalt Species Fine Mode"
-    scale: [1.0, 1.0]
-    map: ["dust1", "dust2"]
+    scale: [1.0]
+    map: ["seas4"]
   SeaS5:
     long_name: "Seasalt Species Coarse Mode"
-    scale: [1.0, 1.0]
-    map: ["dust1", "dust2"]
+    scale: [1.0]
+    map: ["seas5"]

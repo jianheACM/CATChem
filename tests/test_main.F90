@@ -14,7 +14,7 @@ program test_main
    INTEGER:: rc          ! Success or failure
 
    ! Local variables
-   integer :: index
+   integer :: index, index1
    CHARACTER(len=50), PARAMETER :: DUST1 = 'dust1'
    CHARACTER(len=50), PARAMETER :: DUST2 = 'dust2'
 
@@ -45,13 +45,13 @@ program test_main
 
    ! Check Species names and idnex numbers for consistency
    print *, 'Checking Species names and idnex numbers for consistency'
-   call cc_find_species_by_name(ChemState, DUST1, index, RC)
+   call cc_find_species_by_name(ChemState, DUST1, index1, RC)
    if (rc /= CC_SUCCESS) then
       errMsg = 'Error finding species index: ' // TRIM( DUST1 )
       call cc_emit_error(errMsg, rc, thisLoc)
       stop 1
    endif
-   if (index /= 1) then
+   if (index1 /= 9) then
       errMsg = 'Error: index for ' // TRIM( DUST1 ) // ' is not 1'
       call cc_emit_error(errMsg, rc, thisLoc)
       stop 1
@@ -65,39 +65,39 @@ program test_main
       call cc_emit_error(errMsg, rc, thisLoc)
       stop 1
    endif
-   if (index /= 2) then
+   if (index /= 10) then
       errMsg = 'Error: index for ' // TRIM( DUST2 ) // ' is not 2'
       call cc_emit_error(errMsg, rc, thisLoc)
       stop 1
    endif
 
    ! Ensure dust1 is an aerosol and is_dust
-   if (.not. ChemState%ChemSpecies(1)%is_aerosol) then
+   if (.not. ChemState%ChemSpecies(index1)%is_aerosol) then
       errMsg = 'Error: dust1 is not an aerosol'
       call cc_emit_error(errMsg, rc, thisLoc)
       stop 1
    endif
-   if (.not. ChemState%ChemSpecies(1)%is_dust) then
+   if (.not. ChemState%ChemSpecies(index1)%is_dust) then
       errMsg = 'Error: dust1 is not a dust'
       call cc_emit_error(errMsg, rc, thisLoc)
       stop 1
    endif
-   if (ChemState%ChemSpecies(1)%is_seasalt) then
+   if (ChemState%ChemSpecies(index1)%is_seasalt) then
       errMsg = 'Error: dust2 is categorized as seasalt'
       call cc_emit_error(errMsg, rc, thisLoc)
       stop 1
    endif
-   if (ChemState%ChemSpecies(1)%is_gas) then
+   if (ChemState%ChemSpecies(index1)%is_gas) then
       errMsg = 'Error: dust2 is categorized as gas'
       call cc_emit_error(errMsg, rc, thisLoc)
       stop 1
    endif
 
    ! Check numerical values of dust1
-   call assert_close(ChemState%ChemSpecies(1)%lower_radius, 0.1_fp, msg="dust1 lower radius")
-   call assert_close(ChemState%ChemSpecies(1)%upper_radius, 1.0_fp, msg="dust1 upper radius")
-   call assert_close(ChemState%ChemSpecies(1)%radius, 0.8_fp, msg="dust1 radius")
-   call assert_close(ChemState%ChemSpecies(1)%density, 2500.0_fp, msg="dust1 density")
+   call assert_close(ChemState%ChemSpecies(index1)%lower_radius, 0.1_fp, msg="dust1 lower radius")
+   call assert_close(ChemState%ChemSpecies(index1)%upper_radius, 1.0_fp, msg="dust1 upper radius")
+   call assert_close(ChemState%ChemSpecies(index1)%radius, 0.73_fp, msg="dust1 radius")
+   call assert_close(ChemState%ChemSpecies(index1)%density, 2500.0_fp, msg="dust1 density")
 
    ! write grid info
    write(*,*) 'Grid info:'
