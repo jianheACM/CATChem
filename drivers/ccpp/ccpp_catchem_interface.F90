@@ -17,7 +17,7 @@
 !! \note This is part of the CATCHEM-CCPP interface layer that enables
 !!       chemistry calculations within the CCPP framework
 !!!>
-module catchem_interface
+module ccpp_catchem_interface
 
   use catchem_types, only: catchem_container_type !> CATChem container type
 
@@ -367,4 +367,4 @@ contains
    end subroutine ccpp_catchem_interface_run
 
 
-end module catchem_interface
+end module ccpp_catchem_interface
