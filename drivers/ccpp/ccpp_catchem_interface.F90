@@ -31,7 +31,7 @@ implicit none
 
 private
 
-public :: catchem_interface_init, catchem_interface_run, catchem_interface_finalize
+public :: ccpp_catchem_interface_init, ccpp_catchem_interface_run, ccpp_catchem_interface_finalize
 
 type(ConfigType) :: Config                          !> CATChem configuration object
 type(DustStateType) :: DustState
@@ -66,7 +66,7 @@ contains
    !!
    !! \ingroup catchem_ccpp_group
    !!!>
-   subroutine catchem_interface_init(catchem_configfile_in, do_catchem, &
+   subroutine ccpp_catchem_interface_init(catchem_configfile_in, do_catchem, &
                                  im, errmsg, errflg)
       implicit none
       ! Input parameters
@@ -105,13 +105,13 @@ contains
      end if
 
 
-   end subroutine catchem_interface_init
+   end subroutine ccpp_catchem_interface_init
 
   !> \brief Brief description of the subroutine
   !!
   !! \section arg_table_catchem_gocart_interface_finalize Argument Table
   !!
-  subroutine catchem_interface_finalize(do_catchem, errmsg, errflg)
+  subroutine ccpp_catchem_interface_finalize(do_catchem, errmsg, errflg)
 
    implicit none
 
@@ -136,7 +136,7 @@ contains
          return
    end if
 
-  end subroutine catchem_interface_finalize
+  end subroutine ccpp_catchem_interface_finalize
 
   !>
   !! This is the Configurable ATmospheric Chemistry (CATChem)
@@ -146,7 +146,7 @@ contains
   !!
   !>\section catchem_phase1_group CATChem Scheme General Algorithm
   !>
-  subroutine catchem_interface_run(im, kte, kme, garea, nsoil, nlndcat, nsoilcat, &
+  subroutine ccpp_catchem_interface_run(im, kte, kme, garea, nsoil, nlndcat, nsoilcat, &
      lat, lon, & ! Grid information
      do_catchem, & ! CATChem Flag on
      dt, jdate, & ! Time information
@@ -364,7 +364,7 @@ contains
      ! give chemical tracer back to CCPP
      call cc_to_ccpp(im, kte, ntchs, ntchm, CATChemStates%ChemState, chemarr)
 
-   end subroutine catchem_interface_run
+   end subroutine ccpp_catchem_interface_run
 
 
 end module catchem_interface
