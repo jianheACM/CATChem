@@ -20,6 +20,7 @@
   units = flag
   dimensions = ()
   type = logical
+  intent = in
 [catchem_configfile_in]
   standard_name = catchem_configfile
   long_name = catchem configuration file name
@@ -53,6 +54,7 @@
   units = flag
   dimensions = ()
   type = logical
+  intent = in
 [errmsg]
   standard_name = ccpp_error_message
   long_name = error message for error handling in CCPP
@@ -170,6 +172,7 @@
   units = flag
   dimensions = ()
   type = logical
+  intent = in
 # TIME VARIABLES <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 [dt]
   standard_name = timestep_for_physics
@@ -651,12 +654,14 @@
   units = flag
   dimensions = ()
   type = logical
+  intent = in
 [aero_dir_fdb]
   standard_name = do_smoke_aerosol_direct_feedback
   long_name = flag for smoke and dust radiation feedback
   units = flag
   dimensions = ()
   type = logical
+  intent = in
 # Precipitation <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 [rainc_cpl]
   standard_name = cumulative_lwe_thickness_of_convective_precipitation_amount_for_coupling
@@ -681,6 +686,7 @@
   dimensions = (horizontal_loop_extent)
   type = real
   kind = kind_phys
+  intent = in
 #from mp_thompson.meta
 [pfi_lsan]
   standard_name = ice_flux_due_to_large_scale_precipitation
@@ -690,7 +696,6 @@
   type = real
   kind = kind_phys
   intent = inout
-  optional = True
 [pfl_lsan]
   standard_name = liquid_flux_due_to_large_scale_precipitation
   long_name = instantaneous 3D flux of liquid water from nonconvective precipitation
@@ -699,7 +704,6 @@
   type = real
   kind = kind_phys
   intent = inout
-  optional = True
 # Tracer info <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 [ntrac]
   standard_name = number_of_tracers
@@ -728,24 +732,28 @@
   units = index
   dimensions = ()
   type = integer
+  intent = in
 [ntche]
   standard_name = index_for_last_chemical_tracer
   long_name = tracer index for last chemical tracer
   units = index
   dimensions = ()
   type = integer
+  intent = in
 [nchem]
   standard_name = number_of_chemical_species_vertically_mixed
   long_name = number of chemical vertically mixed
   units = count
   dimensions = ()
   type = integer
+  intent = in
 [ndvel]
   standard_name = number_of_chemical_species_deposited
   long_name = number of chemical pbl deposited
   units = count
   dimensions = ()
   type = integer
+  intent = in
 [chemarr_phys]
   standard_name = tracer_concentration_of_new_state
   long_name = tracer concentration updated by physics
@@ -777,6 +785,7 @@
   dimensions = ()
   type = real
   kind = kind_phys
+  intent = in
 [ebb_smoke_in]
   standard_name = surface_smoke_emission
   long_name = emission of surface smoke
@@ -785,6 +794,7 @@
   type = real
   kind = kind_phys
   active = (do_smoke_coupling)
+  intent = in
 # Emissions / Chem input <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 [emi_in]
   standard_name = anthropogenic_background_input
@@ -801,6 +811,7 @@
   dimensions = (horizontal_dimension,12,5)
   type = real
   kind = kind_phys
+  intent = in
 [DustFlx]
   standard_name = emission_of_dust_for_smoke
   long_name = emission of dust for smoke
@@ -808,6 +819,7 @@
   dimensions = (horizontal_dimension)
   type = real
   kind = kind_phys
+  intent = inout
 # Chemistry Diagnostics <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 [drydep]
   standard_name = dry_deposition_flux
@@ -816,6 +828,7 @@
   dimensions = (horizontal_dimension,number_of_chemical_species_deposited)
   type = real
   kind = kind_phys
+  intent = inout
 [wetdpl]
   standard_name = mp_wet_deposition_smoke_dust
   long_name = large scale wet deposition of smoke and dust
@@ -823,3 +836,4 @@
   dimensions = (horizontal_dimension,number_of_chemical_species_vertically_mixed)
   type = real
   kind = kind_phys
+  intent = inout
