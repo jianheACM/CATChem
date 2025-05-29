@@ -1081,7 +1081,7 @@ contains
           chem(i,k,j,p_sulf)=chem(i,k,j,p_sulf)+emis_ant(i,k,j,p_e_sulf)*factor
           chem(i,k,j,p_so2)=chem(i,k,j,p_so2)+emis_ant(i,k,j,p_e_so2)*factor2
           chem(i,k,j,p_no) =chem(i,k,j,p_no) +emis_ant(i,k,j,p_e_no )*factor2
-          chem(i,k,j,p_ch3cho) =chem(i,k,j,p_no2) +emis_ant(i,k,j,p_e_ch3cho)*factor2
+          chem(i,k,j,p_ch3cho) =chem(i,k,j,p_ch3cho) +emis_ant(i,k,j,p_e_ch3cho)*factor2
           chem(i,k,j,p_nh3) =chem(i,k,j,p_nh3) +emis_ant(i,k,j,p_e_nh3)*factor2
           chem(i,k,j,p_co) =chem(i,k,j,p_co) +emis_ant(i,k,j,p_e_co )*factor2
           chem(i,k,j,p_ch4) =chem(i,k,j,p_ch4) +emis_ant(i,k,j,p_e_ch4)*factor2
