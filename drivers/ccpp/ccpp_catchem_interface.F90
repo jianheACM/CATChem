@@ -1,4 +1,4 @@
-!> \file catchem_interface_utils.F90
+!> \file ccpp_catchem_interface.F90
 !! \brief CATCHEM-CCPP interface utilities module
 !!
 !! \details
@@ -47,8 +47,8 @@ contains
 
 
 
-   !> \section arg_table_catchem_interface_init Argument Table
-   !! \htmlinclude catchem_interface_init.html
+   !> \section arg_table_ccpp_catchem_interface_init Argument Table
+   !! \htmlinclude ccpp_catchem_interface_init.html
    !!
    !! \brief Initialize the CATChem container
    !! \param[in] catchem_configfile_in Name of the CATChem configuration file
@@ -109,8 +109,8 @@ contains
 
   !> \brief Brief description of the subroutine
   !!
-  !! \section arg_table_catchem_gocart_interface_finalize Argument Table
-  !!
+  !! \section arg_table_ccpp_catchem_interface_finalize Argument Table
+  !! \htmlinclude ccpp_catchem_interface_finalize.html
   subroutine ccpp_catchem_interface_finalize(do_catchem, errmsg, errflg)
 
    implicit none
@@ -141,10 +141,9 @@ contains
   !>
   !! This is the Configurable ATmospheric Chemistry (CATChem)
   !! This is the CATChem interface Module
-  !! \section arg_table_catchem_runphase1_interface_run Argument Table
-  !! \htmlinclude catchem_runphase1_wrapper_run.html
+  !! \section arg_table_ccpp_catchem_interface_run Argument Table
+  !! \htmlinclude ccpp_catchem_interface_run.html
   !!
-  !>\section catchem_phase1_group CATChem Scheme General Algorithm
   !>
   subroutine ccpp_catchem_interface_run(im, kte, kme, garea, nsoil, nlndcat, nsoilcat, &
      lat, lon, & ! Grid information

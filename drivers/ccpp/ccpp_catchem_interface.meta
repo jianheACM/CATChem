@@ -113,7 +113,7 @@
   intent = in
 [rlat]
   standard_name = latitude
-  long_name = latitude
+  long_name = grid latitude
   units = radian
   dimensions = (horizontal_loop_extent)
   type = real
@@ -121,7 +121,7 @@
   intent = in
 [rlon]
   standard_name = longitude
-  long_name = longitude
+  long_name = grid longitude
   units = radian
   dimensions = (horizontal_loop_extent)
   type = real
