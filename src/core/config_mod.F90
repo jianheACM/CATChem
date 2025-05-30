@@ -233,7 +233,7 @@ CONTAINS
       integer :: n
       CHARACTER(LEN=QFYAML_NamLen) :: key
       CHARACTER(LEN=QFYAML_StrLen) :: v_str
-      real    :: v_real
+      real(f4)    :: v_real
       logical :: v_logical
 
       Character(len=17) :: tags(17)

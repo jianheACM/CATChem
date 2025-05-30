@@ -790,7 +790,7 @@
   standard_name = surface_smoke_emission
   long_name = emission of surface smoke
   units = ug m-2 s-1
-  dimensions = (horizontal_dimension)
+  dimensions = (horizontal_loop_extent)
   type = real
   kind = kind_phys
   intent = in
@@ -807,7 +807,7 @@
   standard_name = fengsha_dust12m_input
   long_name = fengsha dust input
   units = various
-  dimensions = (horizontal_dimension,12,5)
+  dimensions = (horizontal_loop_extent,12,5)
   type = real
   kind = kind_phys
   intent = in
@@ -815,7 +815,7 @@
   standard_name = emission_of_dust_for_smoke
   long_name = emission of dust for smoke
   units = ug m-2 s-1
-  dimensions = (horizontal_dimension)
+  dimensions = (horizontal_loop_extent)
   type = real
   kind = kind_phys
   intent = inout
@@ -824,7 +824,7 @@
   standard_name = dry_deposition_flux
   long_name = rrfs dry deposition flux
   units = ug m-2
-  dimensions = (horizontal_dimension,number_of_chemical_species_deposited)
+  dimensions = (horizontal_loop_extent,number_of_chemical_species_deposited)
   type = real
   kind = kind_phys
   intent = inout
@@ -832,7 +832,7 @@
   standard_name = mp_wet_deposition_smoke_dust
   long_name = large scale wet deposition of smoke and dust
   units = kg kg-1
-  dimensions = (horizontal_dimension,number_of_chemical_species_vertically_mixed)
+  dimensions = (horizontal_loop_extent,number_of_chemical_species_vertically_mixed)
   type = real
   kind = kind_phys
   intent = inout

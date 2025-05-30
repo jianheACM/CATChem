@@ -56,6 +56,7 @@ contains
 
       ! Uses
       USE GOCART2G_Process, only: DryDeposition
+      use precision_mod, only : fp
 
       IMPLICIT NONE
 
@@ -65,22 +66,22 @@ contains
       REAL, allocatable, intent(in), DIMENSION(:) :: tmpu   ! Temperature [K]
       REAL, allocatable, intent(in), DIMENSION(:) :: rhoa   ! Air density [kg/m^3]
       REAL, allocatable, intent(in), DIMENSION(:) :: hghte  ! Height [m]
-      REAL,  intent(in)     :: radius                                ! particle radius [m]
-      REAL,  intent(in)    :: rhop                                  ! particle density [kg/m^3]
-      REAL,  intent(in)               :: ustar                                 ! friction speed [m/sec]
-      REAL,  intent(in)               :: pblh                                  ! PBL height [m]
-      REAL,  intent(in)               :: hflux                                 ! sfc. sens. heat flux [W m-2]
-      REAL,  intent(in)               :: z0h                                   ! rough height, sens. heat [m]
-      REAL,  intent(in)               :: u10m                   ! 10-m u-wind component [m/sec]
-      REAL,  intent(in)               :: v10m                   ! 10-m v-wind component [m/sec]
-      REAL,  intent(in)               :: fraclake               ! fraction covered by water [1]
-      REAL,  intent(in)               :: gwettop                ! fraction soil moisture [1]
-      real, intent(in)                        :: cp
-      REAL, intent(in)                        :: g0
-      real, intent(in)                        :: von_karman
+      REAL(fp),  intent(in)     :: radius                                ! particle radius [m]
+      REAL(fp),  intent(in)    :: rhop                                  ! particle density [kg/m^3]
+      REAL(fp),  intent(in)               :: ustar                                 ! friction speed [m/sec]
+      REAL(fp),  intent(in)               :: pblh                                  ! PBL height [m]
+      REAL(fp),  intent(in)               :: hflux                                 ! sfc. sens. heat flux [W m-2]
+      REAL(fp),  intent(in)               :: z0h                                   ! rough height, sens. heat [m]
+      REAL(fp),  intent(in)               :: u10m                   ! 10-m u-wind component [m/sec]
+      REAL(fp),  intent(in)               :: v10m                   ! 10-m v-wind component [m/sec]
+      REAL(fp),  intent(in)               :: fraclake               ! fraction covered by water [1]
+      REAL(fp),  intent(in)               :: gwettop                ! fraction soil moisture [1]
+      real(fp), intent(in)                        :: cp
+      REAL(fp), intent(in)                        :: g0
+      real(fp), intent(in)                        :: von_karman
       logical, intent(in)                     ::  ResuspensionOpt
       ! Output
-      REAL, intent(out)  :: drydepf(1,1)
+      REAL(fp), intent(out)  :: drydepf(1,1)
       integer, intent(out) :: RC                      ! Success or Failure
 
       ! Local Variables
