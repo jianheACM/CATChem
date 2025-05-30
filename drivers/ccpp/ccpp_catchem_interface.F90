@@ -66,8 +66,8 @@ contains
    !!
    !! \ingroup catchem_ccpp_group
    !!!>
-   subroutine ccpp_catchem_interface_init(catchem_configfile_in, do_catchem, &
-                                 im, errmsg, errflg)
+   subroutine ccpp_catchem_interface_init(im, do_catchem, catchem_configfile_in,  &
+                                  errmsg, errflg)
       implicit none
       ! Input parameters
       character(len=*), intent(in) :: catchem_configfile_in
