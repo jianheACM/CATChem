@@ -15,13 +15,13 @@ contains
       ! a profile given the geopotential height.
 
       ! Arguments
-      real, intent(in) :: GEOHGT (:)
-      real, intent(in) :: hgt
+      real(fp),  intent(in) :: GEOHGT (:)
+      real(fp),  intent(in) :: hgt
       integer, intent(out) :: index
 
       ! Local Variables:
       integer :: i
-      real, dimension(:), allocatable :: diffs
+      real(fp),  dimension(:), allocatable :: diffs
 
       allocate(diffs(size(geohgt)))
 
@@ -41,11 +41,11 @@ contains
    subroutine distribute_conc_linear(ZF, plmHGT, base_emiss, emis)
 
       ! Arguments
-      real, intent(in) :: ZF(:)      ! Height of full layer (m)
+      real(fp),  intent(in) :: ZF(:)      ! Height of full layer (m)
 
-      real, intent(in) :: plmHGT  ! plume rise height
-      real, intent(in) :: base_emiss ! emission from file
-      real, intent(out) :: emis(:) ! output column emission
+      real(fp),  intent(in) :: plmHGT  ! plume rise height
+      real(fp),  intent(in) :: base_emiss ! emission from file
+      real(fp),  intent(out) :: emis(:) ! output column emission
 
       ! Local Variables:
       real(fp) :: hgt_prev     ! place holder for previous height index
@@ -95,14 +95,14 @@ contains
    subroutine CCPr_Sofiev_Distribute(ZF, plmHGT, EFrac, RC, plmPct_opt, SfcPlmPct_opt)
 
       ! Arguments
-      real, intent(in) :: ZF(:)      ! Height of full layer (m)
-      real, intent(in) :: plmHGT     ! plume rise height
-      real, intent(out) :: EFrac(:)   ! Fractional Column Emission
+      real(fp),  intent(in) :: ZF(:)      ! Height of full layer (m)
+      real(fp),  intent(in) :: plmHGT     ! plume rise height
+      real(fp),  intent(out) :: EFrac(:)   ! Fractional Column Emission
 
       integer, intent(inout) :: RC
 
-      real, optional, intent(in) :: plmPct_opt
-      real, optional, intent(in) :: SfcPlmPct_opt
+      real(fp),  optional, intent(in) :: plmPct_opt
+      real(fp),  optional, intent(in) :: SfcPlmPct_opt
 
       ! Local Variables:
       ! real(fp) :: hgt_prev                         ! place holder for previous height index
@@ -111,7 +111,7 @@ contains
       ! integer :: lev0                          ! bottom level index index
       ! integer :: lev1                          ! upper level index
       ! real(fp) :: column_frac                      ! fraction of layer in total plume height
-      ! real, allocatable :: LayPlmPct(:)  ! fraction of layer in total plume height
+      ! real(fp),  allocatable :: LayPlmPct(:)  ! fraction of layer in total plume height
       real(fp) :: plmPct
       real(fp) :: SfcPlmPct
       integer :: plmHGT_index
@@ -159,8 +159,8 @@ contains
             EFrac(plmHGT_index+1) =  (1. - plmPct/2. - SfcPlmPct)
             EFrac(1) = SfcPlmPct
          endif
-      else if (rae(plmPct, 1.) .and. rae(SfcPlmPct, 0.)) then
-         EFrac(plmHGT_index) = 1.
+      else if (rae(plmPct, 1.0_fp) .and. rae(SfcPlmPct, 0.0_fp)) then
+         EFrac(plmHGT_index) = 1.0_fp
       endif
 
       return

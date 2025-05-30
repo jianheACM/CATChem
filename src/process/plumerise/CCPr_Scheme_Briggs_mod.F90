@@ -151,15 +151,15 @@ contains
       REAL(fp),    INTENT( OUT ) :: TFRAC( : )      ! Plume Fractions
 
       ! Parameters:
-      REAL, PARAMETER :: HCRIT   = 1.0E-4 * 0.03  ! hfx min * tolerance
-      REAL, PARAMETER :: SMALL   = 3.0E-5         ! Criterion for stability
-      REAL, PARAMETER :: D3      = 1.0 / 3.0
-      REAL, PARAMETER :: D6      = 1.0 / 6.0
-      REAL, PARAMETER :: D45     = 1.0 / 45.0
-      REAL, PARAMETER :: D2664   = 1.0 / 2.664
-      REAL, PARAMETER :: D59319  = 1.0 / 59.319
-      REAL, PARAMETER :: TWOTHD  = 2.0 / 3.0
-      REAL, PARAMETER :: FIVETHD = 5.0 / 3.0
+      real(fp),  PARAMETER :: HCRIT   = 1.0E-4 * 0.03  ! hfx min * tolerance
+      real(fp),  PARAMETER :: SMALL   = 3.0E-5         ! Criterion for stability
+      real(fp),  PARAMETER :: D3      = 1.0 / 3.0
+      real(fp),  PARAMETER :: D6      = 1.0 / 6.0
+      real(fp),  PARAMETER :: D45     = 1.0 / 45.0
+      real(fp),  PARAMETER :: D2664   = 1.0 / 2.664
+      real(fp),  PARAMETER :: D59319  = 1.0 / 59.319
+      real(fp),  PARAMETER :: TWOTHD  = 2.0 / 3.0
+      real(fp),  PARAMETER :: FIVETHD = 5.0 / 3.0
 
       ! Geometric Constants:
 
@@ -168,11 +168,11 @@ contains
       ! mean gravitational acceleration [ m/sec**2 ]
       ! FSB: Value is mean of polar and equatorial values.
       ! Source: CRC Handbook (76th Ed) pp. 14-6
-      REAL, PARAMETER :: GRAV = 9.80622
+      real(fp),  PARAMETER :: GRAV = 9.80622
 
       !Parameters from PREPLM !Linear interpolation used instead-PCC
       !      INTEGER, PARAMETER :: DEG = 3       ! degree of interpolationg polynomial
-      !      REAL,    PARAMETER :: CTOK = 273.15 ! conversion from deg. C to deg. K
+      !      real(fp),     PARAMETER :: CTOK = 273.15 ! conversion from deg. C to deg. K
 
       ! Local Variables:
       INTEGER IQ              ! stability class:  1=unstbl, 2=neut, 3=stbl, 4=use DHM
@@ -198,18 +198,18 @@ contains
       REAL(fp)              :: THETG
       REAL(fp)              :: THV1
       REAL(fp)              ::THVK
-      REAL, ALLOCATABLE :: TV( : )   ! Virtual temperature
-      REAL, ALLOCATABLE :: TF( : )   ! Full-layer height temperatures
+      real(fp),  ALLOCATABLE :: TV( : )   ! Virtual temperature
+      real(fp),  ALLOCATABLE :: TF( : )   ! Full-layer height temperatures
       REAL(fp)              :: P, Q, DD, DD2
       REAL(fp)              :: DELZ
       INTEGER           :: LSTK            ! first L: ZF(L) > STKHT
       INTEGER           :: LPBL            ! first L: ZF(L) > mixing layer
       REAL(fp)              :: WSTK            ! wind speed @ top of stack [m/s]
       REAL(fp)              :: TSTK            ! temperature @ top of stack [K]
-      REAL, ALLOCATABLE :: ZSTK ( : )      ! zf( l ) - stkht [m]
-      REAL, ALLOCATABLE :: DDZF( : )       ! 1/( zf(l) - zf(l-1) )
-      REAL, ALLOCATABLE :: DTHDZ( : )      ! potential temp. grad.
-      REAL, ALLOCATABLE :: WSPD ( : )      ! wind speed [m/s]
+      real(fp),  ALLOCATABLE :: ZSTK ( : )      ! zf( l ) - stkht [m]
+      real(fp),  ALLOCATABLE :: DDZF( : )       ! 1/( zf(l) - zf(l-1) )
+      real(fp),  ALLOCATABLE :: DTHDZ( : )      ! potential temp. grad.
+      real(fp),  ALLOCATABLE :: WSPD ( : )      ! wind speed [m/s]
       LOGICAL           :: FIRSTIME = .TRUE.
       INTEGER           :: STAT
       ! Local Variables from PT3D_DEFN
@@ -619,7 +619,7 @@ contains
    END SUBROUTINE CCPr_Briggs_Plumerise
 
    real(fp) function NEUTRL(H, B, U, US) result(res)
-      real, intent(in) :: H, B, U, US
+      real(fp),  intent(in) :: H, B, U, US
 
       res = MIN( 10.0 * H, &
          1.2 * ( ( B / ( U * US * US ) ) ** 0.6 &        ! pwr 3 * 0.2
@@ -627,14 +627,14 @@ contains
    end function NEUTRL
 
    real(fp) function STABLE(B, U, S) result(res)
-      real, intent(in) :: B, U, S
-      real, parameter :: D3 = 1.0 / 3.0
+      real(fp),  intent(in) :: B, U, S
+      real(fp),  parameter :: D3 = 1.0 / 3.0
 
       res = 2.6 * ( B / ( U * S ) ) ** D3
    end function STABLE
 
    real(fp) function UNSTBL(B, U) result(res)
-      real, intent(in) :: B, U
+      real(fp),  intent(in) :: B, U
 
       res = 30.0 * ( B / U ) ** 0.6
    end function UNSTBL
