@@ -13,6 +13,7 @@
 !! \date 07/2024
 !!!>
 module CCPr_Scheme_GOCART_DryDep_Mod
+   use precision_mod, only : fp
 
    implicit none
 
@@ -56,16 +57,15 @@ contains
 
       ! Uses
       USE GOCART2G_Process, only: DryDeposition
-      use precision_mod, only : fp
 
       IMPLICIT NONE
 
       ! Arguments
       INTEGER, intent(in)                     :: km            ! number of vertical levels
       INTEGER, intent(in)             :: lwi                   ! orography flag; Land, ocean, ice mask
-      REAL, allocatable, intent(in), DIMENSION(:) :: tmpu   ! Temperature [K]
-      REAL, allocatable, intent(in), DIMENSION(:) :: rhoa   ! Air density [kg/m^3]
-      REAL, allocatable, intent(in), DIMENSION(:) :: hghte  ! Height [m]
+      REAL(fp), allocatable, intent(in), DIMENSION(:) :: tmpu   ! Temperature [K]
+      REAL(fp), allocatable, intent(in), DIMENSION(:) :: rhoa   ! Air density [kg/m^3]
+      REAL(fp), allocatable, intent(in), DIMENSION(:) :: hghte  ! Height [m]
       REAL(fp),  intent(in)     :: radius                                ! particle radius [m]
       REAL(fp),  intent(in)    :: rhop                                  ! particle density [kg/m^3]
       REAL(fp),  intent(in)               :: ustar                                 ! friction speed [m/sec]
@@ -220,17 +220,17 @@ contains
       ! INPUTS
       INTEGER, intent(in)                     :: km     ! number of vertical levels
       INTEGER,  intent(in)                    :: lwi                                    ! orography flag; Land, ocean, ice mask
-      REAL,  intent(in), DIMENSION(:), target :: tmpu   ! Temperature [K]
-      REAL,  intent(in), DIMENSION(:), target :: rhoa   ! Air density [kg/m^3]
-      REAL,  intent(in), DIMENSION(:), target :: hghte  ! Height [m]
-      REAL,  intent(in), target               :: ustar                                 ! friction speed [m/sec]
-      REAL,  intent(in), target              :: pblh                                  ! PBL height [m]
-      REAL,  intent(in), target              :: hflux                                 ! sfc. sens. heat flux [W m-2]
-      REAL,  intent(in), target              :: z0h                                   ! rough height, sens. heat [m]
-      REAL,  intent(in), target :: u10m                   ! 10-m u-wind component [m/sec]
-      REAL,  intent(in), target :: v10m                   ! 10-m v-wind component [m/sec]
-      REAL,  intent(in), target :: fraclake               ! fraction covered by water [1]
-      REAL,  intent(in), target :: gwettop                ! fraction soil moisture [1]
+      REAL(fp),  intent(in), DIMENSION(:), target :: tmpu   ! Temperature [K]
+      REAL(fp),  intent(in), DIMENSION(:), target :: rhoa   ! Air density [kg/m^3]
+      REAL(fp),  intent(in), DIMENSION(:), target :: hghte  ! Height [m]
+      REAL(fp),  intent(in), target               :: ustar                                 ! friction speed [m/sec]
+      REAL(fp),  intent(in), target              :: pblh                                  ! PBL height [m]
+      REAL(fp),  intent(in), target              :: hflux                                 ! sfc. sens. heat flux [W m-2]
+      REAL(fp),  intent(in), target              :: z0h                                   ! rough height, sens. heat [m]
+      REAL(fp),  intent(in), target :: u10m                   ! 10-m u-wind component [m/sec]
+      REAL(fp),  intent(in), target :: v10m                   ! 10-m v-wind component [m/sec]
+      REAL(fp),  intent(in), target :: fraclake               ! fraction covered by water [1]
+      REAL(fp),  intent(in), target :: gwettop                ! fraction soil moisture [1]
 
       ! INPUT/OUTPUTS
       REAL, intent(inout), pointer :: GOCART_TMPU(:,:,:)   !< temperature [K]

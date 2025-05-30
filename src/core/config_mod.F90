@@ -233,7 +233,7 @@ CONTAINS
       integer :: n
       CHARACTER(LEN=QFYAML_NamLen) :: key
       CHARACTER(LEN=QFYAML_StrLen) :: v_str
-      real(f4)    :: v_real
+      real(fp)    :: v_real
       logical :: v_logical
 
       Character(len=17) :: tags(17)
@@ -594,7 +594,7 @@ CONTAINS
       CHARACTER(LEN=QFYAML_NamLen) :: base
       CHARACTER(LEN=QFYAML_StrLen) :: v_str
       integer :: v_int
-      real    :: v_real
+      real(fp)    :: v_real
 
       Character(len=17) :: tags(5)
 
