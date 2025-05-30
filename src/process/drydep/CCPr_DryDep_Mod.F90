@@ -173,6 +173,7 @@ CONTAINS
       INTEGER :: i !< counter
       real :: radius
       real :: rhop
+      real, allocatable, dimension(:) :: tmpu, rhoa, hghte
       real :: drydepf(1,1)
       REAL(fp) :: dqa                                    ! Change in Species due to drydep
       REAL(fp) :: SpecConc                               ! Temporary Species concentration
@@ -199,27 +200,29 @@ CONTAINS
 
                   radius = ChemState%chemSpecies(ChemState%DryDepIndex(i))%radius
                   rhop = ChemState%chemSpecies(ChemState%DryDepIndex(i))%density
+                  !type conversion to match what GOCART uses
+                  tmpu = real(MetState%T) ; rhoa = real(MetState%AIRDEN) ; hghte = real(MetState%ZMID)
 
                   call CCPr_Scheme_GOCART_DryDep( MetState%NLEVS,   &
-                     MetState%T,       &
-                     MetState%AIRDEN,  &
-                     MetState%ZMID,    &
+                     tmpu,       &
+                     rhoa,       &
+                     hghte,    &
                      MetState%LWI,     &
-                     MetState%USTAR,   &
-                     MetSTate%PBLH,    &
-                     MetState%HFLUX,   &
-                     VON_KARMAN,       &
-                     Cp,               &
-                     g0,               &
-                     MetState%Z0H,     &
+                     REAL(MetState%USTAR),   &
+                     REAL(MetSTate%PBLH),    &
+                     REAL(MetState%HFLUX),   &
+                     REAL(VON_KARMAN),       &
+                     REAL(Cp),               &
+                     REAL(g0),               &
+                     REAL(MetState%Z0H),     &
                      drydepf,          &
                      DryDepState%Resuspension, &
                      radius,           &
                      rhop,             &
-                     MetState%U10M,    &
-                     MetSTate%V10M,    &
-                     MetState%FRLAKE,  &
-                     MetState%GWETTOP, &
+                     REAL(MetState%U10M),    &
+                     REAL(MetSTate%V10M),    &
+                     REAL(MetState%FRLAKE),  &
+                     REAL(MetState%GWETTOP), &
                      RC)
 
 
