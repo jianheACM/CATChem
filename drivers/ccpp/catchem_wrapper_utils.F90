@@ -208,7 +208,7 @@ contains
                                         zpbl, coszen, &  ! Surface Variables
                                         ustar, shflx, lhflx, &  ! Near-Surface Meteorology
                                         snowc, vegfrac, lai, frlanduse, frsoil, pores, resid, &  ! Surface Variables
-                                        z0, landfrac, oceanfrac, lakefrac, landicefrac, seaicefrac, &
+                                        z0, landfrac, oceanfrac, lakefrac, seaicefrac, &
                                         swdn, nirbmdi, nirdfdi, visbmdi, visdfdi, &  ! Radiation Fluxes
                                         sfc_alb_nir_dir, sfc_alb_nir_dif, sfc_alb_uvvis_dir, sfc_alb_uvvis_dif,&  ! surface albedo
                                         dust_in, &  ! Dust Emission Inputs
@@ -281,7 +281,7 @@ contains
       real(kind_phys), intent(in) :: landfrac(:)     !> fraction of land
       real(kind_phys), intent(in) :: oceanfrac(:)    !> fraction of ocean
       real(kind_phys), intent(in) :: lakefrac(:)     !> fraction of lake
-      real(kind_phys), intent(in) :: landicefrac(:)  !> fraction of land ice
+      !real(kind_phys), intent(in) :: landicefrac(:)  !> fraction of land ice
       real(kind_phys), intent(in) :: seaicefrac(:)   !> fraction of sea ice
 
       ! Near-Surface Meteorology (dim(:))
@@ -428,7 +428,8 @@ contains
         MetState(i)%FRLAI(15:17) = 0.0 !manually give index 15(snow and ice), 16(barren), 17(water) zeros
         MetState(i)%FROCEAN = oceanfrac(i)         !< Fraction of ocean [1]
         MetState(i)%FRSEAICE = seaicefrac(i)  !fice
-        MetState(i)%FRLANDIC = landicefrac(i)
+        !MetState(i)%FRLANDIC = landicefrac(i) !TODO: seems no land ice fraction in CCPP, so give zero for now
+        MetState(i)%FRLANDIC = 0.0
         MetState(i)%FRLAKE = lakefrac(i)          !< Fraction of lake [1]
         MetState(i)%FRSNO = snowc(i) !snowfrac
         ! Land without snow or land ice (TODO: here we assume FRLAND is without ice already)
@@ -440,9 +441,12 @@ contains
         ! Land snow
         FRSNO = MetState(i)%FRSNO
         ! Set IsLand, IsWater, IsIce, IsSnow based on max fractional area (adoped from GEOS-Chem)
-        MetState(i)%IsLand  = (FRLAND_NOSNO_NOICE > MAX(FRWATER, FRICE, FRSNO))
+        !MetState(i)%IsLand  = (FRLAND_NOSNO_NOICE > MAX(FRWATER, FRICE, FRSNO))
         MetState(i)%IsWater = (FRWATER > MAX(FRLAND_NOSNO_NOICE, FRICE, FRSNO))
-        MetState(i)%IsIce   = (FRICE > MAX(FRLAND_NOSNO_NOICE, FRWATER, FRSNO))
+        !MetState(i)%IsIce   = (FRICE > MAX(FRLAND_NOSNO_NOICE, FRWATER, FRSNO))
+        !define it based on LWI since we do not have land ice fraction in ccpp
+        MetState(i)%IsLand = (lwi(i) == 1) ! land
+        MetState(i)%IsIce   = (lwi(i) == 2) ! ice
         MetState(i)%IsSnow  = (FRSNO > MAX(FRLAND_NOSNO_NOICE, FRWATER, FRICE))
         !soil moisture
         MetState(i)%SOILM(:) = soilmoist(i, :)

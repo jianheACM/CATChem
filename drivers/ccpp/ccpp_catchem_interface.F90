@@ -111,6 +111,8 @@ contains
   !!
   !! \section arg_table_ccpp_catchem_interface_finalize Argument Table
   !! \htmlinclude ccpp_catchem_interface_finalize.html
+  !!
+  !>
   subroutine ccpp_catchem_interface_finalize(do_catchem, errmsg, errflg)
 
    implicit none
@@ -150,7 +152,7 @@ contains
      do_catchem, & ! CATChem Flag on
      dt, jdate, & ! Time information
      xcosz, &
-     lwi, frlanduse, gvf, landicefrac, seaicefrac, oceanfrac, lakefrac, landfrac, & ! land water specific variables
+     lwi, frlanduse, gvf, seaicefrac, oceanfrac, lakefrac, landfrac, & ! land water specific variables
      stype, vtype, snowdepth, frsnow, lai, frsoil, pores, resid, & ! land surface variables
      ustar, u10m, v10m, tskin, ts, hf2d, lf2d, znt, prsfc, pblh, & !surface variables
      dswsfc, nirbmdi, nirdfdi, visbmdi, visdfdi, &  ! Radiation Fluxes
@@ -244,7 +246,7 @@ contains
      real(kind_phys), dimension(30), intent(in)        :: pores           !> porosity of each soil type
      real(kind_phys), dimension(30), intent(in)        :: resid           !> residual water content of each soil type
      real(kind_phys), dimension(im), intent(in)        :: seaicefrac      !> fractin of ice cover over ocean
-     real(kind_phys), dimension(im), intent(in)        :: landicefrac     !> fractin of ice cover over land
+     !real(kind_phys), dimension(im), intent(in)        :: landicefrac     !> fractin of ice cover over land
      real(kind_phys), dimension(im), intent(in)        :: oceanfrac       !> fraction of ocean cover
      real(kind_phys), dimension(im), intent(in)        :: frsnow        !> fraction of snow cover over land
      real(kind_phys), dimension(im), intent(in)        :: lakefrac        !> fraction of lake cover
@@ -345,7 +347,7 @@ contains
                                         pblh, xcosz, &  ! Surface Variables
                                         ustar, hf2d, lf2d, &  ! Near-Surface Meteorology
                                         frsnow, gvf, lai, frlanduse, frsoil, pores, resid, &  ! Surface Variables
-                                        znt, landfrac, oceanfrac, lakefrac, landicefrac, seaicefrac, &
+                                        znt, landfrac, oceanfrac, lakefrac, seaicefrac, &
                                         dswsfc, nirbmdi, nirdfdi, visbmdi, visdfdi, &  ! Radiation Fluxes
                                         sfc_alb_nir_dir, sfc_alb_nir_dif, sfc_alb_uvvis_dir, sfc_alb_uvvis_dif,&  ! surface albedo
                                         dust_in, & !Emissions

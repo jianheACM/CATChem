@@ -76,7 +76,7 @@
   type = scheme
 #Grid State
 [im]
-  standard_name = horizontal_dimension
+  standard_name = horizontal_loop_extent
   long_name = horizontal loop extent
   units = count
   dimensions = ()
@@ -292,14 +292,14 @@
   kind = kind_phys
   intent = in
 #TODO
-[landicefrac]
-  standard_name = land_ice_area_fraction_of_cell_area
-  long_name = fraction of horizontal grid area occupied by land ice
-  units = frac
-  dimensions = (horizontal_loop_extent)
-  type = real
-  kind = kind_phys
-  intent = in
+#[landicefrac]
+#  standard_name = land_ice_area_fraction_of_cell_area
+#  long_name = fraction of horizontal grid area occupied by land ice
+#  units = frac
+#  dimensions = (horizontal_loop_extent)
+#  type = real
+#  kind = kind_phys
+#  intent = in
 [snowfrac]
   standard_name = surface_snow_area_fraction
   long_name = surface snow area fraction
@@ -793,7 +793,6 @@
   dimensions = (horizontal_dimension)
   type = real
   kind = kind_phys
-  active = (do_smoke_coupling)
   intent = in
 # Emissions / Chem input <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 [emi_in]
