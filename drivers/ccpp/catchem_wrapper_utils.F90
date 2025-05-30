@@ -23,7 +23,7 @@ module catchem_wrapper_utils
                       cc_init_emis, cc_init_process, cc_run_process, cc_finalize_process, &
                       CC_SUCCESS
     use catchem_types, only: catchem_container_type
-    !use machine, only: kind_phys
+    use machine, only: kind_phys
 
 
     implicit none
@@ -36,7 +36,7 @@ module catchem_wrapper_utils
     !type(ccpp_t), save, target :: cdata
 
     !temorary for testing
-    integer, parameter :: kind_phys = 4
+    !integer, parameter :: kind_phys = 4
 
 contains
 

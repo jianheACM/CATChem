@@ -22,7 +22,7 @@ module ccpp_catchem_interface
   use catchem_types, only: catchem_container_type !> CATChem container type
 
   !use physcons, only: g => con_g, pi => con_pi
-  !use machine, only: kind_phys
+  use machine, only: kind_phys
   !use catchem_config
   use CATChem
   use catchem_wrapper_utils

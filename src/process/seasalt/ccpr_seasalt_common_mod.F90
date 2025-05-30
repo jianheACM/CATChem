@@ -234,7 +234,7 @@ contains
       IMPLICIT NONE
 
       REAL(fp), INTENT(in) :: A
-      REAL, INTENT(IN) :: X
+      REAL(fp), INTENT(IN) :: X
       integer, intent(out) :: rc
 
       ! LOCAL VARIABLE

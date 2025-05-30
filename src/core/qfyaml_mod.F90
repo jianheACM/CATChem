@@ -12,7 +12,7 @@
 MODULE QFYAML_Mod
    !
    ! !USES:
-   !
+     USE Precision_Mod
      IMPLICIT NONE
      PRIVATE
    !
@@ -81,7 +81,7 @@ MODULE QFYAML_Mod
    ! !DEFINED PARAMETERS:
    !
      ! The precision kind-parameter (4-byte)
-     INTEGER, PARAMETER :: yp                    = KIND( 0.0e0 )
+     INTEGER, PARAMETER :: yp                    = fp
 
      ! Success/failure return codes
      INTEGER, PARAMETER :: QFYAML_Success        =  0
@@ -4136,14 +4136,14 @@ MODULE QFYAML_Mod
      subroutine QFYAML_String_to_Real_Arr(input_string, real_array, array_size, RC)
       implicit none
       character(len=*), intent(in) :: input_string
-      real, allocatable, intent(inout) :: real_array(:)
+      real(yp), allocatable, intent(inout) :: real_array(:)
       integer, intent(out) :: array_size
       integer, intent(inout) :: RC
 
       character(len=:), allocatable :: temp_string
       character(len=1) :: delimiter
       integer :: i, start, end, count
-      real :: temp_real
+      real(yp) :: temp_real
 
       CHARACTER(LEN=QFYAML_StrLen)    :: errMsg
       CHARACTER(LEN=QFYAML_StrLen)    :: thisLoc
