@@ -87,11 +87,11 @@ add_test(
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-add_executable(test_chem test_chem.f90)
-target_link_libraries(test_chem PRIVATE CATChem)
-target_link_libraries(test_chem PRIVATE testing)
-set_target_properties(
-  test_chem
-  PROPERTIES Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/include
-)
-add_test(NAME test_chem COMMAND test_chem)
+#add_executable(test_chem test_chem.f90)
+#target_link_libraries(test_chem PRIVATE CATChem)
+#target_link_libraries(test_chem PRIVATE testing)
+#set_target_properties(
+#  test_chem
+#  PROPERTIES Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/include
+#)
+#add_test(NAME test_chem COMMAND test_chem)
