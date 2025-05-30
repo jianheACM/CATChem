@@ -37,6 +37,7 @@
 !! \date 07/2024
 !!!>
 module CCPR_Scheme_Briggs_Mod
+   use precision_mod,  only : fp
 
    implicit none
 
@@ -130,24 +131,24 @@ contains
 
       ! Arguments:
       INTEGER, INTENT( IN )  :: EMLAYS          ! no. of emission layers
-      REAL,    INTENT( IN )  :: HFX             ! sensible heat flux [m K/s]
-      REAL,    INTENT( IN )  :: HMIX            ! mixing height [m]
-      REAL,    INTENT( IN )  :: PSFC            ! surface pressure
-      REAL,    INTENT( IN )  :: TS              ! surface temperature
-      REAL,    INTENT( IN )  :: STKDM           ! stack diameter [m]
-      REAL,    INTENT( IN )  :: STKHT           ! stack height [m]
-      REAL,    INTENT( IN )  :: STKTK           ! exhaust temperature [deg K]
-      REAL,    INTENT( IN )  :: STKVE           ! exhaust velocity [m/s]
-      REAL,    INTENT( IN )  :: USTAR           ! friction velocity [m/s]
-      REAL,    INTENT( IN )  :: QV  ( : )       ! mixing ratio
-      REAL,    INTENT( IN )  :: TA   ( : )      ! temperature [deg K]
-      REAL,    INTENT( IN )  :: UW  ( : )       ! x-direction winds
-      REAL,    INTENT( IN )  :: VW  ( : )       ! y-direction winds
-      REAL,    INTENT( IN )  :: PRESS( : )      ! PRESS at full layer hts (mod by YOJ)
-      REAL,    INTENT( IN )  :: ZF ( :  )      ! layer surface height [m]
-      REAL,    INTENT( IN )  :: ZH   ( : )      ! layer center height [m]
-      REAL,    INTENT( OUT ) :: ZPLM            ! temporarily, plume top height
-      REAL,    INTENT( OUT ) :: TFRAC( : )      ! Plume Fractions
+      REAL(fp),    INTENT( IN )  :: HFX             ! sensible heat flux [m K/s]
+      REAL(fp),    INTENT( IN )  :: HMIX            ! mixing height [m]
+      REAL(fp),    INTENT( IN )  :: PSFC            ! surface pressure
+      REAL(fp),    INTENT( IN )  :: TS              ! surface temperature
+      REAL(fp),    INTENT( IN )  :: STKDM           ! stack diameter [m]
+      REAL(fp),    INTENT( IN )  :: STKHT           ! stack height [m]
+      REAL(fp),    INTENT( IN )  :: STKTK           ! exhaust temperature [deg K]
+      REAL(fp),    INTENT( IN )  :: STKVE           ! exhaust velocity [m/s]
+      REAL(fp),    INTENT( IN )  :: USTAR           ! friction velocity [m/s]
+      REAL(fp),    INTENT( IN )  :: QV  ( : )       ! mixing ratio
+      REAL(fp),    INTENT( IN )  :: TA   ( : )      ! temperature [deg K]
+      REAL(fp),    INTENT( IN )  :: UW  ( : )       ! x-direction winds
+      REAL(fp),    INTENT( IN )  :: VW  ( : )       ! y-direction winds
+      REAL(fp),    INTENT( IN )  :: PRESS( : )      ! PRESS at full layer hts (mod by YOJ)
+      REAL(fp),    INTENT( IN )  :: ZF ( :  )      ! layer surface height [m]
+      REAL(fp),    INTENT( IN )  :: ZH   ( : )      ! layer center height [m]
+      REAL(fp),    INTENT( OUT ) :: ZPLM            ! temporarily, plume top height
+      REAL(fp),    INTENT( OUT ) :: TFRAC( : )      ! Plume Fractions
 
       ! Parameters:
       REAL, PARAMETER :: HCRIT   = 1.0E-4 * 0.03  ! hfx min * tolerance

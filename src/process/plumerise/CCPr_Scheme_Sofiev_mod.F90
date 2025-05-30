@@ -3,7 +3,7 @@
 !!!>
 module ccpr_scheme_sofiev_mod
 
-   use precision_mod, only: rae
+   use precision_mod, only: rae, fp
    implicit none
 
    PUBLIC :: CCPr_Sofiev_Plmrise
@@ -194,14 +194,14 @@ contains
       plmHGT,   &
       EmisFrac, &
       RC)
-      real, intent(in) :: z(:)
-      real, intent(in) :: T(:)
-      real, intent(in) :: P(:)
-      real, intent(in) :: PBLH
-      real, intent(in) :: psfc
-      real, intent(in) :: frp
-      real, intent(out) :: plmHGT
-      real, intent(out) :: EmisFrac(:)
+      real(fp), intent(in) :: z(:)
+      real(fp), intent(in) :: T(:)
+      real(fp), intent(in) :: P(:)
+      real(fp), intent(in) :: PBLH
+      real(fp), intent(in) :: psfc
+      real(fp), intent(in) :: frp
+      real(fp), intent(out) :: plmHGT
+      real(fp), intent(out) :: EmisFrac(:)
       integer, intent(out) :: RC
 
       integer :: pblx2_index
