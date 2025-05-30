@@ -116,12 +116,14 @@
   units = count
   dimensions = ()
   type = integer
+  intent = in
 [nsoilcat]
   standard_name = number_of_soil_categories
   long_name = number of soil categories
   units = count
   dimensions = ()
   type = integer
+  intent = in
 [lat]
   standard_name = latitude_in_degree
   long_name = latitude
