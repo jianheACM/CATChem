@@ -48,10 +48,10 @@ contains
       real, intent(out) :: emis(:) ! output column emission
 
       ! Local Variables:
-      real :: hgt_prev     ! place holder for previous height index
-      real :: dz           ! layer thickness
-      real :: total_height ! height of of plume
-      real :: column_frac  ! fraction of layer in total plume height
+      real(fp) :: hgt_prev     ! place holder for previous height index
+      real(fp) :: dz           ! layer thickness
+      real(fp) :: total_height ! height of of plume
+      real(fp) :: column_frac  ! fraction of layer in total plume height
       integer :: plmHGT_index ! plume rise height index in Z
       integer :: z            ! loop index
 
@@ -105,15 +105,15 @@ contains
       real, optional, intent(in) :: SfcPlmPct_opt
 
       ! Local Variables:
-      ! real :: hgt_prev                         ! place holder for previous height index
-      ! real :: dz                               ! layer thickness
-      real :: total_height                     ! height of of plume
+      ! real(fp) :: hgt_prev                         ! place holder for previous height index
+      ! real(fp) :: dz                               ! layer thickness
+      real(fp) :: total_height                     ! height of of plume
       ! integer :: lev0                          ! bottom level index index
       ! integer :: lev1                          ! upper level index
-      ! real :: column_frac                      ! fraction of layer in total plume height
+      ! real(fp) :: column_frac                      ! fraction of layer in total plume height
       ! real, allocatable :: LayPlmPct(:)  ! fraction of layer in total plume height
-      real :: plmPct
-      real :: SfcPlmPct
+      real(fp) :: plmPct
+      real(fp) :: SfcPlmPct
       integer :: plmHGT_index
 
       ! initialize emission array to zero
@@ -205,7 +205,7 @@ contains
       integer, intent(out) :: RC
 
       integer :: pblx2_index
-      real :: PT1, PT2, LayerDepth
+      real(fp) :: PT1, PT2, LayerDepth
 
       !find the index of 2x the pbl
       call find_height_index(z, pblh * 2, pblx2_index)
@@ -252,20 +252,20 @@ contains
       !	         11/2020: parameterization options, Yunyao Li (YL)
       !           07/2024: implemented into CATChem, Barry Baker (BB)
 
-      real Hp       !< plume height (m)
-      real pblh     !< PBL height (m)
-      real frp      !< fire radiative power (W)
-      real NFT_sq   !< N square in Free Troposphere (@ z = 2pblh)
-      real PT1, PT2 !< Potential Temperature right below and above PBL height
-      real laydepth !< depth of the layer at the PBL height
-      real grav     !< gravity
+      real(fp) Hp       !< plume height (m)
+      real(fp) pblh     !< PBL height (m)
+      real(fp) frp      !< fire radiative power (W)
+      real(fp) NFT_sq   !< N square in Free Troposphere (@ z = 2pblh)
+      real(fp) PT1, PT2 !< Potential Temperature right below and above PBL height
+      real(fp) laydepth !< depth of the layer at the PBL height
+      real(fp) grav     !< gravity
 
-      real Pf0      !< reference fire power (W)
-      real N0_sq    !< Brunt-Vaisala frequency (s-2)
-      real alpha    !< part of ABL passed freely
-      real beta     !< weights contribution of fire intensity
-      real gama     !< power-law dependence on FRP
-      real delta    !< dependence on stability in the FT
+      real(fp) Pf0      !< reference fire power (W)
+      real(fp) N0_sq    !< Brunt-Vaisala frequency (s-2)
+      real(fp) alpha    !< part of ABL passed freely
+      real(fp) beta     !< weights contribution of fire intensity
+      real(fp) gama     !< power-law dependence on FRP
+      real(fp) delta    !< dependence on stability in the FT
 
       ! ... Initial values.
       ! ... predefined values parameter set 3 to estimate whether hp higher

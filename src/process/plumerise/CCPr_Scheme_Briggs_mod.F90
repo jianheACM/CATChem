@@ -178,34 +178,34 @@ contains
       INTEGER IQ              ! stability class:  1=unstbl, 2=neut, 3=stbl, 4=use DHM
       INTEGER LPLM            ! first L: ZH(L) > Plume height ! same as RADM's KPR
       INTEGER NN              ! counter for iterations through layers
-      REAL    BFLX            ! buoyancy flux (m**4/s**3)
-      REAL    DH              ! plume rise increment to center of the plume
-      REAL    DHM             ! plume rise from momentum
-      REAL    DHSM            ! stable momentum plume rise
-      REAL    DHN             ! plume rise for neutral case
-      REAL    DHT             ! plume rise increment to the top of the plume
-      REAL    HSTAR           ! convective scale at stack (m**2/s**3)
-      REAL    PX, RX, SX      ! scratch coefficients
-      REAL    RBFLX           ! residual buoyancy flux (m**4/s**3)
-      REAL    TPLM            ! temperature at top of plume (m/s)
-      REAL    WPLM            ! wind speed  at top of plume (m/s)
-      REAL    ZMIX            ! hmix - hs
+      REAL(fp)    BFLX            ! buoyancy flux (m**4/s**3)
+      REAL(fp)    DH              ! plume rise increment to center of the plume
+      REAL(fp)    DHM             ! plume rise from momentum
+      REAL(fp)    DHSM            ! stable momentum plume rise
+      REAL(fp)    DHN             ! plume rise for neutral case
+      REAL(fp)    DHT             ! plume rise increment to the top of the plume
+      REAL(fp)    HSTAR           ! convective scale at stack (m**2/s**3)
+      REAL(fp)    PX, RX, SX      ! scratch coefficients
+      REAL(fp)    RBFLX           ! residual buoyancy flux (m**4/s**3)
+      REAL(fp)    TPLM            ! temperature at top of plume (m/s)
+      REAL(fp)    WPLM            ! wind speed  at top of plume (m/s)
+      REAL(fp)    ZMIX            ! hmix - hs
       ! Local Variables from PREPLM
       INTEGER           :: L, I, J, K
-      REAL              :: ES
-      REAL              :: QSFC
-      REAL              :: TVSFC
-      REAL              :: THETG
-      REAL              :: THV1
-      REAL              ::THVK
+      REAL(fp)              :: ES
+      REAL(fp)              :: QSFC
+      REAL(fp)              :: TVSFC
+      REAL(fp)              :: THETG
+      REAL(fp)              :: THV1
+      REAL(fp)              ::THVK
       REAL, ALLOCATABLE :: TV( : )   ! Virtual temperature
       REAL, ALLOCATABLE :: TF( : )   ! Full-layer height temperatures
-      REAL              :: P, Q, DD, DD2
-      REAL              :: DELZ
+      REAL(fp)              :: P, Q, DD, DD2
+      REAL(fp)              :: DELZ
       INTEGER           :: LSTK            ! first L: ZF(L) > STKHT
       INTEGER           :: LPBL            ! first L: ZF(L) > mixing layer
-      REAL              :: WSTK            ! wind speed @ top of stack [m/s]
-      REAL              :: TSTK            ! temperature @ top of stack [K]
+      REAL(fp)              :: WSTK            ! wind speed @ top of stack [m/s]
+      REAL(fp)              :: TSTK            ! temperature @ top of stack [K]
       REAL, ALLOCATABLE :: ZSTK ( : )      ! zf( l ) - stkht [m]
       REAL, ALLOCATABLE :: DDZF( : )       ! 1/( zf(l) - zf(l-1) )
       REAL, ALLOCATABLE :: DTHDZ( : )      ! potential temp. grad.
@@ -213,13 +213,13 @@ contains
       LOGICAL           :: FIRSTIME = .TRUE.
       INTEGER           :: STAT
       ! Local Variables from PT3D_DEFN
-      REAL      :: ZTOP            !Top height of Plume (m)
-      REAL      :: ZBOT            !Bottom height of Plume (m)
-      REAL      :: ZDIFF           !ZTOP - ZBOT (m)
-      REAL      :: DDZZ            !1.0 / ZDIFF
+      REAL(fp)      :: ZTOP            !Top height of Plume (m)
+      REAL(fp)      :: ZBOT            !Bottom height of Plume (m)
+      REAL(fp)      :: ZDIFF           !ZTOP - ZBOT (m)
+      REAL(fp)      :: DDZZ            !1.0 / ZDIFF
       INTEGER   :: LTOP            !Layer of Plume top
       INTEGER   :: LBOT            !Layer of Plume bottom
-      REAL      :: TFRAC_MV        ! Plume Fraction Minimum Value
+      REAL(fp)      :: TFRAC_MV        ! Plume Fraction Minimum Value
 
       !-----------------------------------------------------------------------
 
@@ -618,7 +618,7 @@ contains
       RETURN
    END SUBROUTINE CCPr_Briggs_Plumerise
 
-   real function NEUTRL(H, B, U, US) result(res)
+   real(fp) function NEUTRL(H, B, U, US) result(res)
       real, intent(in) :: H, B, U, US
 
       res = MIN( 10.0 * H, &
@@ -626,14 +626,14 @@ contains
          * ( H + 1.3 * B / ( U * US * US ) ) ** 0.4 ) )  ! pwr 2 * 0.2
    end function NEUTRL
 
-   real function STABLE(B, U, S) result(res)
+   real(fp) function STABLE(B, U, S) result(res)
       real, intent(in) :: B, U, S
       real, parameter :: D3 = 1.0 / 3.0
 
       res = 2.6 * ( B / ( U * S ) ) ** D3
    end function STABLE
 
-   real function UNSTBL(B, U) result(res)
+   real(fp) function UNSTBL(B, U) result(res)
       real, intent(in) :: B, U
 
       res = 30.0 * ( B / U ) ** 0.6
