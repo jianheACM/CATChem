@@ -110,6 +110,7 @@
   units = count
   dimensions = ()
   type = integer
+  intent = in
 [nlndcat]
   standard_name = number_of_vegetation_categories
   long_name = number of vegetation categories
