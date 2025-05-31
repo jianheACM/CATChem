@@ -97,7 +97,7 @@ contains
         ! Initialize the States and processes
         call cc_init_met(GridState, MetState, errflg)
         call cc_init_emis(GridState, EmisState, errflg)
-        call cc_init_chem(GridState, ChemState, errflg)
+        !call cc_init_chem(GridState, ChemState, errflg) !TODO: ChemState already allocated in cc_read_config file
         call cc_init_diag( config, DiagState, ChemState, errflg)
         call cc_init_process(config, ChemState, EmisState, DustState, SeaSaltState, DryDepState, errflg)
 

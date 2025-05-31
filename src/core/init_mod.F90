@@ -93,44 +93,6 @@ contains
 
    end subroutine Init_Emis
 
-   !> \brief Initialize the chem state
-   !!
-   !! This subroutine allocates the chem state.
-   !!
-   !! \param GridState The grid state containing information about the grid.
-   !! \param ChemState The chem state to be initialized.
-   !! \param RC The return code.
-   !!
-   !! \ingroup core_modules
-   !!!>
-   subroutine Init_Chem(GridState, ChemState, RC)
-      !
-      use GridState_Mod, Only : GridStateType
-      use ChemState_Mod
-      USE Error_Mod
-      implicit none
-
-      ! Arguments
-      TYPE(GridStateType), INTENT(IN)  :: GridState
-      TYPE(ChemStateType), INTENT(INOUT) :: ChemState
-      INTEGER,        INTENT(OUT) :: RC
-
-      ! Local variables
-      CHARACTER(LEN=255) :: ErrMsg, thisLoc
-
-      ! Initialize
-      RC = 0
-      ErrMsg = ''
-      thisLoc = ' -> at Init_Chem (in core/init_mod.F90)'
-
-      call Chem_Allocate(GridState, ChemState, RC)
-      if (RC /= CC_SUCCESS) then
-         errMsg = 'Error allocating Chem state'
-         call CC_Error(errMsg, RC , thisLoc)
-      endif
-
-   end subroutine Init_Chem
-
    !> \brief Initialize the diag state
    !!
    !! This subroutine allocates the diag state.
