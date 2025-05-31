@@ -13,7 +13,6 @@ module init_mod
    PUBLIC :: Init_Met
    PUBLIC :: Init_Diag
    PUBLIC :: Init_Emis
-   PUBLIC :: Init_Chem
 
 contains
 
