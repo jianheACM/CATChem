@@ -19,8 +19,8 @@ module catchem_wrapper_utils
                       cc_allocate_metstate, cc_allocate_chemstate, &
                       cc_allocate_diagstate, cc_allocate_emisstate, &
                       cc_emit_error, cc_check_var, cc_emit_warning, &
-                      cc_init_met, cc_init_diag, cc_init_chem, &
-                      cc_init_emis, cc_init_process, cc_run_process, cc_finalize_process, &
+                      cc_init_met, cc_init_diag, cc_init_emis, cc_init_process, &
+                      cc_run_process, cc_finalize_process, &
                       CC_SUCCESS
     use catchem_types, only: catchem_container_type
     use machine, only: kind_phys
