@@ -90,6 +90,13 @@ contains
          call CC_Error(errMsg, RC , thisLoc)
       endif
 
+      !Find mapping index from emission to chemical species
+      call Emis_Find_Chem_Map_Index(EmisState, RC)
+      if (RC /= CC_SUCCESS) then
+         errMsg = 'Error finding emission to chemical species mapping index'
+         call CC_Error(errMsg, RC , thisLoc)
+      endif
+
    end subroutine Init_Emis
 
    !> \brief Initialize the diag state
