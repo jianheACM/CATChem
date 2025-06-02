@@ -227,17 +227,3 @@ no3an3:
   density: 1500.
   is_aerosol: true
   is_drydep: true
-pm25:
-  name: pm25
-  description: primary PM25
-  lower_radius: 0.1
-  upper_radius: 1.0
-  radius: 8.7e-2
-  density: 1500.
-pm10:
-  name: pm10
-  description: primary PM10
-  lower_radius: 0.1
-  upper_radius: 1.0
-  radius: 8.7e-2
-  density: 1500.
