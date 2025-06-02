@@ -64,16 +64,18 @@ contains
    !!
    !! \ingroup core_modules
    !!!>
-   subroutine Init_Emis(GridState, EmisState, RC)
+   subroutine Init_Emis(GridState, EmisState, ChemState, RC)
       !
       use GridState_Mod, Only : GridStateType
       use EmisState_Mod
+      use ChemState_Mod, Only : ChemStateType
       USE Error_Mod
       implicit none
 
       ! Arguments
       TYPE(GridStateType), INTENT(IN)  :: GridState
       TYPE(EmisStateType), INTENT(INOUT) :: EmisState
+      TYPE(ChemStateType), INTENT(INOUT) :: ChemState
       INTEGER,        INTENT(OUT) :: RC
 
       ! Local variables
@@ -91,7 +93,7 @@ contains
       endif
 
       !Find mapping index from emission to chemical species
-      call Emis_Find_Chem_Map_Index(EmisState, RC)
+      call Emis_Find_Chem_Map_Index(EmisState, ChemState, RC)
       if (RC /= CC_SUCCESS) then
          errMsg = 'Error finding emission to chemical species mapping index'
          call CC_Error(errMsg, RC , thisLoc)
