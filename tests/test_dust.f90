@@ -64,7 +64,7 @@ program test_dust
    ! Test 2
    !----------------------------
    ! Set number of dust species to zero for now
-   ChemState%nSpeciesDust = 0
+   !ChemState%nSpeciesDust = 0
 
    ! Meteorological State
    MetState%DSOILTYPE = 1

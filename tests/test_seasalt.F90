@@ -67,7 +67,7 @@ program test_dust
    ! Test 2
    !----------------------------
    ! Set number of dust species to zero for now
-   ChemState%nSpeciesSeaSalt = 0
+   !ChemState%nSpeciesSeaSalt = 0
 
    ! Meteorological State
    MetState%SST=300.0_fp

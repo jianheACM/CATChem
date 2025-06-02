@@ -61,6 +61,9 @@ CONTAINS
       REAL(fp), DIMENSION(nDustBinsDefault), Parameter :: DefaultUpperBinRadius  = (/ 1.0e-6, 1.8e-6, 3.0e-6, 6.0e-6, 10.0e-6  /)
 
       INTEGER :: c, k ! Loop Counter
+      INTEGER, DIMENSION(1) :: min_ind
+      REAL(fp)  :: radius_temp(10)   ! radius of dust bin holder
+      LOGICAL   :: mask(10) = .FALSE. ! flag for sorting bins by radius
 
       ! Error handling
       !---------------
@@ -184,9 +187,40 @@ CONTAINS
 
             ! Dust Aerosols are present in ChmState
             !--------------------------------------
+            ALLOCATE(DustState%LowerBinRadius(DustState%nDustSpecies), STAT=RC)
+            CALL CC_CheckVar('DustState%LowerBinRadius', 0, RC)
+            IF (RC /= CC_SUCCESS) RETURN
 
-            !TODO: Need to figure out how exactly to do this at the moment
-            write(*,*) 'TODO: Need to figure out how to add back to the chemical species state '
+            ALLOCATE(DustState%UpperBinRadius(DustState%nDustSpecies), STAT=RC)
+            CALL CC_CheckVar('DustState%UpperBinRadius', 0, RC)
+            IF (RC /= CC_SUCCESS) RETURN
+
+            ALLOCATE(DustState%EffectiveRadius(DustState%nDustSpecies), STAT=RC)
+            CALL CC_CheckVar('DustState%EffectiveRadius', 0, RC)
+            IF (RC /= CC_SUCCESS) RETURN
+
+            ALLOCATE(DustState%DustDensity(DustState%nDustSpecies), STAT=RC)
+            CALL CC_CheckVar('DustState%DustDensity', 0, RC)
+            IF (RC /= CC_SUCCESS) RETURN
+
+            ALLOCATE(DustState%EmissionPerSpecies(DustState%nDustSpecies), STAT=RC)
+            CALL CC_CheckVar('DustState%EmissionPerSpecies', 0, RC)
+            IF (RC /= CC_SUCCESS) RETURN
+
+            ! Set the default values for the dust species from lower to upper bins
+            ! TODO: here we assume every dust emission species is mapped to the only one dust species in concentration
+            radius_temp(1:DustState%nDustSpecies) = ChemState%ChemSpecies(ChemState%DustIndex(:))%radius
+            mask(1:DustState%nDustSpecies) = .TRUE.
+            do k = 1, DustState%nDustSpecies
+               min_ind = MINLOC(radius_temp, mask)  ! Find the index of the minimum radius in the mask
+               DustState%LowerBinRadius(k) = ChemState%ChemSpecies(ChemState%DustIndex(min_ind(1)))%lower_radius * 1.0e-6_fp !um convert to m
+               DustState%UpperBinRadius(k) = ChemState%ChemSpecies(ChemState%DustIndex(min_ind(1)))%upper_radius * 1.0e-6_fp
+               DustState%EffectiveRadius(k) = ChemState%ChemSpecies(ChemState%DustIndex(min_ind(1)))%radius * 1.0e-6_fp
+               DustState%DustDensity(k) = ChemState%ChemSpecies(ChemState%DustIndex(min_ind(1)))%density
+               mask(min_ind) = .FALSE. ! Set the minimum to false so it won't be selected again
+               DustState%EmissionPerSpecies(k) = 0.0_fp ! Initialize to zero
+            end do
+            DustState%TotalEmission = 0.0_fp ! Initialize to zero
 
          endif
 

@@ -81,6 +81,9 @@ CONTAINS
          10. /)
 
       INTEGER :: c, k ! Loop Counter
+      INTEGER, DIMENSION(1) :: min_ind
+      REAL(fp)  :: radius_temp(10)   ! radius of sea salt bin holder
+      LOGICAL   :: mask(10) = .FALSE. ! flag for sorting bins by radius
 
       ! Error handling
       !---------------
@@ -186,9 +189,45 @@ CONTAINS
 
             ! seasalt Aerosols are present in ChmState
             !--------------------------------------
+            ALLOCATE(SeaSaltState%LowerBinRadius(SeaSaltState%nSeaSaltSpecies), STAT=RC)
+            CALL CC_CheckVar('SeaSaltState%LowerBinRadius', 0, RC)
+            IF (RC /= CC_SUCCESS) RETURN
 
-            !TODO: Need to figure out how exactly to do this at the moment
-            write(*,*) 'TODO: Need to figure out how to add back to the chemical species state '
+            ALLOCATE(SeaSaltState%UpperBinRadius(SeaSaltState%nSeaSaltSpecies), STAT=RC)
+            CALL CC_CheckVar('SeaSaltState%UpperBinRadius', 0, RC)
+            IF (RC /= CC_SUCCESS) RETURN
+
+            ALLOCATE(SeaSaltState%EffectiveRadius(SeaSaltState%nSeaSaltSpecies), STAT=RC)
+            CALL CC_CheckVar('SeaSaltState%EffectiveRadius', 0, RC)
+            IF (RC /= CC_SUCCESS) RETURN
+
+            ALLOCATE(SeaSaltState%SeaSaltDensity(SeaSaltState%nSeaSaltSpecies), STAT=RC)
+            CALL CC_CheckVar('SeaSaltState%SeaSaltDensity', 0, RC)
+            IF (RC /= CC_SUCCESS) RETURN
+
+            ALLOCATE(SeaSaltState%EmissionPerSpecies(SeaSaltState%nSeaSaltSpecies), STAT=RC)
+            CALL CC_CheckVar('SeaSaltState%EmissionPerSpecies', 0, RC)
+            IF (RC /= CC_SUCCESS) RETURN
+
+            ALLOCATE(SeaSaltState%NumberEmissionBin(SeaSaltState%nSeaSaltSpecies), STAT=RC)
+            CALL CC_CheckVar('SeaSaltState%NumberEmissionBin', 0, RC)
+            IF (RC /= CC_SUCCESS) RETURN
+
+            ! Set the default values for the SeaSalt species from lower to upper bins
+            ! TODO: here we assume every sea salt emission species is mapped to the only one species in concentration
+            radius_temp(1:SeaSaltState%nSeaSaltSpecies) = ChemState%ChemSpecies(ChemState%SeaSaltIndex(:))%radius
+            mask(1:SeaSaltState%nSeaSaltSpecies) = .TRUE.
+            do k = 1, SeaSaltState%nSeaSaltSpecies
+               min_ind = MINLOC(radius_temp, mask)  ! Find the index of the minimum radius in the mask
+               SeaSaltState%LowerBinRadius(k) = ChemState%ChemSpecies(ChemState%SeaSaltIndex(min_ind(1)))%lower_radius !TODO: keep um, not m
+               SeaSaltState%UpperBinRadius(k) = ChemState%ChemSpecies(ChemState%SeaSaltIndex(min_ind(1)))%upper_radius
+               SeaSaltState%EffectiveRadius(k) = ChemState%ChemSpecies(ChemState%SeaSaltIndex(min_ind(1)))%radius
+               SeaSaltState%SeaSaltDensity(k) = ChemState%ChemSpecies(ChemState%SeaSaltIndex(min_ind(1)))%density
+               mask(min_ind) = .FALSE. ! Set the minimum to false so it won't be selected again
+               SeaSaltState%EmissionPerSpecies(k) = 0.0_fp ! Initialize to zero
+               SeaSaltState%NumberEmissionBin(k) = 0.0_fp ! Initialize to zero
+            end do
+            SeaSaltState%TotalEmission = 0.0_fp ! Initialize to zero
 
          endif
 
