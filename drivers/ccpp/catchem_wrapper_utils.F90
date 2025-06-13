@@ -1,16 +1,23 @@
 !> \file catchem_wrapper_utils.F90
-!> \brief CATCHEM-CCPP interface utilities module
-!>
-!> \details
-!> Provides wrapper utilities for interfacing CATCHEM chemistry model with CCPP
-!> framework. Handles data transformation and management between host model and
-!> CATCHEM chemistry calculations.
-!>
-!> \author Barry Baker and Wei Li
-!>
-!> \date 11/2024
-!>
-!> \ingroup catchem_ccpp_group
+!! \brief CATCHEM-CCPP interface utilities module
+!!
+!! \defgroup catchem_wrapper_group CATChem Wrapper Utilities
+!! \brief Utility functions for CATChem interface wrappers
+!! \ingroup catchem_ccpp_group
+!!
+!! This group contains utility functions and data transformation routines
+!! used by CATChem interface wrappers, including CCPP and NUOPC interfaces.
+!!
+!! \details
+!! Provides wrapper utilities for interfacing CATCHEM chemistry model with CCPP
+!! framework. Handles data transformation and management between host model and
+!! CATCHEM chemistry calculations.
+!!>
+!! \author Barry Baker and Wei Li
+!!>
+!! \date 11/2024
+!!>
+!! \ingroup catchem_ccpp_group
 !!!>
 module catchem_wrapper_utils
 
@@ -41,15 +48,15 @@ module catchem_wrapper_utils
 contains
 
 
-    !> Allocates memory for the entire catchem container
+    ! Allocates memory for the entire catchem container
     !!
-    !! \param[in]    config         CATChem configuration
-    !! \param[inout] catchem_states Container for all CATChem states
-    !! \param[in]    im            Number of horizontal points
-    !! \param[in]    kme           Number of vertical levels
-    !! \param[in]    nsoil         Number of soil levels
-    !! \param[out]   errflg        Error flag (0=success, non-zero=failure)
-    !! \param[out]   errmsg        Error message if errflg is non-zero
+    !! \param    config         CATChem configuration
+    !! \param catchem_states Container for all CATChem states
+    !! \param    im            Number of horizontal points
+    !! \param    kme           Number of vertical levels
+    !! \param    nsoil         Number of soil levels
+    !! \param   errflg        Error flag (0=success, non-zero=failure)
+    !! \param   errmsg        Error message if errflg is non-zero
     !!
     !! \ingroup catchem_ccpp_group
     !!!>
@@ -146,53 +153,53 @@ contains
     !end subroutine allocate_catchem_container
     end subroutine catchem_init
 
-    !> Transforms CCPP meteorological arrays into CATChem meteorological and chemistry states
+    ! Transforms CCPP meteorological arrays into CATChem meteorological and chemistry states
     !!
-    !! \param[in] im         Number of horizontal grid points
-    !! \param[in] kme        Number of vertical levels
-    !! \param[in] temp       3D temperature field (K)
-    !! \param[in] spechum    3D specific humidity field (kg/kg)
-    !! \param[in] pfull      3D full level pressure (Pa)
-    !! \param[in] phalf      3D half level pressure (Pa)
-    !! \param[in] u          3D zonal wind (m/s)
-    !! \param[in] v          3D meridional wind (m/s)
-    !! \param[in] delp       3D pressure thickness (Pa)
-    !! \param[in] zh         3D geopotential height (m)
-    !! \param[in] kh         3D vertical diffusivity (m2/s)
-    !! \param[in] prsl       3D layer mean pressure (Pa)
-    !! \param[in] prslk      3D Exner function
-    !! \param[in] u10m       10m u wind (m/s)
-    !! \param[in] v10m       10m v wind (m/s)
-    !! \param[in] tskin      Surface skin temperature (K)
-    !! \param[in] ps         Surface pressure (Pa)
-    !! \param[in] precip     Precipitation rate (kg/m2/s)
-    !! \param[in] slmsk      Land-sea mask (1=land,0=sea,2=ice)
-    !! \param[in] snowh      Snow depth (m)
-    !! \param[in] vegtype    Vegetation type
-    !! \param[in] soiltyp    Soil type
-    !! \param[in] hf         Sensible heat flux (W/m2)
-    !! \param[in] ust        Friction velocity (m/s)
-    !! \param[in] zpbl       PBL height (m)
-    !! \param[in] coszen     Cosine of solar zenith angle
-    !! \param[in] albedo     Surface albedo
-    !! \param[in] emis       Surface emissivity
-    !! \param[in] ustar      Friction velocity (m/s)
-    !! \param[in] shflx      Surface sensible heat flux (W/m2)
-    !! \param[in] lhflx      Surface latent heat flux (W/m2)
-    !! \param[in] snowc      Snow cover fraction (0-1)
-    !! \param[in] vegfrac    Green vegetation fraction (0-1)
-    !! \param[in] swdn       Surface downward SW radiation (W/m2)
-    !! \param[in] swup       Surface upward SW radiation (W/m2)
-    !! \param[in] lwdn       Surface downward LW radiation (W/m2)
-    !! \param[in] lwup       Surface upward LW radiation (W/m2)
-    !! \param[in] swdnc      Clear-sky surface downward SW radiation (W/m2)
-    !! \param[in] swupc      Clear-sky surface upward SW radiation (W/m2)
-    !! \param[in] lwdnc      Clear-sky surface downward LW radiation (W/m2)
-    !! \param[in] lwupc      Clear-sky surface upward LW radiation (W/m2)
-    !! \param[inout] MetState   CATChem meteorology state
-    !! \param[inout] ChemState  CATChem chemistry state
-    !! \param[out] errmsg     Error message
-    !! \param[out] errflg     Error flag
+    !! \param im         Number of horizontal grid points
+    !! \param kme        Number of vertical levels
+    !! \param temp       3D temperature field (K)
+    !! \param spechum    3D specific humidity field (kg/kg)
+    !! \param pfull      3D full level pressure (Pa)
+    !! \param phalf      3D half level pressure (Pa)
+    !! \param u          3D zonal wind (m/s)
+    !! \param v          3D meridional wind (m/s)
+    !! \param delp       3D pressure thickness (Pa)
+    !! \param zh         3D geopotential height (m)
+    !! \param kh         3D vertical diffusivity (m2/s)
+    !! \param prsl       3D layer mean pressure (Pa)
+    !! \param prslk      3D Exner function
+    !! \param u10m       10m u wind (m/s)
+    !! \param v10m       10m v wind (m/s)
+    !! \param tskin      Surface skin temperature (K)
+    !! \param ps         Surface pressure (Pa)
+    !! \param precip     Precipitation rate (kg/m2/s)
+    !! \param slmsk      Land-sea mask (1=land,0=sea,2=ice)
+    !! \param snowh      Snow depth (m)
+    !! \param vegtype    Vegetation type
+    !! \param soiltyp    Soil type
+    !! \param hf         Sensible heat flux (W/m2)
+    !! \param ust        Friction velocity (m/s)
+    !! \param zpbl       PBL height (m)
+    !! \param coszen     Cosine of solar zenith angle
+    !! \param albedo     Surface albedo
+    !! \param emis       Surface emissivity
+    !! \param ustar      Friction velocity (m/s)
+    !! \param shflx      Surface sensible heat flux (W/m2)
+    !! \param lhflx      Surface latent heat flux (W/m2)
+    !! \param snowc      Snow cover fraction (0-1)
+    !! \param vegfrac    Green vegetation fraction (0-1)
+    !! \param swdn       Surface downward SW radiation (W/m2)
+    !! \param swup       Surface upward SW radiation (W/m2)
+    !! \param lwdn       Surface downward LW radiation (W/m2)
+    !! \param lwup       Surface upward LW radiation (W/m2)
+    !! \param swdnc      Clear-sky surface downward SW radiation (W/m2)
+    !! \param swupc      Clear-sky surface upward SW radiation (W/m2)
+    !! \param lwdnc      Clear-sky surface downward LW radiation (W/m2)
+    !! \param lwupc      Clear-sky surface upward LW radiation (W/m2)
+    !! \param MetState   CATChem meteorology state
+    !! \param ChemState  CATChem chemistry state
+    !! \param errmsg     Error message
+    !! \param errflg     Error flag
     !!
     !! \ingroup catchem_ccpp_group
     !!!>
@@ -219,119 +226,119 @@ contains
       implicit none
 
       !! Transform CCPP meteorological arrays to CATChem states
-      integer,  intent(in)    :: im              !> number of horizontal points
-      integer,  intent(in)    :: kme             !> number of vertical interfaces
-      integer,  intent(in)    :: kte             !> number of vertical levels
-      !integer, intent(in)     :: nVert           !> number of vertical levels
-      !integer, intent(in)     :: nVertInterface  !> number of vertical interfaces
-      integer, intent(in)     :: nsoil           !> number of soil levels
-      integer, intent(in)     :: nlndcat         !> number of land categories
-      integer, intent(in)     :: nsoilcat        !> number of soil categories
-      !real(kind_phys), intent(in) :: rlat(:)     !> latitude (radian)
-      !real(kind_phys), intent(in) :: rlon(:)     !> longitude (radian)
-      real(kind_phys), intent(in) :: lat(:)      !> latitude (degrees)
-      real(kind_phys), intent(in) :: lon(:)      !> longitude (degrees)
-      !integer, intent(in)     :: ktau            !> number of timestep
-      real(kind_phys), intent(in) :: dt          !> physics timestep (s)
-      integer, intent(in)     :: jdate(8)        !> current forecast date and time
-      !integer, intent(in)     :: tile_num        !> index of cubed sphere tile
-      real(kind_phys), intent(in) :: garea(:)    !> grid cell area
-      !integer, intent(in) :: aero_rad_freq_opt   !> catchem aer radiation frequency
-      !integer, intent(in) :: aero_feedback_opt   !> catchem aerosol radiation feedback option
-      !integer, intent(in) :: plmrise_freq_opt    !> catchem plmrise frequency option
-      integer, intent(in) :: lwi(:)               !> sea/land/ice=0/1/2 index
-      !integer, intent(in) :: dluse(:)            !> land use index
-      real(kind_phys), intent(in) :: pores(30)   !> maximum soil moisture content
-      real(kind_phys), intent(in) :: resid(30)   !> minimum soil moisture content
+      integer,  intent(in)    :: im              ! number of horizontal points
+      integer,  intent(in)    :: kme             ! number of vertical interfaces
+      integer,  intent(in)    :: kte             ! number of vertical levels
+      !integer, intent(in)     :: nVert           ! number of vertical levels
+      !integer, intent(in)     :: nVertInterface  ! number of vertical interfaces
+      integer, intent(in)     :: nsoil           ! number of soil levels
+      integer, intent(in)     :: nlndcat         ! number of land categories
+      integer, intent(in)     :: nsoilcat        ! number of soil categories
+      !real(kind_phys), intent(in) :: rlat(:)     ! latitude (radian)
+      !real(kind_phys), intent(in) :: rlon(:)     ! longitude (radian)
+      real(kind_phys), intent(in) :: lat(:)      ! latitude (degrees)
+      real(kind_phys), intent(in) :: lon(:)      ! longitude (degrees)
+      !integer, intent(in)     :: ktau            ! number of timestep
+      real(kind_phys), intent(in) :: dt          ! physics timestep (s)
+      integer, intent(in)     :: jdate(8)        ! current forecast date and time
+      !integer, intent(in)     :: tile_num        ! index of cubed sphere tile
+      real(kind_phys), intent(in) :: garea(:)    ! grid cell area
+      !integer, intent(in) :: aero_rad_freq_opt   ! catchem aer radiation frequency
+      !integer, intent(in) :: aero_feedback_opt   ! catchem aerosol radiation feedback option
+      !integer, intent(in) :: plmrise_freq_opt    ! catchem plmrise frequency option
+      integer, intent(in) :: lwi(:)               ! sea/land/ice=0/1/2 index
+      !integer, intent(in) :: dluse(:)            ! land use index
+      real(kind_phys), intent(in) :: pores(30)   ! maximum soil moisture content
+      real(kind_phys), intent(in) :: resid(30)   ! minimum soil moisture content
 
       ! 3D/Layer Variables (dim(:,:))
-      real(kind_phys), intent(in) :: temp(:,:)       !> temperature (K)
-      real(kind_phys), intent(in) :: spechum(:,:)    !> specific humidity (kg/kg)
-      real(kind_phys), intent(in) :: pfull(:,:)      !> full level pressure of dry air (Pa)
-      real(kind_phys), intent(in) :: pfull_wet(:,:)  !> full level pressure of moist air (Pa)
-      real(kind_phys), intent(in) :: phalf(:,:)      !> half level pressure of dry air(Pa)
-      real(kind_phys), intent(in) :: u(:,:)          !> zonal wind (m/s)
-      real(kind_phys), intent(in) :: v(:,:)          !> meridional wind (m/s)
-      real(kind_phys), intent(in) :: delp(:,:)       !> pressure thickness (Pa)
-      real(kind_phys), intent(in) :: delp_dry(:,:)   !> dry air pressure thickness (Pa)
-      real(kind_phys), intent(in) :: zh(:,:)         !> geopotential (m2/s2)
-      !real(kind_phys), intent(in) :: kh(:,:)         !> vertical diffusivity (m2/s)
-      !real(kind_phys), intent(in) :: prsl(:,:)       !> layer mean pressure (Pa)
-      !real(kind_phys), intent(in) :: prslk(:,:)      !> Exner function
-      real(kind_phys), intent(in) :: rh(:,:)         !> relative humidity [fraction]
-      real(kind_phys), intent(in) :: pfl_lsan(:,:)   !>  liquid flux from large scale precipitation (kg/m2/s)
-      real(kind_phys), intent(in) :: pfl_isan(:,:)   !>  ice flux from large scale precipitation (kg/m2/s)
-      real(kind_phys), intent(in) :: airden(:,:)   !> dry air density [kg/m3]
+      real(kind_phys), intent(in) :: temp(:,:)       ! temperature (K)
+      real(kind_phys), intent(in) :: spechum(:,:)    ! specific humidity (kg/kg)
+      real(kind_phys), intent(in) :: pfull(:,:)      ! full level pressure of dry air (Pa)
+      real(kind_phys), intent(in) :: pfull_wet(:,:)  ! full level pressure of moist air (Pa)
+      real(kind_phys), intent(in) :: phalf(:,:)      ! half level pressure of dry air(Pa)
+      real(kind_phys), intent(in) :: u(:,:)          ! zonal wind (m/s)
+      real(kind_phys), intent(in) :: v(:,:)          ! meridional wind (m/s)
+      real(kind_phys), intent(in) :: delp(:,:)       ! pressure thickness (Pa)
+      real(kind_phys), intent(in) :: delp_dry(:,:)   ! dry air pressure thickness (Pa)
+      real(kind_phys), intent(in) :: zh(:,:)         ! geopotential (m2/s2)
+      !real(kind_phys), intent(in) :: kh(:,:)         ! vertical diffusivity (m2/s)
+      !real(kind_phys), intent(in) :: prsl(:,:)       ! layer mean pressure (Pa)
+      !real(kind_phys), intent(in) :: prslk(:,:)      ! Exner function
+      real(kind_phys), intent(in) :: rh(:,:)         ! relative humidity [fraction]
+      real(kind_phys), intent(in) :: pfl_lsan(:,:)   !  liquid flux from large scale precipitation (kg/m2/s)
+      real(kind_phys), intent(in) :: pfl_isan(:,:)   !  ice flux from large scale precipitation (kg/m2/s)
+      real(kind_phys), intent(in) :: airden(:,:)   ! dry air density [kg/m3]
 
       ! Surface Variables (dim(:))
-      real(kind_phys), intent(in) :: ps(:)           !> surface pressure (Pa)
-      real(kind_phys), intent(in) :: tskin(:)        !> skin temperature (K)
-      real(kind_phys), intent(in) :: ts(:)           !> surface temperature (K)
-      !real(kind_phys), intent(in) :: slmsk(:)        !> land-sea mask (1=land,0=sea,2=ice)
-      real(kind_phys), intent(in) :: snowh(:)        !> snow depth (m)
-      integer,         intent(in) :: vegtype(:)      !> vegetation type
-      real(kind_phys), intent(in) :: lai(:)          !> leaf area index (m2/m2)
-      real(kind_phys), intent(in) :: z0(:)           !> surface roughness length (m)
-      integer,         intent(in) :: soiltyp(:)      !> soil type
-      real(kind_phys), intent(in) :: soilmoist(:,:)    !> soil moisture (m3/m3)
-      real(kind_phys), intent(in) :: snowc(:)        !> snow cover fraction over land (0-1)
-      real(kind_phys), intent(in) :: vegfrac(:)      !> green vegetation fraction (0-1)
-      real(kind_phys), intent(in) :: frlanduse(:,:)  !> fraction of each land type
-      real(kind_phys), intent(in) :: frsoil(:,:)     !> fraction of each soil type
-      real(kind_phys), intent(in) :: landfrac(:)     !> fraction of land
-      real(kind_phys), intent(in) :: oceanfrac(:)    !> fraction of ocean
-      real(kind_phys), intent(in) :: lakefrac(:)     !> fraction of lake
-      !real(kind_phys), intent(in) :: landicefrac(:)  !> fraction of land ice
-      real(kind_phys), intent(in) :: seaicefrac(:)   !> fraction of sea ice
+      real(kind_phys), intent(in) :: ps(:)           ! surface pressure (Pa)
+      real(kind_phys), intent(in) :: tskin(:)        ! skin temperature (K)
+      real(kind_phys), intent(in) :: ts(:)           ! surface temperature (K)
+      !real(kind_phys), intent(in) :: slmsk(:)        ! land-sea mask (1=land,0=sea,2=ice)
+      real(kind_phys), intent(in) :: snowh(:)        ! snow depth (m)
+      integer,         intent(in) :: vegtype(:)      ! vegetation type
+      real(kind_phys), intent(in) :: lai(:)          ! leaf area index (m2/m2)
+      real(kind_phys), intent(in) :: z0(:)           ! surface roughness length (m)
+      integer,         intent(in) :: soiltyp(:)      ! soil type
+      real(kind_phys), intent(in) :: soilmoist(:,:)    ! soil moisture (m3/m3)
+      real(kind_phys), intent(in) :: snowc(:)        ! snow cover fraction over land (0-1)
+      real(kind_phys), intent(in) :: vegfrac(:)      ! green vegetation fraction (0-1)
+      real(kind_phys), intent(in) :: frlanduse(:,:)  ! fraction of each land type
+      real(kind_phys), intent(in) :: frsoil(:,:)     ! fraction of each soil type
+      real(kind_phys), intent(in) :: landfrac(:)     ! fraction of land
+      real(kind_phys), intent(in) :: oceanfrac(:)    ! fraction of ocean
+      real(kind_phys), intent(in) :: lakefrac(:)     ! fraction of lake
+      !real(kind_phys), intent(in) :: landicefrac(:)  ! fraction of land ice
+      real(kind_phys), intent(in) :: seaicefrac(:)   ! fraction of sea ice
 
       ! Near-Surface Meteorology (dim(:))
-      real(kind_phys), intent(in) :: u10m(:)         !> 10m u wind (m/s)
-      real(kind_phys), intent(in) :: v10m(:)         !> 10m v wind (m/s)
-      real(kind_phys), intent(in) :: ustar(:)        !> friction velocity (m/s)
-      real(kind_phys), intent(in) :: zpbl(:)         !> PBL height (m)
+      real(kind_phys), intent(in) :: u10m(:)         ! 10m u wind (m/s)
+      real(kind_phys), intent(in) :: v10m(:)         ! 10m v wind (m/s)
+      real(kind_phys), intent(in) :: ustar(:)        ! friction velocity (m/s)
+      real(kind_phys), intent(in) :: zpbl(:)         ! PBL height (m)
 
       ! Surface Fluxes (dim(:))
-      !real(kind_phys), intent(in) :: hf(:)           !> sensible heat flux (W/m2)
-      real(kind_phys), intent(in) :: shflx(:)        !> surface sensible heat flux (W/m2)
-      real(kind_phys), intent(in) :: lhflx(:)        !> surface latent heat flux (W/m2)
-      real(kind_phys), intent(in) :: precip(:)       !> precipitation rate (kg/m2/s)
+      !real(kind_phys), intent(in) :: hf(:)           ! sensible heat flux (W/m2)
+      real(kind_phys), intent(in) :: shflx(:)        ! surface sensible heat flux (W/m2)
+      real(kind_phys), intent(in) :: lhflx(:)        ! surface latent heat flux (W/m2)
+      real(kind_phys), intent(in) :: precip(:)       ! precipitation rate (kg/m2/s)
 
       ! Radiation Properties (dim(:))
-      real(kind_phys), intent(in) :: coszen(:)            !> cosine of solar zenith angle
-      real(kind_phys), intent(in) :: cldf(:)              !> fraction of grid box area in which updrafts occur
-      real(kind_phys), intent(in) :: sfc_alb_nir_dir(:)   !> surface near-infrared direct albedo
-      real(kind_phys), intent(in) :: sfc_alb_nir_dif(:)   !> surface near-infrared diffuse albedo
-      real(kind_phys), intent(in) :: sfc_alb_uvvis_dir(:) !> surface visible + uv direct albedo
-      real(kind_phys), intent(in) :: sfc_alb_uvvis_dif(:) !> surface visible + uv diffuse albedo
-      !real(kind_phys), intent(in) :: emis(:)              !> surface emissivity
+      real(kind_phys), intent(in) :: coszen(:)            ! cosine of solar zenith angle
+      real(kind_phys), intent(in) :: cldf(:)              ! fraction of grid box area in which updrafts occur
+      real(kind_phys), intent(in) :: sfc_alb_nir_dir(:)   ! surface near-infrared direct albedo
+      real(kind_phys), intent(in) :: sfc_alb_nir_dif(:)   ! surface near-infrared diffuse albedo
+      real(kind_phys), intent(in) :: sfc_alb_uvvis_dir(:) ! surface visible + uv direct albedo
+      real(kind_phys), intent(in) :: sfc_alb_uvvis_dif(:) ! surface visible + uv diffuse albedo
+      !real(kind_phys), intent(in) :: emis(:)              ! surface emissivity
 
       ! Radiation Fluxes (dim(:))
-      real(kind_phys), intent(in) :: swdn(:)         !> downward shortwave radiation at surface (W/m2)
-      !real(kind_phys), intent(in) :: swup(:)         !> upward shortwave radiation at surface (W/m2)
-      !real(kind_phys), intent(in) :: lwdn(:)         !> downward longwave radiation at surface (W/m2)
-      !real(kind_phys), intent(in) :: lwup(:)         !> upward longwave radiation at surface (W/m2)
-      !real(kind_phys), intent(in) :: swdnc(:)        !> clear-sky downward shortwave radiation (W/m2)
-      !real(kind_phys), intent(in) :: swupc(:)        !> clear-sky upward shortwave radiation (W/m2)
-      !real(kind_phys), intent(in) :: lwdnc(:)        !> clear-sky downward longwave radiation (W/m2)2)
-      !real(kind_phys), intent(in) :: lwupc(:)        !> clear-sky upward longwave radiation (W/m2)
-      real(kind_phys), intent(in) :: nirbmdi(:)      !> surface near-infrared beam shortwave radiation (W/m2)
-      real(kind_phys), intent(in) :: nirdfdi(:)      !> surface near-infrared diffuse shortwave radiation (W/m2)
-      real(kind_phys), intent(in) :: visbmdi(:)      !> surface visible + uv beam shortwave radiation (W/m2)
-      real(kind_phys), intent(in) :: visdfdi(:)      !> surface visible + uv diffuse shortwave radiation (W/m2)
+      real(kind_phys), intent(in) :: swdn(:)         ! downward shortwave radiation at surface (W/m2)
+      !real(kind_phys), intent(in) :: swup(:)         ! upward shortwave radiation at surface (W/m2)
+      !real(kind_phys), intent(in) :: lwdn(:)         ! downward longwave radiation at surface (W/m2)
+      !real(kind_phys), intent(in) :: lwup(:)         ! upward longwave radiation at surface (W/m2)
+      !real(kind_phys), intent(in) :: swdnc(:)        ! clear-sky downward shortwave radiation (W/m2)
+      !real(kind_phys), intent(in) :: swupc(:)        ! clear-sky upward shortwave radiation (W/m2)
+      !real(kind_phys), intent(in) :: lwdnc(:)        ! clear-sky downward longwave radiation (W/m2)2)
+      !real(kind_phys), intent(in) :: lwupc(:)        ! clear-sky upward longwave radiation (W/m2)
+      real(kind_phys), intent(in) :: nirbmdi(:)      ! surface near-infrared beam shortwave radiation (W/m2)
+      real(kind_phys), intent(in) :: nirdfdi(:)      ! surface near-infrared diffuse shortwave radiation (W/m2)
+      real(kind_phys), intent(in) :: visbmdi(:)      ! surface visible + uv beam shortwave radiation (W/m2)
+      real(kind_phys), intent(in) :: visdfdi(:)      ! surface visible + uv diffuse shortwave radiation (W/m2)
 
 
       ! Emissions
-      !real(kind_phys), intent(in) :: emi_in(:)         !> emissions
-      real(kind_phys), dimension(im, 12, 5), intent(in) :: dust_in         !> dust emission inputs
+      !real(kind_phys), intent(in) :: emi_in(:)         ! emissions
+      real(kind_phys), dimension(im, 12, 5), intent(in) :: dust_in         ! dust emission inputs
       ! CATChem States
-      type(MetStateType),  intent(inout) :: MetState(:)    !> CATChem meteorology state
-      !type(ChemStateType), intent(inout) :: ChemState(:)   !> CATChem chemistry state
-      !type(EmisStateType), intent(inout) :: EmisState(:)   !> CATChem emission state
-      !type(DiagStateType), intent(inout) :: DiagState(:)   !> CATChem diagnostic state
+      type(MetStateType),  intent(inout) :: MetState(:)    ! CATChem meteorology state
+      !type(ChemStateType), intent(inout) :: ChemState(:)   ! CATChem chemistry state
+      !type(EmisStateType), intent(inout) :: EmisState(:)   ! CATChem emission state
+      !type(DiagStateType), intent(inout) :: DiagState(:)   ! CATChem diagnostic state
 
       ! Error handling
-      character(len=*), intent(out) :: errmsg    !> error message
-      integer,          intent(out) :: errflg    !> error flag
+      character(len=*), intent(out) :: errmsg    ! error message
+      integer,          intent(out) :: errflg    ! error flag
 
       ! Local variables
       integer :: i, k, k_rev, month_now
@@ -382,7 +389,7 @@ contains
             !MetState(i)%kh(k_rev)       = kh(i,k) !TODO: MetState does not have kh defined yet.
             !MetState(i)%prsl(k_rev)    = prsl(i,k) !assume the same as phalf
             !MetState(i)%prslk(k_rev)   = prslk(i,k) !TODO: MetState does not have prslk defined yet.
-            MetState(i)%AIRDEN(k_rev)  = airden(i, k)    !< Dry air density [kg/m3]
+            MetState(i)%AIRDEN(k_rev)  = airden(i, k)    ! Dry air density [kg/m3]
             MetState(i)%RH(k_rev)      = rh(i,k) * 100
             MetState(i)%BXHEIGHT(k_rev)  = delp (i,k) / 9.80665
             k_rev = k_rev - 1
@@ -413,9 +420,9 @@ contains
         MetState(i)%DSOILTYPE = soiltyp(i) !stype
         MetState(i)%FRVEG    = vegfrac(i) !gvf
         MetState(i)%LAI      = lai(i) !lai
-        MetState(i)%FRLANDUSE(:) = frlanduse(i,:) !< Fraction of each land type
-        MetState(i)%FRSOIL(:) = frsoil(i,:) !< Fraction of each soil type
-        MetState(i)%FRLAND = landfrac(i)       !< Fraction of land [1]
+        MetState(i)%FRLANDUSE(:) = frlanduse(i,:) ! Fraction of each land type
+        MetState(i)%FRSOIL(:) = frsoil(i,:) ! Fraction of each soil type
+        MetState(i)%FRLAND = landfrac(i)       ! Fraction of land [1]
         !https://dtcenter.ucar.edu/GMTB/v6.0.0/sci_doc/_c_c_p_psuite_nml_desp.html
         if (nlndcat == 20) then !modified NoahMP 20 categories; only choice for now (ivegsrc = 1)
             MetState%LUCNAME = 'NOAH'
@@ -426,11 +433,11 @@ contains
         endif
         MetState(i)%FRLAI(:) = frlanduse(i,:) * lai(i)
         MetState(i)%FRLAI(15:17) = 0.0 !manually give index 15(snow and ice), 16(barren), 17(water) zeros
-        MetState(i)%FROCEAN = oceanfrac(i)         !< Fraction of ocean [1]
+        MetState(i)%FROCEAN = oceanfrac(i)         ! Fraction of ocean [1]
         MetState(i)%FRSEAICE = seaicefrac(i)  !fice
         !MetState(i)%FRLANDIC = landicefrac(i) !TODO: seems no land ice fraction in CCPP, so give zero for now
         MetState(i)%FRLANDIC = 0.0
-        MetState(i)%FRLAKE = lakefrac(i)          !< Fraction of lake [1]
+        MetState(i)%FRLAKE = lakefrac(i)          ! Fraction of lake [1]
         MetState(i)%FRSNO = snowc(i) !snowfrac
         ! Land without snow or land ice (TODO: here we assume FRLAND is without ice already)
         FRLAND_NOSNO_NOICE = MetState(i)%FRLAND - MetState(i)%FRSNO !- MetState(i)%FRLANDIC
@@ -469,11 +476,11 @@ contains
         end if
 
         !TODO: need to check the order of the five variables in dust_in
-        MetState(i)%CLAYFRAC = dust_in(i, month_now, 1)        !< Fraction of clay [1]
+        MetState(i)%CLAYFRAC = dust_in(i, month_now, 1)        ! Fraction of clay [1]
         MetState(i)%RDRAG = dust_in(i, month_now, 2) !Drag Partition [1]
-        MetState(i)%SANDFRAC = dust_in(i, month_now, 3)       !< Fraction of sand [1]
+        MetState(i)%SANDFRAC = dust_in(i, month_now, 3)       ! Fraction of sand [1]
         MetState(i)%SSM = dust_in(i, month_now, 4) ! Sediment Supply Map [1]
-        MetState(i)%USTAR_THRESHOLD = dust_in(i, month_now, 5) !< Threshold friction velocity [m/s]
+        MetState(i)%USTAR_THRESHOLD = dust_in(i, month_now, 5) ! Threshold friction velocity [m/s]
 
         ! Near-Surface Meteorology
         MetState(i)%U10M     = u10m(i)
@@ -484,7 +491,7 @@ contains
 
         ! Surface Fluxes
         MetState(i)%Z0 = z0(i) !znt
-        MetState(i)%Z0H = z0(i) !< roughness height, for heat (thermal roughness) [m] TODO: give the same value as z0 for now
+        MetState(i)%Z0H = z0(i) ! roughness height, for heat (thermal roughness) [m] TODO: give the same value as z0 for now
         MetState(i)%HFLUX    = shflx(i) !hf2d
         MetState(i)%EFLUX    = lhflx(i) !lf2d
         MetState(i)%PRECLSC  = precip(i) !rain_cplchm
@@ -686,11 +693,11 @@ contains
     end subroutine ccpp_to_cc
 
 
-    !> Checks for allocation errors and sets error message
+    ! Checks for allocation errors and sets error message
     !!
-    !! \param[in] state_name Name of the state being allocated
-    !! \param[in] errflg     Error flag from allocation
-    !! \param[out] errmsg    Output error message if allocation failed
+    !! \param state_name Name of the state being allocated
+    !! \param errflg     Error flag from allocation
+    !! \param errmsg    Output error message if allocation failed
     !! \return has_error     True if allocation error occurred
     !! \ingroup catchem_ccpp_group
     !!!>

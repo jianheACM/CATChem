@@ -21,7 +21,7 @@ module CCPr_Scheme_SCHEME_Mod
 
 contains
 
-   !> \brief Brief description of the subroutine
+   ! \brief Brief description of the subroutine
    !!
    !! \param MetState     Meteorological Variables
    !! \param DiagState    Diagnostic Variables

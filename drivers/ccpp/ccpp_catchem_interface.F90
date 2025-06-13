@@ -1,5 +1,13 @@
 !> \file ccpp_catchem_interface.F90
-!! \brief CATCHEM-CCPP interface utilities module
+!! \brief CATCHEM-CC   !> \brief Initialize the CATChem containernterface utilities module
+!!
+!! \defgroup catchem_ccpp_group CATChem CCPP Interface
+!! \brief CCPP interface drivers and utilities for CATChem
+!! \ingroup catchem
+!!
+!! This group contains all CCPP-compliant interface modules and utilities
+!! for integrating CATChem with the Common Community Physics Package (CCPP)
+!! framework. Includes initialization, run, and finalization routines.
 !!
 !! \details
 !! This is the CCPP-Compliant wrapper for interfacing CATCHEM chemistry model with CCPP
@@ -11,8 +19,6 @@
 !! \author Barry Baker and Wei Li, NOAA/OAR/ARL
 !!
 !! \date November 2024
-!! \defgroup catchem_ccpp_group CATChem CCPP Interface
-!! \ingroup catchem_ccpp_group
 !!
 !! \note This is part of the CATCHEM-CCPP interface layer that enables
 !!       chemistry calculations within the CCPP framework
@@ -33,11 +39,12 @@ private
 
 public :: ccpp_catchem_interface_init, ccpp_catchem_interface_run, ccpp_catchem_interface_finalize
 
-type(ConfigType) :: Config                          !> CATChem configuration object
-type(DustStateType) :: DustState
-type(SeaSaltStateType) :: SeaSaltState
-type(DryDepStateType) :: DryDepState
-type(catchem_container_type) :: CATChemStates       !> Container for all CATChem states
+type(ConfigType) :: Config                          !! CATChem configuration object
+type(DustStateType) :: DustState                    !! Dust state object
+type(SeaSaltStateType) :: SeaSaltState              !! Sea salt state object
+type(DryDepStateType) :: DryDepState                !! Dry deposition state object
+type(MetStateType) :: MetState                      !! Meteorological state object
+type(catchem_container_type) :: CATChemStates       !! Container for all CATChem states
 
 !   integer :: im    !> Number of horizontal points
 !   integer :: kme   !> Number of vertical levels
@@ -47,22 +54,16 @@ contains
 
 
 
-   !> \section arg_table_ccpp_catchem_interface_init Argument Table
-   !! \htmlinclude ccpp_catchem_interface_init.html
+   !> \brief Initialize the CATChem container
    !!
-   !! \brief Initialize the CATChem container
-   !! \param[in] catchem_configfile_in Name of the CATChem configuration file
-   !! \param[in] do_catchem_in Flag to enable CATChem calculations
-   !! \param[in] export_catchem_diags_in Flag to export CATChem diagnostics
-   !! \param[in] n_dbg_lines_in Number of debug lines
-   !! \param[in] im Number of horizontal points
-   !! \param[in] kme Number of vertical levels
-   !! \param[in] nsoil Number of soil layers
-   !! \param[out] errmsg Error message
-   !! \param[out] errflg Error flag
+   !! This subroutine initializes the CATChem container and reads the configuration
+   !! file to set up the chemistry model
    !!
-   !! \note This subroutine initializes the CATChem container and reads the configuration
-   !!       file to set up the chemistry model
+   !! \param im Number of horizontal points
+   !! \param do_catchem Flag to enable CATChem calculations
+   !! \param catchem_configfile_in Name of the CATChem configuration file
+   !! \param errmsg Error message
+   !! \param errflg Error flag
    !!
    !! \ingroup catchem_ccpp_group
    !!!>
@@ -109,8 +110,7 @@ contains
 
   !> \brief Brief description of the subroutine
   !!
-  !! \section arg_table_ccpp_catchem_interface_finalize Argument Table
-  !! \htmlinclude ccpp_catchem_interface_finalize.html
+    !> \brief Finalize the CATChem container
   !!
   !>
   subroutine ccpp_catchem_interface_finalize(do_catchem, errmsg, errflg)
@@ -143,8 +143,7 @@ contains
   !>
   !! This is the Configurable ATmospheric Chemistry (CATChem)
   !! This is the CATChem interface Module
-  !! \section arg_table_ccpp_catchem_interface_run Argument Table
-  !! \htmlinclude ccpp_catchem_interface_run.html
+  !! \brief Run the CATChem chemistry calculations
   !!
   !>
   subroutine ccpp_catchem_interface_run(im, kte, kme, garea, nsoil, nlndcat, nsoilcat, &

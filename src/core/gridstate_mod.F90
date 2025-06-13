@@ -1,4 +1,4 @@
-!> \file gridstate_mod.F90
+! \file gridstate_mod.F90
 !!
 !! \brief Module for grid state variables
 !!
@@ -16,26 +16,25 @@ module GridState_Mod
 
    PUBLIC :: Grid_Init_State
    type, public :: GridStateType
-      CHARACTER(LEN=4) :: State = 'Grid'  !< Name of this state
+      CHARACTER(LEN=4) :: State = 'Grid'  ! Name of this state
 
       ! Integers
-      integer :: nx = 1
-      integer :: ny = 1
-      integer :: number_of_levels  !< The number of vertical levels
-      integer :: number_of_soil_layers  !< The number of soil layers
+      integer :: nx = 1                        ! Number of grid points in x direction
+      integer :: ny = 1                        ! Number of grid points in y direction
+      integer :: number_of_levels  ! The number of vertical levels
+      integer :: number_of_soil_layers  ! The number of soil layers
 
       ! Reals
-      real(fp) :: area  !< Grid cell horizontal area [m^2]
+      real(fp) :: area  ! Grid cell horizontal area [m^2]
 
    end type GridStateType
 
 contains
 
-   !> \brief Initialize a GridState object
+   ! \brief Initialize a GridState object
    !!
    !! This subroutine initializes a GridState object.
    !!
-   !! \param Config The input config object.
    !! \param GridState The GridState object to be initialized.
    !! \param RC The return code.
    !!
@@ -46,9 +45,9 @@ contains
       use Config_Opt_Mod, Only : ConfigType
       implicit none
 
-      ! type(ConfigType),    intent(in)    :: Config     !< Input Options object
-      type(GridStateType), intent(inout) :: GridState  !< Grid State object
-      INTEGER,             INTENT(OUT)   :: RC         !< Success or failure
+      ! type(ConfigType),    intent(in)    :: Config     ! Input Options object
+      type(GridStateType), intent(inout) :: GridState  ! Grid State object
+      INTEGER,             INTENT(OUT)   :: RC         ! Success or failure
 
       ! Local variables
       CHARACTER(LEN=512) :: errMsg

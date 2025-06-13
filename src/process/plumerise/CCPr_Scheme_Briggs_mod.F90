@@ -1,4 +1,4 @@
-!> \brief This module contains the routines for the BRIGGS plumerise scheme
+! \brief This module contains the routines for the BRIGGS plumerise scheme
 !!
 !! Original Code adapted from the EPA CMAQ Model
 !!

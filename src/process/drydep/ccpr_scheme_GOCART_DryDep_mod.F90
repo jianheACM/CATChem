@@ -22,16 +22,6 @@ module CCPr_Scheme_GOCART_DryDep_Mod
 
 contains
 
-   !> \brief Brief description of the subroutine
-   !!
-   !! \param MetState     Meteorological Variables
-   !! \param DiagState    Diagnostic Variables
-   !! \param DryDepState  DryDeposition Variables
-   !! \param RC           Success or Failure
-   !!
-   !! Note that other state types may be required, e.g. one specific to the process group.
-   !!!>
-
    subroutine CCPr_Scheme_GOCART_DryDep(km,              &
       tmpu,            &
       rhoa,            &
@@ -168,24 +158,9 @@ contains
 
    !>
    !! \brief PrepMetVarsForGOCART - Prep the meteorological variables for GOCART DryDeposition scheme
+   !> \brief Prepare meteorological variables for GOCART dry deposition
    !!
-   !! \param [INOUT] metstate
-   !! \param [INOUT] tmpu
-   !! \param [INOUT] rhoa
-   !! \param [INOUT] hghte
-   !! \param [INOUT] oro
-   !! \param [INOUT] ustar
-   !! \param [INOUT] pblh
-   !! \param [INOUT] shflux
-   !! \param [INOUT] z0h
-   !! \param [INOUT] u10m
-   !! \param [INOUT] v10m
-   !! \param [INOUT] fraclake
-   !! \param [INOUT] gwettop
-   !! \param [OUT] rc
-   !!
-   !! \ingroup core_modules
-   !!!>
+   !! \ingroup catchem_drydep_process
    subroutine PrepMetVarsForGOCART(km,              &
       tmpu,            &
       rhoa,            &
@@ -232,21 +207,21 @@ contains
       REAL,  intent(in), target :: gwettop                ! fraction soil moisture [1]
 
       ! INPUT/OUTPUTS
-      REAL, intent(inout), pointer :: GOCART_TMPU(:,:,:)   !< temperature [K]
-      REAL, intent(inout), pointer, DIMENSION(:,:,:) :: GOCART_RHOA   !< air density [kg/m^3]
-      REAL, intent(inout), pointer, DIMENSION(:,:,:) :: GOCART_HGHTE  !< geometric height [m]
-      REAL, intent(inout), pointer :: GOCART_U10(:,:)                 !< 10-m u-wind component [m/sec]
-      REAL, intent(inout), pointer :: GOCART_V10 (:,:)                !< 10-m v-wind component [m/sec]
-      REAL, intent(inout), pointer :: GOCART_FRACLAKE(:,:)            !< fraction covered by water [1]
-      REAL, intent(inout), pointer :: GOCART_GWETTOP(:,:)             !< fraction soil moisture [1]
-      real, intent(inout), pointer :: GOCART_LWI(:,:)                 !< orography flag; Land, ocean, ice mask
-      REAL, intent(inout), pointer :: GOCART_USTAR(:,:)               !< friction speed [m/sec]
-      REAL, intent(inout), pointer :: GOCART_PBLH(:,:)                !< PBL height [m]
-      REAL, intent(inout), pointer :: GOCART_HFLUX(:,:)               !< sfc. sens. heat flux [W m-2]
-      REAL, intent(inout), pointer :: GOCART_Z0H(:,:)                 !< rough height, sens. heat [m]
+      REAL, intent(inout), pointer :: GOCART_TMPU(:,:,:)   ! temperature [K]
+      REAL, intent(inout), pointer, DIMENSION(:,:,:) :: GOCART_RHOA   ! air density [kg/m^3]
+      REAL, intent(inout), pointer, DIMENSION(:,:,:) :: GOCART_HGHTE  ! geometric height [m]
+      REAL, intent(inout), pointer :: GOCART_U10(:,:)                 ! 10-m u-wind component [m/sec]
+      REAL, intent(inout), pointer :: GOCART_V10 (:,:)                ! 10-m v-wind component [m/sec]
+      REAL, intent(inout), pointer :: GOCART_FRACLAKE(:,:)            ! fraction covered by water [1]
+      REAL, intent(inout), pointer :: GOCART_GWETTOP(:,:)             ! fraction soil moisture [1]
+      real, intent(inout), pointer :: GOCART_LWI(:,:)                 ! orography flag; Land, ocean, ice mask
+      REAL, intent(inout), pointer :: GOCART_USTAR(:,:)               ! friction speed [m/sec]
+      REAL, intent(inout), pointer :: GOCART_PBLH(:,:)                ! PBL height [m]
+      REAL, intent(inout), pointer :: GOCART_HFLUX(:,:)               ! sfc. sens. heat flux [W m-2]
+      REAL, intent(inout), pointer :: GOCART_Z0H(:,:)                 ! rough height, sens. heat [m]
 
       ! OUTPUTS - Add error handling back in late
-      !INTEGER :: rc !< Return code
+      !INTEGER :: rc ! Return code
 
       ! Error handling
       !character(len=255) :: thisloc

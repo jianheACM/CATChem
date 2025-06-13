@@ -1,8 +1,14 @@
-!> \file state_mod.F90
+! \file state_mod.F90
 !!
-!! \brief This file contains the module for CATChem state
+!! \brief Core state management module for CATChem
 !!
-!! \defgroup core_modules
+!! This module provides the main state objects that manage the complete
+!! state of the CATChem atmospheric chemistry modeling system, including
+!! grid, meteorology, chemistry, emissions, and diagnostics.
+!!
+!! \author CATChem Development Team
+!! \date 2023
+!! \version 1.0
 !! \ingroup core_modules
 !!
 !!!>

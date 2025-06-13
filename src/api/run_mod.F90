@@ -1,4 +1,4 @@
-!> \file run_mod.F90
+! \file run_mod.F90
 !! \brief Run module for the program.
 !!
 !! This module contains subroutines and functions related to the run of the program.
@@ -28,15 +28,21 @@ module run_mod
 contains
 
 
-   !> \brief Initialize the emission state
+   ! \brief Run all CATChem processes
    !!
-   !! This subroutine allocates the emission state.
+   !! This subroutine executes all enabled atmospheric chemistry processes
+   !! including emissions, dry deposition, and other chemical processes.
    !!
-   !! \param GridState The grid state containing information about the grid.
-   !! \param EmisState The emission state to be initialized.
-   !! \param RC The return code.
+   !! \param MetState The meteorological state containing atmospheric conditions
+   !! \param DiagState The diagnostic state for storing process outputs
+   !! \param ChemState The chemical state containing species concentrations
+   !! \param EmisState The emission state containing emission data
+   !! \param DustState The dust process state
+   !! \param SeaSaltState The sea salt process state
+   !! \param DryDepState The dry deposition process state
+   !! \param RC The return code indicating success or failure
    !!
-   !! \ingroup core_modules
+   !! \ingroup catchem_api
    !!!>
    subroutine Run_Process(MetState, DiagState, ChemState, EmisState, DustState, SeaSaltState, DryDepState, RC)
       !
@@ -81,18 +87,20 @@ contains
    end subroutine Run_Process
 
 
-   !> \brief Run the emission processes
+   ! \brief Run emission processes
    !!
-   !! This subroutine runs the emission processes.
+   !! This subroutine executes emission processes including dust, sea salt,
+   !! and other aerosol emissions, then applies them to the chemical state.
    !!
-   !! \param MetState The meteorological state.
-   !! \param DiagState The diagnostic state.
-   !! \param ChemState The chemical state.
-   !! \param DustState The dust state.
-   !! \param SeaSaltState The sea salt state.
-   !! \param RC The return code.
+   !! \param MetState The meteorological state containing atmospheric conditions
+   !! \param DiagState The diagnostic state for storing process outputs
+   !! \param ChemState The chemical state containing species concentrations
+   !! \param EmisState The emission state containing emission data
+   !! \param DustState The dust process state
+   !! \param SeaSaltState The sea salt process state
+   !! \param RC The return code indicating success or failure
    !!
-   !! \ingroup core_modules
+   !! \ingroup catchem_api
    !!!>
    subroutine Run_Emis(MetState, DiagState, ChemState, EmisState, DustState, SeaSaltState, RC)
       use CCPr_Dust_mod, ONLY : CCPR_Dust_Run

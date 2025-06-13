@@ -21,22 +21,22 @@ module CCPr_Scheme_GEOS12_Mod
 
 contains
 
-   !> \brief Scheme GEOS2012 Sea Salt Emission scheme
+   ! \brief Scheme GEOS2012 Sea Salt Emission scheme
    !!
-   !! \param   [IN] FROCEAN
-   !! \param   [IN] FRSEAICE
-   !! \param   [IN] USTAR
-   !! \param   [IN] SST
-   !! \param   [IN] SeaSaltScaleFactor
-   !! \param   [IN] UpperBinRadius
-   !! \param   [IN] LowerBinRadius
-   !! \param   [IN] EffectiveRadius
-   !! \param   [IN] SeaSaltDensity
-   !! \param   [IN] EmissionBin
-   !! \param   [IN] NumberEmissionBin
-   !! \param   [IN] TotalEmission
-   !! \param   [IN] TotalNumberEmission
-   !! \param   [OUT] RC
+   !! \param FROCEAN Fraction of ocean cover
+   !! \param FRSEAICE Fraction of sea ice cover
+   !! \param USTAR Friction velocity
+   !! \param SST Sea surface temperature
+   !! \param SeaSaltScaleFactor Scaling factor for sea salt emissions
+   !! \param UpperBinRadius Upper radius of each bin
+   !! \param LowerBinRadius Lower radius of each bin
+   !! \param EffectiveRadius Effective radius of each bin
+   !! \param SeaSaltDensity Density of sea salt particles
+   !! \param EmissionBin Emission rate per bin
+   !! \param NumberEmissionBin Number emission rate per bin
+   !! \param TotalEmission Total emission rate
+   !! \param TotalNumberEmission Total number emission rate
+   !! \param RC Return code
    !!
    !! \ingroup catchem_seasalt_process
    !!!>
@@ -65,36 +65,36 @@ contains
       ! Arguments
       !----------
       ! Inputs
-      real(fp), intent(in) :: FROCEAN                                !< Ocean Fraction
-      real(fp), intent(in) :: FRSEAICE                               !< SeaIce Fraction
-      real(fp), intent(in) :: USTAR                                  !< Friction velocity
-      real(fp), intent(in) :: SST                                    !< Sea surface temperature
-      real(fp), intent(in) :: SeaSaltScaleFactor                     !< SeaSalt Tuning Parameter [-]
-      real(fp), dimension(:), intent(in) :: UpperBinRadius           !< SeaSalt Upper Bin Radius [m]
-      real(fp), dimension(:), intent(in) :: LowerBinRadius           !< SeaSalt Lower Bin Radius [m]
-      real(fp), dimension(:), intent(in) :: EffectiveRadius          !< SeaSalt Effective Radius [m]
-      real(fp), dimension(:), intent(in) :: SeaSaltDensity           !< SeaSalt Density [kg/m^3]
+      real(fp), intent(in) :: FROCEAN                                ! Ocean Fraction
+      real(fp), intent(in) :: FRSEAICE                               ! SeaIce Fraction
+      real(fp), intent(in) :: USTAR                                  ! Friction velocity
+      real(fp), intent(in) :: SST                                    ! Sea surface temperature
+      real(fp), intent(in) :: SeaSaltScaleFactor                     ! SeaSalt Tuning Parameter [-]
+      real(fp), dimension(:), intent(in) :: UpperBinRadius           ! SeaSalt Upper Bin Radius [m]
+      real(fp), dimension(:), intent(in) :: LowerBinRadius           ! SeaSalt Lower Bin Radius [m]
+      real(fp), dimension(:), intent(in) :: EffectiveRadius          ! SeaSalt Effective Radius [m]
+      real(fp), dimension(:), intent(in) :: SeaSaltDensity           ! SeaSalt Density [kg/m^3]
 
       ! Inputs/Outputs
-      real(fp), intent(inout)               :: TotalEmission         !< Total SeaSalt Emission [ug m-2 s-1]
-      real(fp), intent(inout)               :: TotalNumberEmission   !< Total SeaSalt Emission [# m-2 s-1]
-      real(fp), dimension(:), intent(inout) :: EmissionBin           !< SeaSalt Emission [ug m-2 s-1]
-      real(fp), dimension(:), intent(inout) :: NumberEmissionBin     !< SeaSalt Emission [# m-2 s-1]
+      real(fp), intent(inout)               :: TotalEmission         ! Total SeaSalt Emission [ug m-2 s-1]
+      real(fp), intent(inout)               :: TotalNumberEmission   ! Total SeaSalt Emission [# m-2 s-1]
+      real(fp), dimension(:), intent(inout) :: EmissionBin           ! SeaSalt Emission [ug m-2 s-1]
+      real(fp), dimension(:), intent(inout) :: NumberEmissionBin     ! SeaSalt Emission [# m-2 s-1]
 
       ! Outputs
-      integer, intent(out) :: RC !< Return code
+      integer, intent(out) :: RC ! Return code
 
       ! Local Variables
-      logical :: do_seasalt                            !< Enable Dust Calculation Flag
-      integer :: n, ir                                 !< Loop counter
-      integer :: nbins                                 !< number of SeaSalt bins
-      integer, parameter :: nr = 10                    !< Number of (linear) sub-size bins
-      real, parameter    :: r80fac = 1.65              !< ratio of radius(RH=0.8)/radius(RH=0.) [Gerber]
-      real(fp) :: DryRadius                            !< sub-bin radius         (dry, um)
-      real(fp) :: DeltaDryRadius                       !< sub-bin radius spacing (dry, um)
-      real(fp) :: rwet, drwet                          !< sub-bin radius spacing (rh=80%, um)
-      real(fp) :: NumberEmissions                      !< sub-bin number emission rate [#/m2/s]
-      real(fp) :: MassEmissions                        !< sub-bin number emission rate [kg/m2/s]
+      logical :: do_seasalt                            ! Enable Dust Calculation Flag
+      integer :: n, ir                                 ! Loop counter
+      integer :: nbins                                 ! number of SeaSalt bins
+      integer, parameter :: nr = 10                    ! Number of (linear) sub-size bins
+      real, parameter    :: r80fac = 1.65              ! ratio of radius(RH=0.8)/radius(RH=0.) [Gerber]
+      real(fp) :: DryRadius                            ! sub-bin radius         (dry, um)
+      real(fp) :: DeltaDryRadius                       ! sub-bin radius spacing (dry, um)
+      real(fp) :: rwet, drwet                          ! sub-bin radius spacing (rh=80%, um)
+      real(fp) :: NumberEmissions                      ! sub-bin number emission rate [#/m2/s]
+      real(fp) :: MassEmissions                        ! sub-bin number emission rate [kg/m2/s]
       real(fp) :: aFac
       real(fp) :: bFac
       real(fp) :: scalefac

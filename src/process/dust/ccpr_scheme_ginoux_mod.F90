@@ -24,7 +24,21 @@ contains
    !>
    !! \brief Calculates the dust emission flux in ug m-2 s-1
    !!
-   !! \param
+   !! \param DSOILTYPE Dominant soil type index
+   !! \param SSM Sediment supply map (0-1)
+   !! \param TSKIN Skin temperature [K]
+   !! \param FROCEAN Fraction of ocean
+   !! \param FRSNO Fraction of snow
+   !! \param airden Air density [kg/m3]
+   !! \param u10m 10m zonal wind speed [m/s]
+   !! \param v10m 10m meridional wind speed [m/s]
+   !! \param gwettop Top level volumetric soil moisture [m3/m3]
+   !! \param AlphaScaleFactor Alpha scaling parameter
+   !! \param EffectiveRadius Effective particle radius array
+   !! \param DustDensity Dust particle density array
+   !! \param TotalEmission Total emission rate [ug/m2/s]
+   !! \param EmissionPerSpecies Emission rate per species [ug/m2/s]
+   !! \param RC Return code
    !!
    !! \ingroup catchem_dust_process
    !!!>
@@ -51,31 +65,31 @@ contains
       implicit none
 
       ! Arguments
-      integer, intent(in) :: DSOILTYPE         !< Dominant Soil Type
-      real(fp), intent(in) :: SSM              !< Sediment Supply Map (0-1)
-      real(fp), intent(in) :: TSKIN            !< Skin Temperature [K]
-      real(fp), intent(in) :: FROCEAN          !< Fraction of Ocean
-      real(fp), intent(in) :: FRSNO            !< Fraction of Snow
-      real(fp), dimension(:), intent(in) :: airden           !< Air density [kg/m3]
-      real(fp), intent(in) :: u10m             !< 10m wind speed [m/s]
-      real(fp), intent(in) :: v10m             !< 10m wind speed [m/s]
-      real(fp), intent(in) :: gwettop          !< Top level volumetric soil moisture [m3/m3]
-      real(fp), intent(in) :: AlphaScaleFactor !< Alpha Scaling Parameter
-      real(fp), dimension(:), intent(in) :: EffectiveRadius  !< Effective Particle Radius
-      real(fp), dimension(:), intent(in) :: DustDensity      !< Dust Particle Density
+      integer, intent(in) :: DSOILTYPE         ! Dominant Soil Type
+      real(fp), intent(in) :: SSM              ! Sediment Supply Map (0-1)
+      real(fp), intent(in) :: TSKIN            ! Skin Temperature [K]
+      real(fp), intent(in) :: FROCEAN          ! Fraction of Ocean
+      real(fp), intent(in) :: FRSNO            ! Fraction of Snow
+      real(fp), dimension(:), intent(in) :: airden           ! Air density [kg/m3]
+      real(fp), intent(in) :: u10m             ! 10m wind speed [m/s]
+      real(fp), intent(in) :: v10m             ! 10m wind speed [m/s]
+      real(fp), intent(in) :: gwettop          ! Top level volumetric soil moisture [m3/m3]
+      real(fp), intent(in) :: AlphaScaleFactor ! Alpha Scaling Parameter
+      real(fp), dimension(:), intent(in) :: EffectiveRadius  ! Effective Particle Radius
+      real(fp), dimension(:), intent(in) :: DustDensity      ! Dust Particle Density
 
-      real(fp), intent(inout)             :: TotalEmission !< Total Emission Rate [ug/m2/s]
-      real(fp), dimension(:), intent(inout) :: EmissionPerSpecies !< Emission Rate per Species [ug/m2/s]
+      real(fp), intent(inout)             :: TotalEmission ! Total Emission Rate [ug/m2/s]
+      real(fp), dimension(:), intent(inout) :: EmissionPerSpecies ! Emission Rate per Species [ug/m2/s]
       integer, intent(out) :: RC
 
       ! Local Variables
-      logical :: do_dust                               !< Enable Dust Calculation Flag
-      integer :: n                                     !< Bin index
-      integer :: nbins                                 !< number of dust bins
-      real(fp) :: ginoux_scaling                       !< Ginoux scaling
-      real(fp) :: u_thresh0                            !< Dry threshold wind speed [m/s]
-      real(fp) :: u_thresh                             !< Moisture Corrected threshold wind speed [m/s]
-      real(fp) :: w10m                                 !< 10m wind speed [m/s]
+      logical :: do_dust                               ! Enable Dust Calculation Flag
+      integer :: n                                     ! Bin index
+      integer :: nbins                                 ! number of dust bins
+      real(fp) :: ginoux_scaling                       ! Ginoux scaling
+      real(fp) :: u_thresh0                            ! Dry threshold wind speed [m/s]
+      real(fp) :: u_thresh                             ! Moisture Corrected threshold wind speed [m/s]
+      real(fp) :: w10m                                 ! 10m wind speed [m/s]
 
       ! Initialize
       RC = 0

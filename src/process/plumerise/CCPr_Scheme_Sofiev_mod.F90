@@ -1,5 +1,17 @@
-!> \brief This module contains the routines for the SOFIEV plumerise scheme
-!! \ingroup catchem_plumerise_process
+! \brief This module contains the routines for the SOFIEV plumerise scheme
+!!    ! \brief Distribute emission around a given height
+   !!
+   !! This function will distribute the emission around a given height
+   !! with a total plumePct, % of emission, in the given height and the rest split between the layer above and below
+   !!
+   !! \param ZF Height of full layer array [m]
+   !! \param plmHGT Plume rise height [m]
+   !! \param EFrac Output fractional column emission array
+   !! \param RC Return code
+   !! \param plmPct_opt Optional percentage of emission at plume height
+   !! \param SfcPlmPct_opt Optional percentage of surface emission
+   !!
+   !! \ingroup catchem_plumerise_processhem_plumerise_process
 !!!>
 module ccpr_scheme_sofiev_mod
 
@@ -77,17 +89,17 @@ contains
 
    end subroutine distribute_conc_linear
 
-   !> \brief Distribute emissions around a given height
+   ! \brief Distribute emissions around a given height
    !!
    !! This function will distribute the emission around a given height
    !! with a total plumePct, % of emission, in the given height and the rest split between the layer obove and below
    !!
-   !! \param[in] ZF Height of full layer (m)
-   !! \param[in] plmHGT plume rise height
-   !! \param[in] plmPct_opt % of emission
-   !! \param[in] underplumePct % of emission
-   !! \param[in] base_emiss emission from file
-   !! \param[out] emis output column emission
+   !! \param ZF Height of full layer (m)
+   !! \param plmHGT plume rise height
+   !! \param plmPct_opt % of emission
+   !! \param underplumePct % of emission
+   !! \param base_emiss emission from file
+   !! \param emis output column emission
    !!
    !! \ingroup catchem_plumerise_process
    !!
@@ -167,7 +179,7 @@ contains
 
    end subroutine CCPr_Sofiev_Distribute
 
-   !> \brief Find the plume height index
+   ! \brief Find the plume height index
    !!
    !! \ingroup catchem_plumerise_process
    !!
@@ -227,18 +239,18 @@ contains
    end subroutine CCPr_Sofiev_Plmrise
 
 
-   !> \brief Sofiev Plume Rise Algorithm
+   ! \brief Sofiev Plume Rise Algorithm
    !!
    !! Ref: M. Sofiev et al., Evaluation of the smoke-injection
    !! height from wild-land fires using remote sensing data.
    !!    Atmos. Chem. Phys., 12, 1995-2006, 2012.
    !!
-   !! \param[in] PT1 Potential Temperature right below PBL height
-   !! \param[in] PT2 Potential Temperature right above PBL height
-   !! \param[in] laydepth Layer depth
-   !! \param[in] frp Fire radiative power
-   !! \param[in] pblh PBL height
-   !! \param[out] Hp Plume height
+   !! \param PT1 Potential Temperature right below PBL height
+   !! \param PT2 Potential Temperature right above PBL height
+   !! \param laydepth Layer depth
+   !! \param frp Fire radiative power
+   !! \param pblh PBL height
+   !! \param Hp Plume height
    !!
    !! \ingroup catchem_plumerise_process
    !! \author Barry Baker
@@ -252,20 +264,20 @@ contains
       !	         11/2020: parameterization options, Yunyao Li (YL)
       !           07/2024: implemented into CATChem, Barry Baker (BB)
 
-      real(fp) Hp       !< plume height (m)
-      real(fp) pblh     !< PBL height (m)
-      real(fp) frp      !< fire radiative power (W)
-      real(fp) NFT_sq   !< N square in Free Troposphere (@ z = 2pblh)
-      real(fp) PT1, PT2 !< Potential Temperature right below and above PBL height
-      real(fp) laydepth !< depth of the layer at the PBL height
-      real(fp) grav     !< gravity
+      real(fp) Hp       ! plume height (m)
+      real(fp) pblh     ! PBL height (m)
+      real(fp) frp      ! fire radiative power (W)
+      real(fp) NFT_sq   ! N square in Free Troposphere (@ z = 2pblh)
+      real(fp) PT1, PT2 ! Potential Temperature right below and above PBL height
+      real(fp) laydepth ! depth of the layer at the PBL height
+      real(fp) grav     ! gravity
 
-      real(fp) Pf0      !< reference fire power (W)
-      real(fp) N0_sq    !< Brunt-Vaisala frequency (s-2)
-      real(fp) alpha    !< part of ABL passed freely
-      real(fp) beta     !< weights contribution of fire intensity
-      real(fp) gama     !< power-law dependence on FRP
-      real(fp) delta    !< dependence on stability in the FT
+      real(fp) Pf0      ! reference fire power (W)
+      real(fp) N0_sq    ! Brunt-Vaisala frequency (s-2)
+      real(fp) alpha    ! part of ABL passed freely
+      real(fp) beta     ! weights contribution of fire intensity
+      real(fp) gama     ! power-law dependence on FRP
+      real(fp) delta    ! dependence on stability in the FT
 
       ! ... Initial values.
       ! ... predefined values parameter set 3 to estimate whether hp higher
