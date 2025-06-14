@@ -1,13 +1,31 @@
-! \file catchem_nuopc_driver.F90
-! \brief Simple NUOPC driver for testing CATChem cap
-!>
-! \details
-! This is a simple NUOPC driver that can be used to test the CATChem
-! NUOPC cap in standalone mode. It sets up a basic NUOPC application
-! with the CATChem component.
-!>
-! \author Barry Baker
-! \date 11/2024
+!> \file catchem_nuopc_driver.F90
+!! \brief Simple NUOPC driver for testing CATChem cap in standalone mode
+!!
+!! \details
+!! This is a standalone NUOPC driver application that can be used to test
+!! the CATChem NUOPC cap in isolation from larger Earth system models.
+!! It sets up a minimal NUOPC application with only the CATChem component,
+!! enabling testing and validation of the cap functionality.
+!!
+!! The driver follows standard NUOPC application patterns:
+!! - Initializes ESMF framework
+!! - Creates and configures the driver component
+!! - Adds the CATChem component to the driver
+!! - Executes the standard initialize-run-finalize sequence
+!! - Provides logging and error handling throughout
+!!
+!! This standalone capability is essential for:
+!! - Component testing and validation
+!! - Performance benchmarking
+!! - Debugging and development
+!! - Integration testing before coupling with larger systems
+!!
+!! \note This driver requires ESMF/NUOPC libraries and appropriate
+!!       configuration files for CATChem
+!!
+!! \author Barry Baker, NOAA/OAR/ARL
+!! \date November 2024
+!! \ingroup catchem_nuopc_group
 
 program catchem_nuopc_driver
 

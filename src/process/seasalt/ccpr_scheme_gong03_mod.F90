@@ -1,15 +1,22 @@
-!>
-!! \file
-!! \brief Contains the Gong 2003
+!> \file ccpr_scheme_gong03_mod.F90
+!! \brief Gong 2003 sea salt emission scheme
+!! \ingroup catchem_seasalt_process
 !!
+!! \author Barry Baker
+!! \date 05/2024
+!!
+!! This module implements the Gong 2003 sea salt emission scheme for calculating
+!! sea salt aerosol emissions in the CATChem atmospheric chemistry model.
+!!
+!! \details
+!! The Gong 2003 scheme provides an updated parameterization for sea salt
+!! emissions that improves upon the 1997 version, with better treatment of
+!! sub- and super-micron particles.
+!!
+!! \section gong03_reference Reference
 !! Gong, S. L. (2003), A parameterization of sea-salt aerosol source function for sub- and super-micron particles,
 !! Global Biogeochem. Cycles, 17, 1097, doi:10.1029/2003GB002079, 4.
 !!
-!! \author Barry baker
-!! \date 05/2024
-!!
-!! \ingroup catchem_seasalt_process
-!!!>
 module CCPr_Scheme_Gong03_Mod
 
    implicit none

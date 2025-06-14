@@ -1,14 +1,15 @@
-! \file CCPr_SeaSalt_mod.F90
-!! \brief Driver for the CATCHem Process: SeaSalt
+!> \file CCPr_SeaSalt_mod.F90
+!! \brief Driver for the CATChem Process: SeaSalt
+!! \ingroup catchem_seasalt_process
 !!
-!! Driver for the seasalt process.
+!! \author CATChem Development Team
+!! \date 2024
 !!
-!! \defgroup catchem_seasalt_process CATChem Sea Salt Process
-!! \ingroup catchem
+!! This module provides the main driver for sea salt emission processes in CATChem,
+!! including initialization, execution, and finalization of sea salt calculations.
+!! The module supports multiple sea salt emission schemes and handles the
+!! integration with the atmospheric chemistry system.
 !!
-!!
-!! The CATChem SeaSalt Process group holds all the CATCHem SeaSalt processes.
-!!!>
 MODULE CCPr_SeaSalt_mod
 
    ! USES:

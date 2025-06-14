@@ -1,14 +1,27 @@
-! \file catchem_nuopc_interface.F90
-! \brief NUOPC interface for CATChem similar to CCPP interface
-!>
-! \details
-! This module provides the core interface routines for CATChem NUOPC cap,
-! handling data transformations between ESMF/NUOPC fields and CATChem states.
-! It follows the same pattern as the CCPP interface but adapted for NUOPC.
-!>
-! \author Barry Baker
-! \date 11/2024
-! \ingroup catchem_nuopc_group
+!> \file catchem_nuopc_interface.F90
+!! \brief NUOPC interface for CATChem atmospheric chemistry model
+!!
+!! \details
+!! This module provides the core interface routines for the CATChem NUOPC cap,
+!! handling data transformations between ESMF/NUOPC fields and CATChem states.
+!! It follows similar patterns as the CCPP interface but is adapted for NUOPC
+!! framework requirements including ESMF grids, fields, and parallel operations.
+!!
+!! Key functionalities include:
+!! - CATChem model initialization and finalization within NUOPC framework
+!! - Data transformation between ESMF fields and CATChem state objects
+!! - Field mapping configuration and management
+!! - Integration with CF-compliant input and NetCDF output systems
+!! - Support for flexible grid configurations and parallel decomposition
+!! - Error handling and logging for NUOPC applications
+!!
+!! The interface supports both sequential and parallel execution modes
+!! and provides standardized data exchange capabilities for coupling
+!! with other Earth system model components.
+!!
+!! \author Barry Baker, NOAA/OAR/ARL
+!! \date November 2024
+!! \ingroup catchem_nuopc_group
 
 module catchem_nuopc_interface
 
@@ -31,39 +44,68 @@ module catchem_nuopc_interface
   public :: transform_catchem_to_nuopc
   public :: load_field_config
 
-  ! Field mapping structure
+  !> \brief Field mapping configuration structure
+  !!
+  !! Defines the mapping between NUOPC standard names and CATChem variables,
+  !! including metadata for proper data transformation and validation.
+  !! \{
   type :: field_mapping_type
-    character(len=128) :: standard_name
-    character(len=128) :: catchem_var
-    integer :: dimensions
-    character(len=64) :: units
-    logical :: optional = .false.
+    character(len=128) :: standard_name !< NUOPC/CF standard field name
+    character(len=128) :: catchem_var   !< Corresponding CATChem variable path
+    integer :: dimensions               !< Number of spatial dimensions (2D/3D)
+    character(len=64) :: units          !< Physical units for conversion
+    logical :: optional = .false.       !< Whether field is required or optional
   end type field_mapping_type
+  !! \}
 
-  ! Field configuration storage
-  type(QFYAML_t) :: field_config_yaml
-  type(field_mapping_type), allocatable :: import_fields(:)
-  type(field_mapping_type), allocatable :: export_fields(:)
-  integer :: n_import_fields = 0
-  integer :: n_export_fields = 0
+  !> \brief Module-level field configuration storage
+  !!
+  !! These variables maintain the field mapping configuration loaded
+  !! from external YAML files and used throughout the interface.
+  !! \{
+  type(QFYAML_t) :: field_config_yaml                    !< YAML configuration parser
+  type(field_mapping_type), allocatable :: import_fields(:) !< Import field mapping array
+  type(field_mapping_type), allocatable :: export_fields(:) !< Export field mapping array
+  integer :: n_import_fields = 0                         !< Number of import fields
+  integer :: n_export_fields = 0                         !< Number of export fields
+  !! \}
 
 contains
 
-  ! Initialize CATChem for NUOPC interface
+  !> Initialize CATChem model for NUOPC interface
   !!
-  !! Similar to catchem_init in CCPP interface but adapted for NUOPC
+  !! This routine performs comprehensive initialization of the CATChem model
+  !! within the NUOPC framework, including configuration loading, memory
+  !! allocation, and setup of I/O systems for external data and diagnostics.
   !!
-  !! \param config         CATChem configuration
-  !! \param catchem_states CATChem container
-  !! \param dustState      Dust process state
-  !! \param seaSaltState   Sea salt process state
-  !! \param dryDepState    Dry deposition process state
-  !! \param    im             Horizontal dimension
-  !! \param    config_file    Configuration file name
-  !! \param    grid           ESMF grid for regridding operations
-  !! \param   errflg         Error flag
-  !! \param   errmsg         Error message
+  !! @param config CATChem configuration object to initialize
+  !! @param catchem_states Main container for all CATChem state variables
+  !! @param dustState Dust emission and transport state object
+  !! @param seaSaltState Sea salt emission and transport state object
+  !! @param dryDepState Dry deposition process state object
+  !! @param im Number of horizontal grid points
+  !! @param config_file Path to CATChem configuration file
+  !! @param grid ESMF grid for regridding and I/O operations
+  !! @param errflg Error flag (CC_SUCCESS on success)
+  !! @param errmsg Error message string if errflg indicates failure
   !!
+  !! This routine performs the following initialization steps:
+  !! - Reads and validates the CATChem configuration file
+  !! - Initializes all CATChem state objects and process modules
+  !! - Allocates memory for MetState, EmisState, ChemState, and DiagState arrays
+  !! - Sets up field mapping configuration for NUOPC data exchange
+  !! - Initializes CF-compliant input system for external data
+  !! - Initializes NetCDF output system for diagnostic data
+  !! - Validates grid compatibility and spatial dimensions
+  !!
+  !! The routine is similar to catchem_init in the CCPP interface but includes
+  !! additional NUOPC-specific functionality such as ESMF grid integration
+  !! and YAML-based field configuration management.
+  !!
+  !! @note This routine must be called before any CATChem calculations
+  !!       and requires valid ESMF grid and configuration files
+  !!
+  !! @warning Proper error checking should be performed on errflg after calling
   subroutine catchem_nuopc_init(config, catchem_states, dustState, seaSaltState, &
                                dryDepState, im, config_file, grid, errflg, errmsg)
 

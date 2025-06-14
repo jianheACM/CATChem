@@ -1,17 +1,26 @@
-!>
-!! \file
-!! \brief CCPr Scheme for dry deposition
-!!
-!!
-!! Reference: Benchmarking GOCART-2G in the Goddard Earth Observing System (GEOS)
-!! Allison B. Collow, Peter R. Colarco, Arlindo M. da Silva, Virginie Buchard,
-!! Huisheng Bian, M Chin, Sampa Das, Ravi Govindaraju, Dongchul Kim, and Valentina Aquila,
-!! Geosci. Model Development, 17, 14431468, 2024
-!! https://doi.org/10.5194/gmd-17-1443-2024
+!> \file ccpr_scheme_GOCART_DryDep_mod.F90
+!! \brief GOCART dry deposition scheme
+!! \ingroup catchem_drydep_process
 !!
 !! \author Lacey Holland
 !! \date 07/2024
-!!!>
+!!
+!! This module implements the GOCART dry deposition scheme for calculating
+!! dry deposition velocities and removal rates in the CATChem atmospheric
+!! chemistry model.
+!!
+!! \details
+!! The GOCART scheme provides parameterizations for dry deposition based on
+!! surface characteristics, meteorological conditions, and aerosol properties.
+!! It includes treatments for various surface types and particle size dependencies.
+!!
+!! \section gocart_drydep_reference Reference
+!! Benchmarking GOCART-2G in the Goddard Earth Observing System (GEOS)
+!! Allison B. Collow, Peter R. Colarco, Arlindo M. da Silva, Virginie Buchard,
+!! Huisheng Bian, M Chin, Sampa Das, Ravi Govindaraju, Dongchul Kim, and Valentina Aquila,
+!! Geosci. Model Development, 17, 1443-1468, 2024
+!! https://doi.org/10.5194/gmd-17-1443-2024
+!!
 module CCPr_Scheme_GOCART_DryDep_Mod
 
    implicit none

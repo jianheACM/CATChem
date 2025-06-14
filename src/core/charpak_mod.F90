@@ -1,10 +1,21 @@
-! \file
+!> \file charpak_mod.F90
 !! \brief Module for character string manipulation
-!!
-!! Original code from https://github.com/geoschem/geos-chem/blob/20e2402baf56c682cc04af74adb139efdb6ca000/Headers/charpak_mod.F90
-!!
 !! \ingroup core_modules
-!!!>
+!!
+!! \author Original GEOS-Chem Development Team
+!! \author CATChem Development Team
+!! \date 2023
+!!
+!! This module provides utilities for character string manipulation and text
+!! processing operations used throughout the CATChem atmospheric chemistry model.
+!!
+!! Original code from https://github.com/geoschem/geos-chem/
+!!
+!! \details
+!! The character package module provides comprehensive string manipulation
+!! functions including case conversion, text cleaning, splitting, replacement,
+!! and formatted output operations.
+!!
 MODULE Charpak_Mod
     !
     ! !USES:

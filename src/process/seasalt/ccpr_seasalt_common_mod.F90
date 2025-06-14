@@ -1,12 +1,15 @@
-!>
-!! \file ccpr_SeaSalt_common_mod.F90
-!! \brief Contains module ccpr_SeaSalt_common_mod
+!> \file ccpr_seasalt_common_mod.F90
+!! \brief Common utilities and data types for sea salt emission processes
+!! \ingroup catchem_seasalt_process
 !!
 !! \author Barry Baker
 !! \date 05/2024
 !!
-!! \ingroup catchem_seasalt_process
-!!!>
+!! This module provides common utilities, data types, and shared functions
+!! for sea salt emission calculations in the CATChem atmospheric chemistry model.
+!! It includes wind speed parameterizations, size distribution functions,
+!! and temperature correction factors used by various sea salt emission schemes.
+!!
 module CCPr_SeaSalt_Common_Mod
    use precision_mod, Only : fp, ZERO, rae
    implicit none
@@ -224,7 +227,7 @@ contains
    !! \\f$\\int_x^\\infty t^{A-1}\\exp(-t) dt\\f$
    !!
    !! \param A Parameter A
-   !! \param X Parameter X  
+   !! \param X Parameter X
    !! \param RC Return code
    !!
    !! \ingroup catchem_seasalt_process

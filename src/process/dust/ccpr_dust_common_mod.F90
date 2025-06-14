@@ -1,12 +1,15 @@
-!>
-!! \file ccpr_dust_common_mod.F90
-!! \brief Contains module ccpr_dust_common_mod
-!!
+!> \file ccpr_dust_common_mod.F90
+!! \brief Common utilities and data types for dust emission processes
 !! \ingroup catchem_dust_process
 !!
 !! \author Barry Baker
 !! \date 05/2024
-!!!>
+!!
+!! This module provides common utilities, data types, and shared functions
+!! for dust emission calculations in the CATChem atmospheric chemistry model.
+!! It includes soil moisture parameterizations, size distribution functions,
+!! and horizontal flux calculations used by various dust emission schemes.
+!!
 module CCPr_Dust_Common_Mod
    use precision_mod, only: fp, ZERO
    implicit none

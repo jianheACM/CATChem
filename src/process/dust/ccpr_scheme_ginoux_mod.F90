@@ -1,6 +1,23 @@
-!>
-!! \file
-!! \brief Contains the Ginoux windblown dust emission scheme
+!> \file ccpr_scheme_ginoux_mod.F90
+!! \brief Ginoux windblown dust emission scheme
+!! \ingroup catchem_dust_process
+!!
+!! \author Barry Baker
+!! \date 05/2024
+!!
+!! This module implements the Ginoux dust emission scheme for calculating
+!! windblown dust emissions in the CATChem atmospheric chemistry model.
+!!
+!! \details
+!! The Ginoux scheme calculates dust emissions based on surface wind speed,
+!! soil moisture, and surface characteristics. It provides size-resolved
+!! dust emission fluxes for integration with atmospheric transport models.
+!!
+!! \section ginoux_reference Reference
+!! Ginoux, P., "Sources and distributions of dust aerosols simulated with the GOCART model",
+!! Journal of Geophysical Research, vol. 106, no. D17, pp. 20,255–20,273, 2001.
+!! doi:10.1029/2000JD000053.
+!!!! \brief Contains the Ginoux windblown dust emission scheme
 !!
 !! Ginoux, P., “Sources and distributions of dust aerosols simulated with the GOCART model”,
 !! <Journal of Geophysical Research, vol. 106, no. D17, pp. 20, 255–20, 273, 2001.

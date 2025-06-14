@@ -1,5 +1,5 @@
 !> \file catchem_wrapper_utils.F90
-!! \brief CATCHEM-CCPP interface utilities module
+!! \brief CATChem-CCPP interface utilities module
 !!
 !! \defgroup catchem_wrapper_group CATChem Wrapper Utilities
 !! \brief Utility functions for CATChem interface wrappers
@@ -7,18 +7,30 @@
 !!
 !! This group contains utility functions and data transformation routines
 !! used by CATChem interface wrappers, including CCPP and NUOPC interfaces.
+!! Provides common functionality for data conversion, memory management,
+!! and state initialization across different host model interfaces.
 !!
 !! \details
-!! Provides wrapper utilities for interfacing CATCHEM chemistry model with CCPP
-!! framework. Handles data transformation and management between host model and
-!! CATCHEM chemistry calculations.
-!!>
-!! \author Barry Baker and Wei Li
-!!>
-!! \date 11/2024
-!!>
+!! This module provides essential wrapper utilities for interfacing the CATChem
+!! chemistry model with various host modeling frameworks, particularly the
+!! Common Community Physics Package (CCPP). It handles:
+!! - Data transformation between host model and CATChem formats
+!! - Memory allocation and deallocation for CATChem state objects
+!! - Initialization and finalization routines
+!! - Error handling and diagnostic reporting
+!! - Coordinate transformations and unit conversions
+!!
+!! \author Barry Baker and Wei Li, NOAA/OAR/ARL
+!! \date November 2024
 !! \ingroup catchem_ccpp_group
-!!!>
+!!
+!> \brief CATChem wrapper utilities module
+!!
+!! This module contains utility functions and data transformation routines
+!! that support the integration of CATChem with different host modeling
+!! frameworks through standardized interfaces.
+!!
+!! \ingroup catchem_wrapper_group
 module catchem_wrapper_utils
 
     use CATChem, only: ConfigType, MetStateType, ChemStateType, GridStateType, &
@@ -35,8 +47,13 @@ module catchem_wrapper_utils
 
     implicit none
 
+    !> \brief Public interface for data transformation from CCPP to CATChem format
     public :: transform_ccpp_to_catchem
+
+    !> \brief Public interfaces for bidirectional data conversion
     public :: cc_to_ccpp, ccpp_to_cc
+
+    !> \brief Public interfaces for CATChem lifecycle management
     public :: catchem_init, catchem_run, catchem_finalize
 
     ! CCPP data structure
@@ -48,19 +65,33 @@ module catchem_wrapper_utils
 contains
 
 
-    ! Allocates memory for the entire catchem container
+    !> Initialize CATChem model components and state containers
     !!
-    !! \param    config         CATChem configuration
-    !! \param catchem_states Container for all CATChem states
-    !! \param    im            Number of horizontal points
-    !! \param    kme           Number of vertical levels
-    !! \param    nsoil         Number of soil levels
-    !! \param   errflg        Error flag (0=success, non-zero=failure)
-    !! \param   errmsg        Error message if errflg is non-zero
+    !! This subroutine performs comprehensive initialization of the CATChem model
+    !! including configuration loading, memory allocation, and state object setup
+    !! for all active atmospheric chemistry processes.
     !!
-    !! \ingroup catchem_ccpp_group
-    !!!>
-
+    !! @param config CATChem configuration object to be initialized
+    !! @param catchem_states Main container for all CATChem state variables
+    !! @param im Number of horizontal grid points
+    !! @param config_file Path to CATChem configuration file
+    !! @param errflg Error flag (0=success, non-zero=failure)
+    !! @param errmsg Error message string if errflg is non-zero
+    !! @param DustState Dust emission and transport state object
+    !! @param SeaSaltState Sea salt emission and transport state object
+    !! @param DryDepState Dry deposition process state object
+    !!
+    !! This routine performs the following initialization steps:
+    !! - Reads and validates the CATChem configuration file
+    !! - Allocates memory for all state objects based on grid dimensions
+    !! - Initializes process-specific state containers (dust, sea salt, dry deposition)
+    !! - Sets up the main CATChem container with appropriate linkages
+    !! - Validates configuration consistency and parameter ranges
+    !!
+    !! @note This routine must be called before any CATChem calculations can be performed.
+    !!       The configuration file must exist and be properly formatted.
+    !!
+    !! @warning Proper error checking should be performed on errflg after calling this routine
     subroutine catchem_init(config, catchem_states, im, config_file, errflg, errmsg, &
                             DustState, SeaSaltState, DryDepState)
         use CATChem, only: DustStateType, SeaSaltStateType, DryDepStateType
@@ -153,55 +184,93 @@ contains
     !end subroutine allocate_catchem_container
     end subroutine catchem_init
 
-    ! Transforms CCPP meteorological arrays into CATChem meteorological and chemistry states
+    !> Transform CCPP meteorological data to CATChem format
     !!
-    !! \param im         Number of horizontal grid points
-    !! \param kme        Number of vertical levels
-    !! \param temp       3D temperature field (K)
-    !! \param spechum    3D specific humidity field (kg/kg)
-    !! \param pfull      3D full level pressure (Pa)
-    !! \param phalf      3D half level pressure (Pa)
-    !! \param u          3D zonal wind (m/s)
-    !! \param v          3D meridional wind (m/s)
-    !! \param delp       3D pressure thickness (Pa)
-    !! \param zh         3D geopotential height (m)
-    !! \param kh         3D vertical diffusivity (m2/s)
-    !! \param prsl       3D layer mean pressure (Pa)
-    !! \param prslk      3D Exner function
-    !! \param u10m       10m u wind (m/s)
-    !! \param v10m       10m v wind (m/s)
-    !! \param tskin      Surface skin temperature (K)
-    !! \param ps         Surface pressure (Pa)
-    !! \param precip     Precipitation rate (kg/m2/s)
-    !! \param slmsk      Land-sea mask (1=land,0=sea,2=ice)
-    !! \param snowh      Snow depth (m)
-    !! \param vegtype    Vegetation type
-    !! \param soiltyp    Soil type
-    !! \param hf         Sensible heat flux (W/m2)
-    !! \param ust        Friction velocity (m/s)
-    !! \param zpbl       PBL height (m)
-    !! \param coszen     Cosine of solar zenith angle
-    !! \param albedo     Surface albedo
-    !! \param emis       Surface emissivity
-    !! \param ustar      Friction velocity (m/s)
-    !! \param shflx      Surface sensible heat flux (W/m2)
-    !! \param lhflx      Surface latent heat flux (W/m2)
-    !! \param snowc      Snow cover fraction (0-1)
-    !! \param vegfrac    Green vegetation fraction (0-1)
-    !! \param swdn       Surface downward SW radiation (W/m2)
-    !! \param swup       Surface upward SW radiation (W/m2)
-    !! \param lwdn       Surface downward LW radiation (W/m2)
-    !! \param lwup       Surface upward LW radiation (W/m2)
-    !! \param swdnc      Clear-sky surface downward SW radiation (W/m2)
-    !! \param swupc      Clear-sky surface upward SW radiation (W/m2)
-    !! \param lwdnc      Clear-sky surface downward LW radiation (W/m2)
-    !! \param lwupc      Clear-sky surface upward LW radiation (W/m2)
-    !! \param MetState   CATChem meteorology state
-    !! \param ChemState  CATChem chemistry state
-    !! \param errmsg     Error message
-    !! \param errflg     Error flag
+    !! This subroutine transforms meteorological variables from CCPP format
+    !! into CATChem's MetState format, handling coordinate transformations,
+    !! unit conversions, and vertical level indexing differences between
+    !! the two systems.
     !!
-    !! \ingroup catchem_ccpp_group
+    !! @param im Number of horizontal grid points
+    !! @param kme Number of vertical interfaces
+    !! @param kte Number of vertical levels
+    !! @param nsoil Number of soil levels
+    !! @param nlndcat Number of land categories
+    !! @param nsoilcat Number of soil categories
+    !! @param lat Latitude in degrees
+    !! @param lon Longitude in degrees
+    !! @param dt Physics timestep in seconds
+    !! @param jdate Current forecast date and time array
+    !! @param garea Grid cell area (m²)
+    !! @param lwi Land-water-ice flag (0=water, 1=land, 2=ice)
+    !! @param temp 3D temperature field (K)
+    !! @param spechum 3D specific humidity field (kg/kg)
+    !! @param pfull 3D full level pressure of dry air (Pa)
+    !! @param pfull_wet 3D full level pressure of moist air (Pa)
+    !! @param phalf 3D half level pressure of dry air (Pa)
+    !! @param rh 3D relative humidity (fraction)
+    !! @param u 3D zonal wind (m/s)
+    !! @param v 3D meridional wind (m/s)
+    !! @param delp 3D pressure thickness (Pa)
+    !! @param delp_dry 3D dry air pressure thickness (Pa)
+    !! @param zh 3D geopotential height (m)
+    !! @param u10m 10m zonal wind (m/s)
+    !! @param v10m 10m meridional wind (m/s)
+    !! @param tskin Surface skin temperature (K)
+    !! @param ps Surface pressure (Pa)
+    !! @param ts Surface temperature (K)
+    !! @param precip Precipitation rate (kg/m²/s)
+    !! @param snowh Snow depth (m)
+    !! @param vegtype Vegetation type index
+    !! @param soiltyp Soil type index
+    !! @param soilmoist Soil moisture (m³/m³)
+    !! @param zpbl Planetary boundary layer height (m)
+    !! @param coszen Cosine of solar zenith angle
+    !! @param ustar Friction velocity (m/s)
+    !! @param shflx Surface sensible heat flux (W/m²)
+    !! @param lhflx Surface latent heat flux (W/m²)
+    !! @param snowc Snow cover fraction (0-1)
+    !! @param vegfrac Green vegetation fraction (0-1)
+    !! @param lai Leaf area index (m²/m²)
+    !! @param frlanduse Fraction of each land use type
+    !! @param frsoil Fraction of each soil type
+    !! @param pores Maximum soil moisture content by soil type
+    !! @param resid Minimum soil moisture content by soil type
+    !! @param z0 Surface roughness length (m)
+    !! @param landfrac Land fraction
+    !! \param[in] oceanfrac Ocean fraction
+    !! \param[in] lakefrac Lake fraction
+    !! \param[in] seaicefrac Sea ice fraction
+    !! \param[in] swdn Surface downward shortwave radiation (W/m²)
+    !! \param[in] nirbmdi Near-infrared beam radiation (W/m²)
+    !! \param[in] nirdfdi Near-infrared diffuse radiation (W/m²)
+    !! \param[in] visbmdi Visible beam radiation (W/m²)
+    !! \param[in] visdfdi Visible diffuse radiation (W/m²)
+    !! \param[in] sfc_alb_nir_dir Surface near-infrared direct albedo
+    !! \param[in] sfc_alb_nir_dif Surface near-infrared diffuse albedo
+    !! \param[in] sfc_alb_uvvis_dir Surface visible+UV direct albedo
+    !! \param[in] sfc_alb_uvvis_dif Surface visible+UV diffuse albedo
+    !! \param[in] dust_in Dust emission input data (clay, drag, sand, etc.)
+    !! \param[inout] MetState Array of CATChem meteorological state objects
+    !! \param[out] errmsg Error message string
+    !! \param[out] errflg Error flag (0=success, non-zero=failure)
+    !!
+    !! \details
+    !! This routine performs comprehensive data transformation including:
+    !! - Coordinate system conversion between CCPP and CATChem formats
+    !! - Vertical level indexing reversal (CCPP uses top-down, CATChem bottom-up)
+    !! - Unit conversions (e.g., specific humidity kg/kg to g/kg)
+    !! - Surface property calculations (land/water/ice classification)
+    !! - Radiation flux processing and albedo calculations
+    !! - Soil moisture normalization and vegetation parameter setup
+    !! - Monin-Obukhov length calculation for surface layer parameterization
+    !!
+    !! \note This routine assumes specific array indexing conventions and
+    !!       requires careful attention to vertical coordinate transformations.
+    !!
+    !! \warning Vertical level ordering is reversed between CCPP and CATChem
+    !!
+    !! \ingroup catchem_wrapper_group
     !!!>
     subroutine transform_ccpp_to_catchem(im, kme, kte, nsoil, nlndcat, nsoilcat, lat, lon, &      ! Grid Information
                                         dt, jdate, garea, &  ! Grid Information
@@ -530,6 +599,38 @@ contains
 
 
 
+    !> \brief Execute CATChem atmospheric chemistry processes
+    !!
+    !! This subroutine runs the main CATChem atmospheric chemistry calculations
+    !! for all horizontal grid points, processing dust emission, sea salt production,
+    !! dry deposition, and other atmospheric chemistry processes.
+    !!
+    !! \param[in] im Number of horizontal grid points
+    !! \param[inout] catchem_states Container holding all CATChem state variables
+    !! \param[inout] DustState Dust emission and transport state object
+    !! \param[inout] SeaSaltState Sea salt emission and transport state object
+    !! \param[inout] DryDepState Dry deposition process state object
+    !! \param[inout] errflg Error flag (0=success, non-zero=failure)
+    !!
+    !! \details
+    !! This routine performs the core CATChem calculations by:
+    !! - Looping through all horizontal grid points
+    !! - Calling the main CATChem process routine for each grid point
+    !! - Processing meteorological inputs and updating chemistry states
+    !! - Handling emissions, transport, and deposition processes
+    !! - Computing diagnostic variables for output
+    !! - Performing error checking and reporting
+    !!
+    !! The routine integrates multiple atmospheric chemistry processes including
+    !! aerosol dynamics, gas-phase chemistry, emissions processing, and
+    !! deposition calculations in a coordinated manner.
+    !!
+    !! \note This routine should be called after successful initialization
+    !!       and meteorological data transformation.
+    !!
+    !! \warning Proper error checking should be performed on errflg after calling
+    !!
+    !! \ingroup catchem_wrapper_group
     subroutine catchem_run (im, catchem_states, DustState, SeaSaltState, DryDepState, errflg)
         use CATChem, only: DustStateType, SeaSaltStateType, DryDepStateType
         implicit none
@@ -563,6 +664,34 @@ contains
     end subroutine catchem_run
 
 
+    !> \brief Finalize and clean up CATChem model components
+    !!
+    !! This subroutine performs cleanup operations for CATChem, including
+    !! finalizing process states and deallocating memory for all state
+    !! containers to prevent memory leaks.
+    !!
+    !! \param[inout] catchem_states Main container for all CATChem state variables
+    !! \param[inout] DustState Dust emission and transport state object
+    !! \param[inout] SeaSaltState Sea salt emission and transport state object
+    !! \param[inout] DryDepState Dry deposition process state object
+    !! \param[inout] errflg Error flag (0=success, non-zero=failure)
+    !!
+    !! \details
+    !! This routine performs comprehensive cleanup including:
+    !! - Finalizing CATChem process states (dust, sea salt, dry deposition)
+    !! - Deallocating MetState arrays and associated memory
+    !! - Deallocating EmisState arrays and emission data structures
+    !! - Deallocating ChemState arrays and chemistry species data
+    !! - Deallocating DiagState arrays and diagnostic variables
+    !! - Performing error checking for each deallocation step
+    !! - Reporting specific errors for debugging purposes
+    !!
+    !! \note This routine should be called at the end of model execution
+    !!       or when CATChem components are no longer needed.
+    !!
+    !! \warning Failure to call this routine may result in memory leaks
+    !!
+    !! \ingroup catchem_wrapper_group
     subroutine catchem_finalize (catchem_states, DustState, SeaSaltState, DryDepState, errflg)
         use CATChem, only: DustStateType, SeaSaltStateType, DryDepStateType
         implicit none
@@ -626,6 +755,34 @@ contains
     end subroutine catchem_finalize
 
 
+    !> \brief Convert CATChem chemistry data to CCPP format
+    !!
+    !! This subroutine transfers chemical species concentration data from
+    !! CATChem's internal format to CCPP's chemistry array format, performing
+    !! necessary unit conversions and coordinate transformations.
+    !!
+    !! \param[in] im Number of horizontal grid points
+    !! \param[in] kte Number of vertical levels
+    !! \param[in] ind_start Starting index for chemical species in CCPP array
+    !! \param[in] ntchm Number of chemical tracers to transfer
+    !! \param[in] ChemState Array of CATChem chemistry state objects
+    !! \param[inout] chemarr CCPP chemistry array to be updated
+    !!
+    !! \details
+    !! This routine performs data conversion including:
+    !! - Extracting species concentrations from CATChem ChemState objects
+    !! - Reversing vertical coordinate indexing (CATChem to CCPP convention)
+    !! - Converting concentration units based on species type:
+    !!   - Gas species: ppm to kg/kg using molecular weight ratios
+    !!   - Aerosol species: μg/kg to kg/kg (factor of 1e-9)
+    !! - Placing converted data into appropriate CCPP array locations
+    !!
+    !! \note The routine assumes consistent ordering of chemical species
+    !!       between CATChem and CCPP arrays.
+    !!
+    !! \warning Vertical coordinate systems are reversed between the two models
+    !!
+    !! \ingroup catchem_wrapper_group
     subroutine cc_to_ccpp(im, kte, ind_start, ntchm, ChemState, chemarr)
         use CATChem, only: ChemStateType
         implicit none
@@ -659,6 +816,34 @@ contains
 
     end subroutine cc_to_ccpp
 
+    !> \brief Convert CCPP chemistry data to CATChem format
+    !!
+    !! This subroutine transfers chemical species concentration data from
+    !! CCPP's chemistry array format to CATChem's internal ChemState format,
+    !! performing necessary unit conversions and coordinate transformations.
+    !!
+    !! \param[in] im Number of horizontal grid points
+    !! \param[in] kte Number of vertical levels
+    !! \param[in] ind_start Starting index for chemical species in CCPP array
+    !! \param[in] ntchm Number of chemical tracers to transfer
+    !! \param[inout] ChemState Array of CATChem chemistry state objects to update
+    !! \param[in] chemarr CCPP chemistry array containing input data
+    !!
+    !! \details
+    !! This routine performs data conversion including:
+    !! - Extracting species concentrations from CCPP chemistry arrays
+    !! - Reversing vertical coordinate indexing (CCPP to CATChem convention)
+    !! - Converting concentration units based on species type:
+    !!   - Gas species: kg/kg to ppm using molecular weight ratios
+    !!   - Aerosol species: kg/kg to μg/kg (factor of 1e+9)
+    !! - Storing converted data in CATChem ChemState objects
+    !!
+    !! \note The routine assumes consistent ordering of chemical species
+    !!       between CCPP arrays and CATChem ChemState objects.
+    !!
+    !! \warning Vertical coordinate systems are reversed between the two models
+    !!
+    !! \ingroup catchem_wrapper_group
     subroutine ccpp_to_cc(im, kte, ind_start, ntchm, ChemState, chemarr)
         use CATChem, only: ChemStateType
         implicit none
@@ -693,14 +878,25 @@ contains
     end subroutine ccpp_to_cc
 
 
-    ! Checks for allocation errors and sets error message
+    !> \brief Check for memory allocation errors and generate error messages
     !!
-    !! \param state_name Name of the state being allocated
-    !! \param errflg     Error flag from allocation
-    !! \param errmsg    Output error message if allocation failed
-    !! \return has_error     True if allocation error occurred
-    !! \ingroup catchem_ccpp_group
-    !!!>
+    !! This utility function checks allocation status and generates standardized
+    !! error messages for memory allocation failures in CATChem state objects.
+    !!
+    !! \param[in] state_name Name of the state object being allocated
+    !! \param[in] errflg Error flag returned from allocation operation
+    !! \param[out] errmsg Error message string (set if allocation failed)
+    !! \return has_error Logical flag indicating if allocation error occurred
+    !!
+    !! \details
+    !! This function provides centralized error checking for memory allocation
+    !! operations throughout the CATChem wrapper utilities. It standardizes
+    !! error reporting and helps with debugging allocation-related issues.
+    !!
+    !! \note This function is typically used immediately after allocate statements
+    !!       to provide consistent error handling.
+    !!
+    !! \ingroup catchem_wrapper_group
     function check_allocation_error(state_name, errflg, errmsg) result(has_error)
         implicit none
 

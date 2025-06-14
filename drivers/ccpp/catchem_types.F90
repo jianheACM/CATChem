@@ -1,19 +1,18 @@
-! \file catchem_types.F90
-! \brief Container module for CATCHEM model data structures
-!>
-! \details
-! Defines the core data structures used by CATCHEM chemistry model including
-! arrays for meteorological states, chemical species concentrations, emissions,
-! and diagnostic outputs. Provides the fundamental data container types needed
-! for chemistry calculations.
-!>
-! \author Barry Baker
-!>
-! \date 11/2024
-!>
-! \ingroup catchem_ccpp_group
+!> \file catchem_types.F90
+!! \brief Container module for CATCHEM model data structures
+!!
+!! \details
+!! Defines the core data structures used by CATCHEM chemistry model including
+!! arrays for meteorological states, chemical species concentrations, emissions,
+!! and diagnostic outputs. Provides the fundamental data container types needed
+!! for chemistry calculations.
+!!
+!! \author Barry Baker
+!!
+!! \date 11/2024
+!!
+!! \ingroup catchem_ccpp_group
 !!!>
-
 module catchem_types
 
   use CATChem, only: GridStateType, MetStateType, ChemStateType, EmisStateType, DiagStateType
@@ -22,7 +21,7 @@ module catchem_types
   private
 
 
-  ! Container type for CATCHEM model data
+  !> Container type for CATCHEM model data
   !!
   !! Holds arrays for meteorological, chemical, emission and diagnostic states
   !! along with the horizontal dimension parameter
@@ -34,11 +33,11 @@ module catchem_types
     integer :: im = 0  ! Horizontal dimension
 
     ! State arrays
-    type(GridStateType)  :: GridState   ! Grid state (not an array)
-    type(MetStateType),  allocatable :: MetState(:)    ! Meteorological state array
-    type(ChemStateType), allocatable :: ChemState(:)   ! Chemical state array
-    type(EmisStateType), allocatable :: EmisState(:)   ! Emission state array
-    type(DiagStateType), allocatable :: DiagState(:)   ! Diagnostic state array
+    type(GridStateType)  :: GridState   !> Grid state (not an array)
+    type(MetStateType),  allocatable :: MetState(:)    !> Meteorological state array
+    type(ChemStateType), allocatable :: ChemState(:)   !> Chemical state array
+    type(EmisStateType), allocatable :: EmisState(:)   !> Emission state array
+    type(DiagStateType), allocatable :: DiagState(:)   !> Diagnostic state array
 
   end type catchem_container_type
 

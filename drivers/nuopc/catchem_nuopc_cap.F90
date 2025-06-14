@@ -1,22 +1,39 @@
-! \file catchem_nuopc_cap.F90
-! \brief NUOPC cap for CATChem atmospheric chemistry model
-!>
-! \defgroup catchem_nuopc_group CATChem NUOPC Interface
-! \ingroup catchem
-!>
-! \details
-! This module provides the NUOPC (National Unified Operational Prediction
-! Capability) cap for the CATChem (Configurable ATmospheric Chemistry) model.
-! The cap enables CATChem to run within the NUOPC/ESMF framework as a
-! component in coupled Earth system models.
-!>
-! The cap implements the standard NUOPC phases:
-! - Initialize: Set up the component, advertise fields, and realize the grid
-! - Run: Execute chemistry calculations and data exchange
-! - Finalize: Clean up resources
-!>
-! \author Barry Baker
-! \date 11/2024
+!> \file catchem_nuopc_cap.F90
+!! \brief NUOPC cap for CATChem atmospheric chemistry model
+!!
+!! \defgroup catchem_nuopc_group CATChem NUOPC Interface
+!! \brief NUOPC interface drivers and utilities for CATChem
+!! \ingroup catchem
+!!
+!! This group contains all NUOPC-compliant interface modules and utilities
+!! for integrating CATChem with the NUOPC framework, including the main
+!! cap module, data transformation utilities, and I/O capabilities.
+!!
+!! \details
+!! This module provides the NUOPC (National Unified Operational Prediction
+!! Capability) cap for the CATChem (Configurable ATmospheric Chemistry) model.
+!! The cap enables CATChem to run within the NUOPC/ESMF framework as a
+!! component in coupled Earth system models.
+!!
+!! The cap implements the standard NUOPC phases:
+!! - Initialize Phase 1: Advertise import and export fields
+!! - Initialize Phase 2: Realize fields and initialize the CATChem model
+!! - Run: Execute chemistry calculations and data exchange
+!! - Finalize: Clean up resources and finalize CATChem processes
+!!
+!! Key features:
+!! - Standard NUOPC/ESMF compliance for easy integration
+!! - Flexible field mapping and data exchange
+!! - Support for various grid configurations
+!! - Configurable chemistry processes and diagnostics
+!! - Parallel execution capabilities
+!! - Error handling and logging
+!!
+!! \note This cap follows NUOPC conventions and requires ESMF/NUOPC libraries
+!!
+!! \author Barry Baker, NOAA/OAR/ARL
+!! \date November 2024
+!! \ingroup catchem_nuopc_group
 
 module catchem_nuopc_cap
 
@@ -39,27 +56,46 @@ module catchem_nuopc_cap
 
   public :: SetServices
 
-  ! CATChem component data
-  type(catchem_container_type), save :: catchem_states
-  type(ConfigType), save :: config
-  type(DustStateType), save :: dustState
-  type(SeaSaltStateType), save :: seaSaltState
-  type(DryDepStateType), save :: dryDepState
+  !> \brief CATChem component data containers
+  !!
+  !! These module-level variables maintain the state of the CATChem component
+  !! throughout the simulation, including all chemistry, meteorological,
+  !! emissions, and diagnostic state information.
+  !! \{
+  type(catchem_container_type), save :: catchem_states  !< Main CATChem state container
+  type(ConfigType), save :: config                      !< CATChem configuration object
+  type(DustStateType), save :: dustState               !< Dust emission and transport state
+  type(SeaSaltStateType), save :: seaSaltState         !< Sea salt emission and transport state
+  type(DryDepStateType), save :: dryDepState           !< Dry deposition process state
+  !! \}
 
-  ! Component configuration
-  character(len=256), save :: config_file = 'CATChem_config.yml'
-  logical, save :: do_chemistry = .true.
+  !> \brief Component configuration parameters
+  !! \{
+  character(len=256), save :: config_file = 'CATChem_config.yml' !< Configuration file path
+  logical, save :: do_chemistry = .true.                         !< Enable chemistry calculations
+  !! \}
 
 contains
 
-  ! Set services for the CATChem NUOPC cap
+  !> Set services for the CATChem NUOPC cap
   !!
-  !! This is the main entry point called by NUOPC to set up the component.
-  !! It registers the initialize, run, and finalize phases.
+  !! This is the main entry point called by NUOPC to set up the CATChem component.
+  !! It registers the initialize, run, and finalize phase entry points and sets
+  !! component metadata attributes.
   !!
-  !! \param model  NUOPC model component
-  !! \param   rc     ESMF return code
+  !! @param model NUOPC model component to configure
+  !! @param rc ESMF return code (ESMF_SUCCESS on success)
   !!
+  !! This routine performs the following setup operations:
+  !! - Derives the component from the NUOPC model template
+  !! - Sets component metadata (name, version)
+  !! - Registers entry points for all required NUOPC phases:
+  !!   - IPDv00p1: Initialize Phase 1 (advertise fields)
+  !!   - IPDv00p2: Initialize Phase 2 (realize fields and initialize model)
+  !!   - RunPhase1: Model advance (execute chemistry)
+  !!   - FinalizePhase1: Model cleanup
+  !!
+  !! @note This routine must be called before any other component operations
   subroutine SetServices(model, rc)
     type(ESMF_GridComp)  :: model
     integer, intent(out) :: rc
@@ -103,14 +139,30 @@ contains
 
   end subroutine SetServices
 
-  ! Initialize Phase 1 - Advertise fields
+  !> \brief Initialize Phase 1 - Advertise import and export fields
   !!
   !! In this phase, the component advertises what fields it can import
   !! (receive from other components) and export (provide to other components).
+  !! This establishes the interface contract without creating actual field objects.
   !!
-  !! \param model  NUOPC model component
-  !! \param   rc     ESMF return code
+  !! \param[inout] model NUOPC model component
+  !! \param[out] rc ESMF return code (ESMF_SUCCESS on success)
   !!
+  !! \details
+  !! This routine performs the following operations:
+  !! - Retrieves the component's import and export states
+  !! - Calls the field advertisement routine to declare all required fields
+  !! - Sets up the field interface for meteorological inputs and chemistry outputs
+  !! - Enables field matching and connection with other components
+  !!
+  !! Fields advertised typically include:
+  !! - Import: Temperature, humidity, pressure, winds, surface properties
+  !! - Export: Chemical species concentrations, deposition fluxes, emissions
+  !!
+  !! \note This is a standard NUOPC initialization phase that must complete
+  !!       successfully before Phase 2 can proceed
+  !!
+  !! \ingroup catchem_nuopc_group
   subroutine InitializeP1(model, rc)
     type(ESMF_GridComp)  :: model
     integer, intent(out) :: rc
@@ -135,14 +187,34 @@ contains
 
   end subroutine InitializeP1
 
-  ! Initialize Phase 2 - Realize fields and initialize model
+  !> \brief Initialize Phase 2 - Realize fields and initialize CATChem model
   !!
   !! In this phase, the component creates the actual ESMF fields for the
-  !! advertised imports and exports, and initializes the CATChem model.
+  !! advertised imports and exports, and performs complete initialization
+  !! of the CATChem model including memory allocation and configuration.
   !!
-  !! \param model  NUOPC model component
-  !! \param   rc     ESMF return code
+  !! \param[inout] model NUOPC model component
+  !! \param[out] rc ESMF return code (ESMF_SUCCESS on success)
   !!
+  !! \details
+  !! This routine performs comprehensive model initialization:
+  !! - Retrieves component information (local PET, PET count)
+  !! - Gets the computational grid from the driver
+  !! - Determines grid dimensions for memory allocation
+  !! - Creates actual ESMF field objects on the grid
+  !! - Reads CATChem configuration from file
+  !! - Initializes all CATChem state containers and processes
+  !! - Sets up chemistry, meteorology, emissions, and diagnostic systems
+  !! - Prepares the model for time stepping
+  !!
+  !! The grid is typically provided by the parent driver or mediator
+  !! component and defines the spatial discretization for all field
+  !! operations and data exchange.
+  !!
+  !! \note This phase must complete successfully before any model
+  !!       advance operations can be performed
+  !!
+  !! \ingroup catchem_nuopc_group
   subroutine InitializeP2(model, rc)
     type(ESMF_GridComp)  :: model
     integer, intent(out) :: rc
@@ -218,15 +290,37 @@ contains
 
   end subroutine InitializeP2
 
-  ! Model advance routine - Run the chemistry model
+  !> \brief Model advance routine - Execute one time step of chemistry calculations
   !!
   !! This routine is called at each time step to advance the chemistry model.
-  !! It imports meteorological data, runs chemistry calculations, and exports
-  !! the results.
+  !! It handles the complete workflow of importing meteorological data,
+  !! running chemistry calculations, and exporting the computed results.
   !!
-  !! \param model  NUOPC model component
-  !! \param   rc     ESMF return code
+  !! \param[inout] model NUOPC model component
+  !! \param[out] rc ESMF return code (ESMF_SUCCESS on success)
   !!
+  !! \details
+  !! This routine performs the following operations for each time step:
+  !! - Retrieves the component clock and current simulation time
+  !! - Calculates the time step duration for chemistry integration
+  !! - Imports meteorological fields from other model components
+  !! - Transforms NUOPC field data into CATChem state format
+  !! - Executes all enabled chemistry processes (if do_chemistry=true):
+  !!   - Dust emission and transport
+  !!   - Sea salt emission and transport
+  !!   - Gas-phase and aerosol chemistry
+  !!   - Dry and wet deposition processes
+  !! - Transforms computed results back to NUOPC field format
+  !! - Exports chemistry fields to other model components
+  !! - Updates diagnostic outputs and logging
+  !!
+  !! The routine handles both sequential and parallel execution,
+  !! with appropriate logging and error checking throughout.
+  !!
+  !! \note This routine is called repeatedly during model integration
+  !!       and must maintain consistent state between calls
+  !!
+  !! \ingroup catchem_nuopc_group
   subroutine ModelAdvance(model, rc)
     type(ESMF_GridComp)  :: model
     integer, intent(out) :: rc
@@ -302,11 +396,28 @@ contains
 
   end subroutine ModelAdvance
 
-  ! Run chemistry processes
+  !> \brief Execute all chemistry processes for one time step
   !!
-  !! \param  dt  Time step in seconds
-  !! \param rc  Return code
+  !! This internal routine runs all enabled atmospheric chemistry processes
+  !! for each horizontal grid point, including emissions, transport, and
+  !! deposition calculations.
   !!
+  !! \param[in] dt Time step duration in seconds
+  !! \param[out] rc Return code (CC_SUCCESS on success)
+  !!
+  !! \details
+  !! This routine executes the following chemistry processes sequentially:
+  !! - Dust emission and transport calculations
+  !! - Sea salt emission and transport calculations
+  !! - Dry deposition processes for all species
+  !! - Additional chemistry processes as configured
+  !!
+  !! Each process is called for all horizontal grid points in sequence,
+  !! with error checking after each major process group.
+  !!
+  !! \note This routine is called internally by ModelAdvance
+  !!
+  !! \ingroup catchem_nuopc_group
   subroutine run_chemistry_processes(dt, rc)
     real(ESMF_KIND_R8), intent(in) :: dt
     integer, intent(out) :: rc
@@ -347,13 +458,29 @@ contains
 
   end subroutine run_chemistry_processes
 
-  ! Finalize the model component
+  !> \brief Finalize the CATChem model component
   !!
-  !! Clean up resources and finalize CATChem processes.
+  !! This routine performs cleanup operations and finalizes all CATChem
+  !! processes, deallocating memory and closing any open resources.
   !!
-  !! \param model  NUOPC model component
-  !! \param   rc     ESMF return code
+  !! \param[inout] model NUOPC model component to finalize
+  !! \param[out] rc ESMF return code (ESMF_SUCCESS on success)
   !!
+  !! \details
+  !! This routine performs the following cleanup operations:
+  !! - Finalizes all CATChem chemistry and emission processes
+  !! - Deallocates memory for all state containers
+  !! - Closes any open files or external resources
+  !! - Performs diagnostic output if enabled
+  !! - Logs completion status and any warnings
+  !!
+  !! This is a standard NUOPC finalization phase that should be called
+  !! when the component is no longer needed or at the end of simulation.
+  !!
+  !! \note Failure to call this routine may result in memory leaks
+  !!       or incomplete output files
+  !!
+  !! \ingroup catchem_nuopc_group
   subroutine ModelFinalize(model, rc)
     type(ESMF_GridComp)  :: model
     integer, intent(out) :: rc
@@ -386,11 +513,20 @@ contains
 
   end subroutine ModelFinalize
 
-  ! Convert real to string for logging
+  !> \brief Convert real number to string for logging purposes
   !!
-  !! \param val  Real value to convert
-  !! \return         String representation
+  !! This utility function converts a real number to a formatted string
+  !! representation suitable for logging and diagnostic messages.
   !!
+  !! \param[in] val Real value to convert
+  !! \return str String representation of the value
+  !!
+  !! \details
+  !! The function formats the real number with appropriate precision
+  !! and removes leading/trailing whitespace for clean output in log
+  !! messages and diagnostic information.
+  !!
+  !! \ingroup catchem_nuopc_group
   function real_to_string(val) result(str)
     real(ESMF_KIND_R8), intent(in) :: val
     character(len=32) :: str

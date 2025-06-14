@@ -1,14 +1,22 @@
-!>
-!! \file
-!! \brief Contains the Gong 1997
+!> \file ccpr_scheme_gong97_mod.F90
+!! \brief Gong 1997 sea salt emission scheme
+!! \ingroup catchem_seasalt_process
 !!
+!! \author Barry Baker
+!! \date 05/2024
+!!
+!! This module implements the Gong 1997 sea salt emission scheme for calculating
+!! sea salt aerosol emissions in the CATChem atmospheric chemistry model.
+!!
+!! \details
+!! The Gong 1997 scheme calculates sea salt emissions based on surface wind speed
+!! and provides size-resolved emission fluxes. It is one of the foundational
+!! parameterizations for sea salt emission modeling.
+!!
+!! \section gong97_reference Reference
 !! Gong, S. L., L. A. Barrie, and J.-P. Blanchet (1997), Modeling sea-salt aerosols in the atmosphere:
 !! 1. Model development, J. Geophys. Res., 102(D3), 3805–3818, doi:10.1029/96JD02953.
 !!
-!! \author Barry baker
-!! \date 05/2024
-!! \ingroup catchem_seasalt_process
-!!!>
 module CCPr_Scheme_Gong97_Mod
 
    implicit none

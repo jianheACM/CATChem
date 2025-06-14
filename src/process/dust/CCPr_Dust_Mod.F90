@@ -1,5 +1,5 @@
 !> \file CCPr_Dust_mod.F90
-!! \brief Driver for the CATCHem Process: Dust
+!! \brief Driver for the CATChem Process: Dust
 !!
 !! \defgroup catchem_dust_process CATChem Dust Process
 !! \brief Dust emission and transport processes
@@ -10,26 +10,12 @@
 !! Includes various dust schemes like Ginoux and Fengsha, as well as
 !! common dust utilities and state management.
 !!
-!! The CATChem Dust Process group holds all the CATCHem dust processes.od.F90
-!! \brief Driver for the CATCHem Process: Dust
+!! \author CATChem Development Team
+!! \date 2024
 !!
-!! \defgroup process_modules CATChem Process Modules
-!! \brief All atmospheric chemistry process modules
+!! This module provides the main driver for dust emission processes in CATChem,
+!! including initialization, execution, and finalization of dust calculations.
 !!
-!! This group contains all process modules in the CATChem system,
-!! including dust, sea salt, dry deposition, and plume rise processes.
-!!
-!! \defgroup catchem_dust_process CATChem Dust Process
-!! \brief Dust emission and transport processes
-!! \ingroup process_modules
-!!
-!! This group contains all modules, functions, and data types related to
-!! dust emission calculations in the CATChem atmospheric chemistry model.
-!! Includes various dust schemes like Ginoux and Fengsha, as well as
-!! common dust utilities and state management.
-!!
-!! The CATChem Dust Process group holds all the CATCHem dust processes.
-!!!>
 MODULE CCPr_Dust_mod
 
    ! USES:

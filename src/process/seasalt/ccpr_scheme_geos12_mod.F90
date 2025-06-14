@@ -1,16 +1,23 @@
-!>
-!! \file
-!! \brief Contains the GEOS2012 Sea Salt Emission algorithm
+!> \file ccpr_scheme_geos12_mod.F90
+!! \brief GEOS-Chem 2012 sea salt emission scheme
+!! \ingroup catchem_seasalt_process
 !!
+!! \author Barry Baker
+!! \date 05/2024
+!!
+!! This module implements the GEOS-Chem 2012 sea salt emission scheme for calculating
+!! sea salt aerosol emissions in the CATChem atmospheric chemistry model.
+!!
+!! \details
+!! The GEOS-Chem 2012 scheme provides an improved parameterization for sea salt
+!! emissions based on extensive observational constraints and updated understanding
+!! of sea salt emission processes.
+!!
+!! \section geos12_reference Reference
 !! Jaeglé, L., Quinn, P. K., Bates, T. S., Alexander, B., and Lin, J.-T.: Global distribution of sea salt aerosols:
 !! new constraints from in situ and remote sensing observations, Atmos. Chem. Phys., 11, 3137–3157,
 !! https://doi.org/10.5194/acp-11-3137-2011, 2011.
 !!
-!! \author Barry baker
-!! \date 05/2024
-!!
-!! \ingroup catchem_seasalt_process
-!!!>
 module CCPr_Scheme_GEOS12_Mod
 
    implicit none

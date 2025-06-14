@@ -1,14 +1,27 @@
-! \file catchem_nuopc_utils.F90
-! \brief NUOPC utilities for CATChem model
-!>
-! \details
-! This module provides utility subroutines for the NUOPC cap of CATChem.
-! It handles data transformations between ESMF/NUOPC fields and CATChem
-! data structures, field creation, and common NUOPC operations.
-!>
-! \author Barry Baker
-! \date 11/2024
-! \ingroup catchem_nuopc_group
+!> \file catchem_nuopc_utils.F90
+!! \brief NUOPC utilities for CATChem atmospheric chemistry model
+!!
+!! \details
+!! This module provides utility subroutines and functions for the NUOPC cap
+!! of CATChem. It handles essential operations including data transformations
+!! between ESMF/NUOPC fields and CATChem data structures, field creation and
+!! management, and common NUOPC operations required for component integration.
+!!
+!! Key functionalities include:
+!! - Field advertisement and realization for NUOPC data exchange
+!! - Data import/export between ESMF fields and CATChem states
+!! - Field configuration management from YAML files
+!! - Grid and coordinate system utilities
+!! - Error handling and validation for NUOPC operations
+!! - State container initialization and management
+!!
+!! The module supports flexible field mapping configurations and provides
+!! standardized interfaces for coupling CATChem with other Earth system
+!! model components through the NUOPC framework.
+!!
+!! \author Barry Baker, NOAA/OAR/ARL
+!! \date November 2024
+!! \ingroup catchem_nuopc_group
 
 module catchem_nuopc_utils
 
@@ -22,13 +35,18 @@ module catchem_nuopc_utils
 
   private
 
-  ! Field configuration structure
+  !> \brief Field configuration structure for NUOPC interface
+  !!
+  !! Contains the complete field mapping configuration including both
+  !! import and export field definitions with associated metadata.
+  !! \{
   type :: field_config_type
-    integer :: n_import_fields = 0
-    integer :: n_export_fields = 0
-    type(field_mapping_type), allocatable :: import_fields(:)
-    type(field_mapping_type), allocatable :: export_fields(:)
+    integer :: n_import_fields = 0                         !< Number of import fields
+    integer :: n_export_fields = 0                         !< Number of export fields
+    type(field_mapping_type), allocatable :: import_fields(:) !< Import field mapping array
+    type(field_mapping_type), allocatable :: export_fields(:) !< Export field mapping array
   end type field_config_type
+  !! \}
 
   public :: catchem_advertise_fields
   public :: catchem_realize_fields

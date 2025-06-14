@@ -1,18 +1,19 @@
-! \brief This module contains the routines for the SOFIEV plumerise scheme
-!!    ! \brief Distribute emission around a given height
-   !!
-   !! This function will distribute the emission around a given height
-   !! with a total plumePct, % of emission, in the given height and the rest split between the layer above and below
-   !!
-   !! \param ZF Height of full layer array [m]
-   !! \param plmHGT Plume rise height [m]
-   !! \param EFrac Output fractional column emission array
-   !! \param RC Return code
-   !! \param plmPct_opt Optional percentage of emission at plume height
-   !! \param SfcPlmPct_opt Optional percentage of surface emission
-   !!
-   !! \ingroup catchem_plumerise_processhem_plumerise_process
-!!!>
+!> \file CCPr_Scheme_Sofiev_mod.F90
+!! \brief Sofiev plume rise scheme for fire emissions
+!! \ingroup catchem_plumerise_process
+!!
+!! \author CATChem Development Team
+!! \date 2023
+!!
+!! This module implements the Sofiev plume rise scheme for calculating
+!! the vertical distribution of fire emissions in the CATChem atmospheric
+!! chemistry model.
+!!
+!! \details
+!! The Sofiev scheme provides specialized parameterizations for fire plume
+!! rise calculations, accounting for fire intensity, atmospheric conditions,
+!! and buoyancy effects specific to biomass burning emissions.
+!!
 module ccpr_scheme_sofiev_mod
 
    use precision_mod, only: rae, fp

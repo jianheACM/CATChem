@@ -1,8 +1,19 @@
-!>
-!! \file
-!! \brief Contains the FENGSHA windblown dust emission scheme
+!> \file ccpr_scheme_fengsha_mod.F90
+!! \brief FENGSHA windblown dust emission scheme
+!! \ingroup catchem_dust_process
 !!
+!! \author Barry Baker
+!! \date 05/2024
 !!
+!! This module implements the FENGSHA dust emission scheme for calculating
+!! windblown dust emissions in the CATChem atmospheric chemistry model.
+!!
+!! \details
+!! The FENGSHA scheme provides an advanced dust emission parameterization
+!! that accounts for detailed surface characteristics, soil properties,
+!! and meteorological conditions to calculate size-resolved dust emissions.
+!!
+!! \section fengsha_reference Reference
 !! Zhang, L., Montuoro, R., McKeen, S. A., Baker, B., Bhattacharjee, P. S., Grell, G. A.,
 !! Henderson, J., Pan, L., Frost, G. J., McQueen, J., Saylor, R., Li, H., Ahmadov, R.,
 !! Wang, J., Stajner, I., Kondragunta, S., Zhang, X., and Li, F.:
@@ -10,10 +21,6 @@
 !! Prediction (NCEP)'s Global Ensemble Forecast System (GEFS-Aerosols v1),
 !! Geosci. Model Dev., 15, 5337–5369, https://doi.org/10.5194/gmd-15-5337-2022, 2022.
 !!
-!! \author Barry baker
-!! \date 05/2024
-!! \ingroup catchem_dust_process
-!!!>
 module CCPr_Scheme_Fengsha_Mod
 
    implicit none

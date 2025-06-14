@@ -1,13 +1,25 @@
-! \brief Template for a new process driver
+!> \file Process_driver_template.F90
+!! \brief Template for new process drivers in CATChem
+!! \ingroup process_modules
 !!
-!! To use:
-!! - replace <PROCESS> by an identifier for the process group (e.g. 'Dust')
-!!
-!! More in-depth description here
-!!
-!! \author Barry baker
+!! \author Barry Baker
 !! \date 05/2024
-!!!>
+!!
+!! This file provides a template for creating new atmospheric chemistry
+!! process drivers in the CATChem modeling system.
+!!
+!! \details
+!! To use this template:
+!! - Replace <PROCESS> with an identifier for the process group (e.g., 'Dust', 'SeaSalt')
+!! - Implement the required initialization, run, and finalization routines
+!! - Add process-specific configuration options and state variables
+!! - Update documentation to describe the specific process being implemented
+!!
+!! The template includes standard CATChem interfaces for:
+!! - Process initialization with configuration
+!! - Process execution with meteorological and chemical states
+!! - Process finalization and cleanup
+!!
 MODULE CCPR_<PROCESS>_mod
    USE Precision_mod
    USE Error_Mod

@@ -1,21 +1,15 @@
-!> \brief CCPR drydep state types
-!!
-!! \defgroup catchem_drydep_process CATChem Dry Deposition Process
-!! \brief Atmospheric dry deposition calculations
-!! \ingroup process_modules
-!!
-!! This group contains modules and functions for calculating dry deposition
-!! of atmospheric species in the CATChem system. Includes various dry
-!! deposition schemes and velocity calculations.
-!!
-!! \author Lacey Holland
-!! \date 07/2024ef CCPR drydep state types
-!!
-!! \defgroup catchem_drydep_process CATChem Dry Deposition Process
+!> \file CCPr_DryDep_mod.F90
+!! \brief Driver for the CATChem Process: Dry Deposition
+!! \ingroup catchem_drydep_process
 !!
 !! \author Lacey Holland
 !! \date 07/2024
-!!!>
+!!
+!! This module provides the main driver for dry deposition processes in CATChem,
+!! including initialization, execution, and finalization of dry deposition
+!! calculations. The module handles the removal of atmospheric species through
+!! surface deposition processes.
+!!
 MODULE CCPR_DryDep_mod
    USE Precision_mod
    USE Error_Mod
