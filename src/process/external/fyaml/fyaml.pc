@@ -1,0 +1,11 @@
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=/usr/local/lib
+includedir=/usr/local/include
+
+Name: FYAML
+Description: A comprehensive Fortran library for parsing YAML files
+Version: 0.2.0
+URL: https://github.com/fyaml/fyaml
+Libs: -L${libdir} -lfyaml
+Cflags: -I${includedir}

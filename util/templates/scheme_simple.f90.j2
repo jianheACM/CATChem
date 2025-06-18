@@ -1,0 +1,144 @@
+!> \file {{ scheme_name }}Scheme_Mod.F90
+!! \brief {{ scheme_name }} scheme implementation for {{ process_name }} process
+!! \ingroup {{ process_name|lower }}_schemes
+!!
+!! \author {{ author }}
+!! \date {{ year }}
+!! \version 1.0
+!!
+!! This module implements the {{ scheme_name|lower }} scheme for {{ process_name|lower }} processes.
+!! This is a pure computational module that does not depend on state management.
+!! All state management is handled by the main process module.
+!! Users should provide a more detailed description of the scheme and its purpose.
+!!
+!! Include references to relevant literature or documentation if applicable.
+!! \references
+!! [1] Author, A. (Year). Title of the paper. Journal Name, Volume(Issue), Page numbers.
+!! [2] Author, B. (Year). Title of the book. Publisher.
+!!
+module {{ scheme_name }}Scheme_Mod
+   use precision_mod
+   use constants_mod
+
+   implicit none
+   private
+
+   public :: {{ scheme_name|lower }}_calculate
+{% if has_init_routine %}
+   public :: {{ scheme_name|lower }}_init
+   public :: {{ scheme_name|lower }}_finalize
+{% endif %}
+
+   ! Module-level parameters (can be made configurable later)
+   real(fp), parameter :: DEFAULT_PARAM1 = 1.0_fp
+   real(fp), parameter :: DEFAULT_PARAM2 = 2.0_fp
+
+contains
+
+{% if has_init_routine %}
+   !> Initialize {{ scheme_name }} scheme (if needed for complex schemes)
+   subroutine {{ scheme_name|lower }}_init(rc)
+      integer, intent(out) :: rc
+
+      rc = 0  ! Success
+
+      ! TODO: Add initialization code if needed
+      ! (e.g., reading lookup tables, initializing constants)
+
+   end subroutine {{ scheme_name|lower }}_init
+{% endif %}
+
+   !> Calculate {{ process_type }} using {{ scheme_name|lower }} scheme
+   !!
+   !! This is the main computational routine for the {{ scheme_name|lower }} scheme.
+   !! All inputs and outputs are explicit - no StateContainer dependency.
+   !!
+   subroutine {{ scheme_name|lower }}_calculate( &
+{%- if process_type == 'emission' %}
+                                                ! Meteorological inputs
+                                                temperature, pressure, humidity, &
+                                                wind_speed, surface_roughness, &
+                                                ! Emission outputs
+                                                emission_flux, &
+{%- elif process_type == 'transformation' %}
+                                                ! Chemical inputs
+                                                concentrations_in, &
+                                                ! Meteorological inputs
+                                                temperature, pressure, &
+                                                ! Chemical outputs
+                                                concentrations_out, &
+{%- elif process_type == 'loss' %}
+                                                ! Chemical inputs
+                                                concentrations, &
+                                                ! Meteorological inputs
+                                                temperature, pressure, humidity, &
+                                                ! Loss outputs
+                                                loss_rate, &
+{%- endif %}
+                                                dt, rc)
+
+      ! Input arguments
+{%- if process_type == 'emission' %}
+      real(fp), intent(in) :: temperature(:)      !< Temperature [K] (nlevs)
+      real(fp), intent(in) :: pressure(:)         !< Pressure [Pa] (nlevs)
+      real(fp), intent(in) :: humidity(:)         !< Relative humidity [0-1] (nlevs)
+      real(fp), intent(in) :: wind_speed(:)       !< Wind speed [m/s] (nlevs)
+      real(fp), intent(in) :: surface_roughness   !< Surface roughness [m] (scalar)
+      real(fp), intent(out) :: emission_flux(:,:) !< Emission flux [kg/m²/s] (nlevs, nspecies)
+{%- elif process_type == 'transformation' %}
+      real(fp), intent(in) :: concentrations_in(:,:)  !< Input concentrations [kg/kg] (nlevs, nspecies)
+      real(fp), intent(in) :: temperature(:)          !< Temperature [K] (nlevs)
+      real(fp), intent(in) :: pressure(:)             !< Pressure [Pa] (nlevs)
+      real(fp), intent(out) :: concentrations_out(:,:) !< Output concentrations [kg/kg] (nlevs, nspecies)
+{%- elif process_type == 'loss' %}
+      real(fp), intent(in) :: concentrations(:,:)  !< Concentrations [kg/kg] (nlevs, nspecies)
+      real(fp), intent(in) :: temperature(:)       !< Temperature [K] (nlevs)
+      real(fp), intent(in) :: pressure(:)          !< Pressure [Pa] (nlevs)
+      real(fp), intent(in) :: humidity(:)          !< Relative humidity [0-1] (nlevs)
+      real(fp), intent(out) :: loss_rate(:,:)      !< Loss rate [1/s] (nlevs, nspecies)
+{%- endif %}
+      real(fp), intent(in) :: dt                       !< Time step [s]
+      integer, intent(out) :: rc
+
+      ! Local variables
+      integer :: k, n
+
+      rc = 0  ! Success
+
+      ! TODO: Implement {{ scheme_name|lower }} calculations here
+      ! This is where the actual scheme physics/chemistry goes
+
+{%- if process_type == 'emission' %}
+      ! Example emission calculation - replace with actual physics
+      do n = 1, size(emission_flux, 2)
+         do k = 1, size(emission_flux, 1)
+            emission_flux(k,n) = DEFAULT_PARAM1 * wind_speed(k) * surface_roughness
+         end do
+      end do
+{%- elif process_type == 'transformation' %}
+      ! Example transformation - replace with actual chemistry
+      concentrations_out = concentrations_in  ! No change (placeholder)
+{%- elif process_type == 'loss' %}
+      ! Example loss rate calculation - replace with actual physics
+      do n = 1, size(loss_rate, 2)
+         do k = 1, size(loss_rate, 1)
+            loss_rate(k,n) = DEFAULT_PARAM2 / temperature(k)
+         end do
+      end do
+{%- endif %}
+
+   end subroutine {{ scheme_name|lower }}_calculate
+
+{% if has_init_routine %}
+   !> Finalize {{ scheme_name }} scheme (if needed)
+   subroutine {{ scheme_name|lower }}_finalize(rc)
+      integer, intent(out) :: rc
+
+      rc = 0  ! Success
+
+      ! TODO: Add cleanup code if needed
+
+   end subroutine {{ scheme_name|lower }}_finalize
+{% endif %}
+
+end module {{ scheme_name }}Scheme_Mod

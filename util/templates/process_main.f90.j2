@@ -1,0 +1,248 @@
+!> \file {{ process_name }}Process_Mod.F90
+!! \brief {{ process_name }} process implementation
+!! \ingroup process_modules
+!!
+!! \author {{ author }}
+!! \date {{ year }}
+!! \version 1.0
+!!
+!! {{ process_description }}
+!!
+module {{ process_name }}Process_Mod
+   use precision_mod
+   use state_mod, only : StateContainerType
+   use error_mod
+   use ProcessInterface_Mod
+{% if schemes %}
+{% for scheme in schemes %}
+   use {{ scheme }}Scheme_Mod
+{% endfor %}
+{% endif %}
+{% if process_name != 'Common' %}
+   use {{ process_name }}Common_Mod
+{% endif %}
+
+   implicit none
+   private
+
+   public :: {{ process_name }}ProcessType
+
+   !> {{ process_name }} process type extending ProcessInterface
+   type, extends(ProcessInterface) :: {{ process_name }}ProcessType
+      private
+
+      ! Process-specific configuration
+      character(len=32) :: selected_scheme = '{{ schemes[0] if schemes else "default" }}'
+{% if multi_phase %}
+
+      ! Multiphase configuration
+      character(len=16) :: solver_method = '{{ solver_type }}'
+      real(fp) :: solver_tolerance = 1.0e-6_fp
+{% endif %}
+
+   contains
+      ! Required ProcessInterface methods
+      procedure :: init => {{ process_name|lower }}_process_init
+      procedure :: run => {{ process_name|lower }}_process_run
+      procedure :: finalize => {{ process_name|lower }}_process_finalize
+   end type {{ process_name }}ProcessType
+
+contains
+
+   !> Initialize {{ process_name }} process
+   subroutine {{ process_name|lower }}_process_init(this, container, rc)
+      class({{ process_name }}ProcessType), intent(inout) :: this
+      type(StateContainerType), intent(inout) :: container
+      integer, intent(out) :: rc
+
+      type(ErrorManagerType), pointer :: error_mgr
+      character(len=256) :: message
+
+      rc = CC_SUCCESS
+
+      error_mgr => container%get_error_manager()
+
+      ! Set process metadata
+      this%name = '{{ process_name }}'
+      this%version = '1.0'
+      this%description = '{{ process_description }}'
+
+{% if multi_phase %}
+      ! Configure multiphase chemistry
+      call this%set_multiphase_config( &
+         n_phases={{ n_phases }}, &
+         phase_names=[{{ "'" + "', '".join(phases) + "'" }}], &
+         has_heterogeneous={{ 'true' if has_heterogeneous else 'false' }}_fp, &
+         has_aqueous={{ 'true' if has_aqueous else 'false' }}_fp, &
+         has_thermo=.true., &
+         has_cloud={{ 'true' if has_aqueous else 'false' }}_fp, &
+         rc=rc)
+      if (rc /= CC_SUCCESS) return
+
+      ! Configure chemistry solver
+      call this%set_solver_config( &
+         solver_type='{{ solver_type }}', &
+         rtol=1.0e-3_fp, &
+         atol=1.0e-12_fp, &
+         n_reactions=0, &  ! To be set based on mechanism
+         n_photolysis=0, & ! To be set based on mechanism
+         rc=rc)
+      if (rc /= CC_SUCCESS) return
+{% endif %}
+
+      ! Validate inputs
+{% if process_type == 'emission' %}
+      if (.not. this%validate_emission_inputs(container, rc)) then
+         call error_mgr%report_error("{{ process_name }} emission process input validation failed")
+         return
+      end if
+{% elif multi_phase %}
+      if (.not. this%validate_multiphase_inputs(container, rc)) then
+         call error_mgr%report_error("{{ process_name }} multiphase process input validation failed")
+         return
+      end if
+{% else %}
+      ! Basic validation
+      if (.not. container%is_initialized) then
+         call error_mgr%report_error("StateContainer not initialized")
+         rc = -1
+         return
+      end if
+{% endif %}
+
+      this%is_initialized = .true.
+      this%is_active = .true.
+
+      write(message, '(A,A,A)') '{{ process_name }} process initialized with scheme: ', &
+                                trim(this%selected_scheme)
+      call error_mgr%report_info(message)
+
+   end subroutine {{ process_name|lower }}_process_init
+
+   !> Run {{ process_name }} process
+   subroutine {{ process_name|lower }}_process_run(this, container, rc)
+      class({{ process_name }}ProcessType), intent(inout) :: this
+      type(StateContainerType), intent(inout) :: container
+      integer, intent(out) :: rc
+
+      type(MetStateType), pointer :: met_state
+      type(ChemStateType), pointer :: chem_state
+{% if process_type == 'emission' %}
+      type(EmisStateType), pointer :: emis_state
+{% endif %}
+      type(ErrorManagerType), pointer :: error_mgr
+
+      rc = CC_SUCCESS
+
+      if (.not. this%is_ready()) then
+         rc = -1
+         return
+      end if
+
+      ! Get state pointers
+      met_state => container%get_met_state_ptr()
+      chem_state => container%get_chem_state_ptr()
+{% if process_type == 'emission' %}
+      emis_state => container%get_emis_state_ptr()
+{% endif %}
+      error_mgr => container%get_error_manager()
+
+      ! Execute scheme-specific calculations
+      select case (trim(this%selected_scheme))
+{% for scheme in schemes %}
+      case ('{{ scheme }}')
+         call this%run_{{ scheme|lower }}_scheme(container, rc)
+{% endfor %}
+      case default
+         call error_mgr%report_error("Unknown scheme: " // trim(this%selected_scheme))
+         rc = -1
+         return
+      end select
+
+   end subroutine {{ process_name|lower }}_process_run
+
+   !> Finalize {{ process_name }} process
+   subroutine {{ process_name|lower }}_process_finalize(this, rc)
+      class({{ process_name }}ProcessType), intent(inout) :: this
+      integer, intent(out) :: rc
+
+      rc = CC_SUCCESS
+
+      this%is_initialized = .false.
+      this%is_active = .false.
+
+   end subroutine {{ process_name|lower }}_process_finalize
+
+{% for scheme in schemes %}
+   !> Run {{ scheme }} scheme
+   subroutine run_{{ scheme|lower }}_scheme(this, container, rc)
+      class({{ process_name }}ProcessType), intent(inout) :: this
+      type(StateContainerType), intent(inout) :: container
+      integer, intent(out) :: rc
+
+      type(MetStateType), pointer :: met_state
+      type(ChemStateType), pointer :: chem_state
+{% if process_type == 'emission' %}
+      type(EmisStateType), pointer :: emis_state
+{% endif %}
+
+      ! Local arrays for scheme interface
+{% if process_type == 'emission' %}
+      real(fp), allocatable :: temperature(:,:,:)
+      real(fp), allocatable :: pressure(:,:,:)
+      real(fp), allocatable :: humidity(:,:,:)
+      real(fp), allocatable :: wind_speed(:,:,:)
+      real(fp), allocatable :: surface_roughness(:,:)
+      real(fp), allocatable :: emission_flux(:,:,:,:)
+{% elif process_type == 'transformation' %}
+      real(fp), allocatable :: concentrations_in(:,:,:,:)
+      real(fp), allocatable :: concentrations_out(:,:,:,:)
+      real(fp), allocatable :: temperature(:,:,:)
+      real(fp), allocatable :: pressure(:,:,:)
+{% elif process_type == 'loss' %}
+      real(fp), allocatable :: concentrations(:,:,:,:)
+      real(fp), allocatable :: temperature(:,:,:)
+      real(fp), allocatable :: pressure(:,:,:)
+      real(fp), allocatable :: humidity(:,:,:)
+      real(fp), allocatable :: loss_rate(:,:,:,:)
+{% endif %}
+
+      rc = CC_SUCCESS
+
+      ! Get state pointers
+      met_state => container%get_met_state_ptr()
+      chem_state => container%get_chem_state_ptr()
+{% if process_type == 'emission' %}
+      emis_state => container%get_emis_state_ptr()
+{% endif %}
+
+      ! TODO: Extract data from StateContainer to local arrays
+      ! This is where you'd get the actual meteorological and chemical data
+      ! from the StateContainer and prepare it for the scheme
+
+      ! TODO: Allocate arrays based on grid dimensions
+      ! call get_grid_dimensions(nx, ny, nz, n_species)
+      ! allocate(temperature(nx, ny, nz), ...)
+
+      ! Call the scheme calculation
+      call {{ scheme|lower }}_calculate( &
+{% if process_type == 'emission' %}
+         temperature, pressure, humidity, wind_speed, surface_roughness, &
+         emission_flux, &
+{% elif process_type == 'transformation' %}
+         concentrations_in, temperature, pressure, concentrations_out, &
+{% elif process_type == 'loss' %}
+         concentrations, temperature, pressure, humidity, loss_rate, &
+{% endif %}
+         this%dt, rc)
+
+      if (rc /= CC_SUCCESS) return
+
+      ! TODO: Update StateContainer with results
+      ! This is where you'd take the results from the scheme and update
+      ! the appropriate state in the StateContainer
+
+   end subroutine run_{{ scheme|lower }}_scheme
+
+{% endfor %}
+end module {{ process_name }}Process_Mod

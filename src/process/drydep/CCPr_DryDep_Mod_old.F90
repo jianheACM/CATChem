@@ -161,7 +161,9 @@ CONTAINS
 
       ! USE
       USE constants, only : Cp, g0, VON_KARMAN
+#ifdef ENABLE_GOCART
       use CCPr_Scheme_GOCART_DryDep_Mod, only : CCPr_Scheme_GOCART_DryDep
+#endif
 
       IMPLICIT NONE
       ! INPUT PARAMETERS
@@ -208,6 +210,7 @@ CONTAINS
 
                   radius = ChemState%chemSpecies(ChemState%DryDepIndex(i))%radius
                   rhop = ChemState%chemSpecies(ChemState%DryDepIndex(i))%density
+#ifdef ENABLE_GOCART
                   !type conversion to match what GOCART uses
                   tmpu = real(MetState%T) ; rhoa = real(MetState%AIRDEN) ; hghte = real(MetState%ZMID)
 
@@ -245,6 +248,14 @@ CONTAINS
                   DryDepState%drydep_vel(i) = MetState%ZMID(1) * drydepf(1,1)
                   DiagState%drydep_frequency(i)= drydepf(1,1)
                   DiagState%drydep_vel(i) = MetState%ZMID(1) * drydepf(1,1)
+#else
+                  ! GOCART disabled - use simple parameterization or set to zero
+                  DryDepState%drydep_frequency(i) = 0.0_fp
+                  DryDepState%drydep_vel(i) = 0.0_fp
+                  DiagState%drydep_frequency(i) = 0.0_fp
+                  DiagState%drydep_vel(i) = 0.0_fp
+                  RC = CC_SUCCESS
+#endif
 
                   ! apply drydep velocities/freq to chem species
                   dqa = 0.

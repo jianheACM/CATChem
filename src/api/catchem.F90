@@ -58,7 +58,7 @@ module CATChem
    ! CATChem States
    !---------------
    use ChemState_Mod,  only: ChemStateType    ! Chemical State
-   use GridState_Mod,  only: GridStateType    ! Grid State
+   ! use GridState_Mod,  only: GridStateType    ! Grid State (DEPRECATED - removed)
    use DiagState_Mod,  only: DiagStateType    ! Diagnostic State
    use EmisState_Mod,  only: EmisStateType    ! Emission State
    use MetState_Mod,   only: MetStateType     ! Meteorology State
@@ -73,21 +73,26 @@ module CATChem
    use ChemState_Mod, only: cc_get_species_conc => GetSpecConc
    use ChemState_Mod, only: cc_get_species_conc_by_name => GetSpecConcByName
    use ChemState_Mod, only: cc_get_species_conc_by_index => GetSpecConcByIndex
-   use ChemState_Mod, only: cc_allocate_chemstate => Chem_Allocate
+   ! use ChemState_Mod, only: cc_allocate_chemstate => Chem_Allocate  ! DEPRECATED
    ! metstate
-   use MetState_Mod, only: cc_allocate_metstate => Met_Allocate
+   ! use MetState_Mod, only: cc_allocate_metstate => Met_Allocate  ! DEPRECATED
    ! diagstate
-   use DiagState_Mod, only: cc_allocate_diagstate => Diag_Allocate
-   ! emisstate
-   use EmisState_Mod, only: cc_allocate_emisstate => Emis_Allocate
-   use EmisState_Mod, only: cc_deallocate_emisstate => EmisState_CleanUp
-   use EmisState_Mod, only: cc_emis_to_chem_map => Emis_Find_Chem_Map_Index
-   use EmisState_Mod, only: cc_apply_emis_to_chem => Apply_Emis_to_Chem
+   ! diagstate - Already modernized, use type-bound procedures:
+   ! - DiagState%init() for initialization
+   ! - DiagState%cleanup() for cleanup
+   ! - DiagState%validate() for validation
+   ! emisstate - All legacy functions removed. Use modern type-bound procedures:
+   ! - EmisState%init() for initialization
+   ! - EmisState%cleanup() for cleanup
+   ! - EmisState%find_species() for species mapping
+   ! - EmisState%apply_emissions() for applying emissions
 
    !-------------------
    ! Configuration Read
    !-------------------
-   use Config_Mod, only: cc_read_config => Read_Input_File  ! Method for reading the configuration file
+   ! Legacy config_mod disabled - use modern ConfigManager instead:
+   ! - ConfigManager%load_config() for configuration loading
+   ! - ConfigManager%get_value() for accessing values
 
    !---------------
    ! Error Handling

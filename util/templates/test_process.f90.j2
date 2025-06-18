@@ -1,0 +1,130 @@
+!> \file test_{{ process_name_lower }}_process.F90
+!! \brief Unit tests for {{ process_name }} process
+!! \ingroup test_modules
+!!
+!! \author {{ author }}
+!! \date {{ year }}
+!!
+program test_{{ process_name_lower }}_process
+   use precision_mod
+   use error_mod
+   use state_mod, only : StateContainerType
+   use {{ process_name }}Process_Mod
+   use test_framework_mod
+
+   implicit none
+
+   type(TestSuiteType) :: suite
+   type({{ process_name }}ProcessType) :: process
+   type(StateContainerType) :: container
+   integer :: rc
+
+   ! Initialize test suite
+   call suite%init_suite('{{ process_name }} Process Tests')
+
+   ! Initialize state container (placeholder)
+   call container%init(rc)
+   if (rc /= CC_SUCCESS) then
+      call suite%report_error('Failed to initialize state container')
+      stop
+   end if
+
+   ! Run tests
+   call test_process_initialization(suite, process, container)
+   call test_process_run(suite, process, container)
+   call test_scheme_switching(suite, process, container)
+{% if has_multiphase %}
+   call test_multiphase_setup(suite, process, container)
+{% endif %}
+
+   ! Finalize
+   call suite%finalize_suite()
+   call container%finalize(rc)
+
+contains
+
+   !> \brief Test process initialization
+   subroutine test_process_initialization(suite, process, container)
+      type(TestSuiteType), intent(inout) :: suite
+      type({{ process_name }}ProcessType), intent(inout) :: process
+      type(StateContainerType), intent(inout) :: container
+
+      integer :: rc
+
+      call suite%begin_test('Process Initialization')
+
+      ! Test initialization
+      call process%init(container, rc)
+      call suite%assert_equal(rc, CC_SUCCESS, 'Process initialization should succeed')
+
+      ! Test that process is ready
+      call suite%assert_true(process%is_ready(), 'Process should be ready after initialization')
+
+      ! Test process metadata
+      call suite%assert_equal(trim(process%get_name()), '{{ process_name }}', 'Process name should match')
+
+      call suite%end_test()
+   end subroutine test_process_initialization
+
+   !> \brief Test process run
+   subroutine test_process_run(suite, process, container)
+      type(TestSuiteType), intent(inout) :: suite
+      type({{ process_name }}ProcessType), intent(inout) :: process
+      type(StateContainerType), intent(inout) :: container
+
+      integer :: rc
+
+      call suite%begin_test('Process Run')
+
+      ! Ensure process is initialized
+      if (.not. process%is_ready()) then
+         call process%init(container, rc)
+      end if
+
+      ! Test run
+      call process%run(container, rc)
+      call suite%assert_equal(rc, CC_SUCCESS, 'Process run should succeed')
+
+      call suite%end_test()
+   end subroutine test_process_run
+
+   !> \brief Test scheme switching
+   subroutine test_scheme_switching(suite, process, container)
+      type(TestSuiteType), intent(inout) :: suite
+      type({{ process_name }}ProcessType), intent(inout) :: process
+      type(StateContainerType), intent(inout) :: container
+
+      character(len=32) :: scheme_name
+
+      call suite%begin_test('Scheme Switching')
+
+{% for scheme in schemes %}
+      ! Test {{ scheme }} scheme
+      call process%set_active_scheme('{{ scheme }}')
+      scheme_name = process%get_active_scheme()
+      call suite%assert_equal(trim(scheme_name), '{{ scheme }}', '{{ scheme }} scheme should be active')
+{% endfor %}
+
+      call suite%end_test()
+   end subroutine test_scheme_switching
+
+{% if has_multiphase %}
+   !> \brief Test multiphase setup
+   subroutine test_multiphase_setup(suite, process, container)
+      type(TestSuiteType), intent(inout) :: suite
+      type({{ process_name }}ProcessType), intent(inout) :: process
+      type(StateContainerType), intent(inout) :: container
+
+      integer :: rc
+
+      call suite%begin_test('Multiphase Setup')
+
+      ! Test multiphase configuration
+      call suite%assert_true(process%is_multiphase_process(), 'Process should be multiphase')
+      call suite%assert_equal(process%get_phase_count(), {{ n_phases }}, 'Phase count should match')
+
+      call suite%end_test()
+   end subroutine test_multiphase_setup
+{% endif %}
+
+end program test_{{ process_name_lower }}_process

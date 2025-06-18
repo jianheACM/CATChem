@@ -1,517 +1,533 @@
-!>
-!! \file emisstate_mod.F90
-!! \brief Emission Species State
+!> \file emisstate_mod.F90
+!! \brief Module for emission state variables
 !!
-!! \details The Emission Species States contain information about the emitted species and
-!!          the emitted fluxes, scale factors, and speciation to concentration mappings.
+!! This module contains the EmisStateType derived type and related procedures
+!! for managing emission data in CATChem. It follows the modern state container
+!! pattern with proper initialization, cleanup, and validation procedures.
 !!
 !! \ingroup core_modules
 !!!>
-module EmisState_Mod
+MODULE EmisState_Mod
 
-   ! Uses
-
+   !=========================================================================
+   ! Module uses
+   !=========================================================================
    USE Error_Mod
    USE Precision_Mod
+   USE species_mod, only: SpeciesType
 
    IMPLICIT NONE
    PRIVATE
 
-   PUBLIC :: Emis_Allocate
-   PUBLIC :: Emis_Find_Chem_Map_Index
-   PUBLIC :: EmisState_CleanUp
-   PUBLIC :: Apply_Emis_to_Chem
+   !=========================================================================
+   ! Public interfaces
+   !=========================================================================
+   PUBLIC :: EmisStateType
+   PUBLIC :: EmisSpeciesType
+   PUBLIC :: EmisCategoryType
+   ! All legacy functions removed - use modern type-bound procedures instead:
+   ! - EmisState%init() instead of legacy allocation
+   ! - EmisState%cleanup() instead of EmisState_CleanUp()
+   ! - EmisState%find_species() for species mapping
+   ! - EmisState%apply_emissions() for applying emissions
 
-   ! \brief Emission Species State
+   !=========================================================================
+   ! Derived types for emission species
+   !=========================================================================
+
+   !> \brief Derived type for individual emission species
    !!
-   !! \details The Emission Species States contain information about the emitted species and
-   !!          the emitted fluxes, scale factors, and speciation to concentration mappings.
+   !! Contains all data for a single emitted species including fluxes,
+   !! plume rise parameters, and mapping information.
    !!
    !! \ingroup core_modules
-   !!
-   !! \param name Name of the species
-   !! \param long_name Long name of the species
-   !! \param units Units of the species
-   !! \param nEmisMap Number of Emission mappings per emitted species
-   !! \param EmisMapIndex Emission mapping to concentration index
-   !! \param Scale Scale factor
-   !! \param Flux Emission flux
-   !!
    !!!>
-   TYPE :: EmisSpeciesType
-      ! Character
-      character(len=10)               :: name             ! Name of the species
-      character(len=50)               :: long_name        ! Long name of the species
-      character(len=10)               :: units            ! Units of the species
-      character(len=100), allocatable :: EmisMapName(:)   ! Emission mapping to concentration species
+   TYPE, PUBLIC :: EmisSpeciesType
+      CHARACTER(LEN=31)             :: name             ! Species name
+      INTEGER                       :: nEmisMap         ! Number of emission maps
+      INTEGER,          ALLOCATABLE :: EmisMapIndex(:)  ! Emission map indices
+      REAL(fp),         ALLOCATABLE :: Flux(:)          ! Emission flux [kg/m2/s]
+      INTEGER                       :: plumerise        ! Plume rise option
+      INTEGER                       :: nPlmSrc          ! Number of plume sources
+      REAL(fp),         ALLOCATABLE :: frp(:)           ! Fire radiative power [MW]
+      REAL(fp),         ALLOCATABLE :: PlmSrcFlx(:)     ! Plume source flux [kg/s]
+      REAL(fp),         ALLOCATABLE :: PlmRiseHgt(:)    ! Plume rise height [m]
+      REAL(fp),         ALLOCATABLE :: STKDM(:)         ! Stack diameter [m]
+      REAL(fp),         ALLOCATABLE :: STKHT(:)         ! Stack height [m]
+      REAL(fp),         ALLOCATABLE :: STKTK(:)         ! Stack temperature [K]
+      REAL(fp),         ALLOCATABLE :: STKVE(:)         ! Stack velocity [m/s]
 
-      ! Integers
-      integer              :: nEmisMap         ! Number of Emission mappings per emitted species
-      integer, ALLOCATABLE :: EmisMapIndex(:)  ! Emission mapping to concentration index
-      integer              :: plumerise        ! Plumerise option (default = 0 for no plumerise) sofiev = 1 briggs = 2 simple linear weighted thickness = 3
-      integer              :: EmisLayer        ! Emission layer
-      integer              :: nPlmSrc         ! Plumerise number of sources
-
-      ! Real
-      real(fp), ALLOCATABLE :: Scale(:)        ! Scale factor
-      real(fp), ALLOCATABLE :: Flux(:)         ! Emission flux
-      real(fp)              :: EmisHeight      ! Emission Height [m] - Simple emission height or -1 for PBLH
-      real(fp), ALLOCATABLE :: PlmSrcFlx(:)    ! Plumerise source emission flux [kg/m2/s]
-      real(fp), ALLOCATABLE :: PlmRiseHgt(:)   ! Height of Plume rise [m]
-      real(fp), ALLOCATABLE :: FRP(:)          ! Fire Radiative Power (W/m^2)
-      real(fp), ALLOCATABLE :: STKDM(:)        ! Briggs stack diameter [m] (array of all point sources in grid cell)
-      real(fp), ALLOCATABLE :: STKHT(:)        ! Briggs stack thickness [m] (array of all point sources in grid cell)
-      real(fp), ALLOCATABLE :: STKTK(:)        ! Briggs stack thickness [m] (array of all point sources in grid cell)
-      real(fp), ALLOCATABLE :: STKVE(:)        ! Briggs stack velocity [m/s] (array of all point sources in grid cell)
+   CONTAINS
+      PROCEDURE :: init => emisspecies_init
+      PROCEDURE :: cleanup => emisspecies_cleanup
+      PROCEDURE :: validate => emisspecies_validate
 
    END TYPE EmisSpeciesType
 
-   ! \brief Emission Category State
+   !> \brief Derived type for emission categories
    !!
-   !! \details The Emission Category State contains all the Species types for a given emission
-   !!          category. It includes the name of the category, the number of emitted species, and
-   !!          the emitted species containers.
-   !!
-   !! \param name Name of the category
-   !! \param nSpecies Number of emitted species
-   !! \param Species Emitted Species container
+   !! Contains data for a single emission category including all species
+   !! within that category and category-specific parameters.
    !!
    !! \ingroup core_modules
    !!!>
-   TYPE :: EmisCategoryType
+   TYPE, PUBLIC :: EmisCategoryType
+      CHARACTER(LEN=31)                   :: Name           ! Category name
+      INTEGER                             :: nSpecies       ! Number of species
+      INTEGER                             :: nPlumerise     ! Number of plume rise species
+      TYPE(EmisSpeciesType), ALLOCATABLE  :: Species(:)     ! Species array
 
-      ! Character
-      character(len=20)    :: name                         ! Name of the species
-
-      ! Integers
-      integer              :: nSpecies                 ! Number of emitted species per process
-      integer              :: nPlumerise               ! Number of Species undergoing a Plumerise
-
-      ! Types
-      type(EmisSpeciesType), ALLOCATABLE :: Species(:) ! Emitted species container
+   CONTAINS
+      PROCEDURE :: init => emiscategory_init
+      PROCEDURE :: cleanup => emiscategory_cleanup
+      PROCEDURE :: validate => emiscategory_validate
 
    END TYPE EmisCategoryType
 
-   !>
-   !! \brief Emission State
+   !> \brief Derived type for emission state
    !!
-   !! \details The Emission State contains all the emission category containers for the simulation and
-   !!          the number of emission categories.
+   !! Main container for all emission data including categories, species,
+   !! and global emission parameters.
    !!
    !! \ingroup core_modules
-   !!
-   !! \param State Name of the state
-   !! \param nCats Number of emission categories
-   !! \param Cats Emission category containers
-   !!
    !!!>
    TYPE, PUBLIC :: EmisStateType
+      CHARACTER(LEN=4)                    :: State              = 'EMIS'
+      INTEGER                             :: nCats               ! Number of categories
+      INTEGER                             :: nEmisTotalPlumerise ! Total plume rise emissions
+      TYPE(EmisCategoryType), ALLOCATABLE :: Cats(:)            ! Category array
 
-      ! Character
-      CHARACTER(LEN=4) :: State = 'Emis' ! Name of this state
-      CHARACTER(LEN=10), ALLOCATABLE :: TotEmisNames(:)         ! Name of the state
-
-      ! Integers
-      integer :: nCats         ! Number of emission categories
-      integer :: nEmisTotal              ! Total number of emitted species
-      integer :: nEmisTotalPlumerise     ! Total number of plume rise categories
-
-      ! Types
-      type(EmisSpeciesType), ALLOCATABLE :: TotSpecies(:) ! Emitted species container
-      type(EmisCategoryType), ALLOCATABLE :: Cats(:) ! Emission categories container
+   CONTAINS
+      PROCEDURE :: init => emisstate_init
+      PROCEDURE :: cleanup => emisstate_cleanup_method
+      PROCEDURE :: validate => emisstate_validate
 
    END TYPE EmisStateType
 
 CONTAINS
 
-   ! \brief Allocate the emission state
+   !=========================================================================
+   ! EmisSpeciesType procedures
+   !=========================================================================
+
+   !> \brief Initialize an emission species
    !!
-   !! \details Allocate the emission state.
-   !!
-   !! \ingroup core_modules
-   !!
-   !! \param GridState Grid State
-   !! \param EmisState Emission State
-   !! \param RC Return code
-   !!
+   !! \param[inout] this The EmisSpeciesType object to initialize
+   !! \param[in] species_name Name of the species
+   !! \param[in] num_levels Number of vertical levels
+   !! \param[in] error_mgr Error manager for context and error reporting
+   !! \param[out] rc Return code
+   !! \param[in] num_plume_sources Number of plume sources (optional)
    !!!>
-   subroutine Emis_Allocate(GridState, EmisState, RC)
+   SUBROUTINE emisspecies_init(this, species_name, num_levels, error_mgr, rc, num_plume_sources)
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE, ERROR_MEMORY_ALLOCATION, ERROR_INVALID_INPUT
 
-      ! Uses
-      USE GridState_Mod, ONLY : GridStateType
+      CLASS(EmisSpeciesType), INTENT(INOUT) :: this
+      CHARACTER(LEN=*),       INTENT(IN)    :: species_name
+      INTEGER,                INTENT(IN)    :: num_levels
+      TYPE(ErrorManagerType), POINTER, INTENT(INOUT) :: error_mgr
+      INTEGER,                INTENT(OUT)   :: rc
+      INTEGER, OPTIONAL,      INTENT(IN)    :: num_plume_sources
 
-      IMPLICIT NONE
-
-      !Input
-      TYPE(GridStateType), INTENT(IN) :: GridState
-
-      ! Input/Output
-      TYPE(EmisStateType), INTENT(INOUT) :: EmisState
-
-      ! Output
-      INTEGER, INTENT(OUT) :: RC
-
-      ! Locals
-      CHARACTER(LEN=255) :: ErrMsg
-      CHARACTER(LEN=255) :: ThisLoc
-
-      integer :: c ! Loop counter for emission Cats
-      integer :: s ! Loop counter for emitted species
-      ! integer :: nPlumes ! temporary variable for number of plumes
-
-      ! Initialize return code
-      RC = CC_SUCCESS
-
-      ! Initialize local variables
-      ErrMsg = ''
-      ThisLoc = ' -> at Emis_Allocate (in core/emisstate_mod.F90)'
-
-      if (EmisState%nCats > 0) then
-         print*, 'Number of Categories = ', EmisState%nCats
-         do c = 1, EmisState%nCats
-            print*, 'Number of Species for CAT=', EmisState%Cats(c)%name, ' = ', EmisState%Cats(c)%nSpecies
-            do s = 1, EmisState%Cats(c)%nSpecies
-               print*, 'Allocating ', EmisState%Cats(c)%Species(s)%name
-
-               ALLOCATE(EmisState%Cats(c)%Species(s)%Flux(GridState%number_of_levels), STAT=RC)
-               if (RC /= CC_SUCCESS) then
-                  ErrMsg = '  Error allocating "EmisState%Cats%Species%Flux"!'
-                  call CC_Error(ErrMsg, RC, ThisLoc)
-                  return
-               endif
-               print*, 'Flux allocated for ', EmisState%Cats(c)%Species(s)%name
-
-               ALLOCATE(EmisState%Cats(c)%Species(s)%EmisMapIndex(EmisState%Cats(c)%Species(s)%nEmisMap), STAT=RC)
-               if (RC /= CC_SUCCESS) then
-                  ErrMsg = '  Error allocating "EmisState%Cats%Species%EmisMapIndex"!'
-                  call CC_Error(ErrMsg, RC, ThisLoc)
-                  return
-               endif
-
-               print*, '  EmisMapIndex allocated for ', EmisState%Cats(c)%Species(s)%name
-
-               ! if (EmisState%Cats(c)%Species(s)%nPlmSrc > 0) then ! if there are plume sources
-               !    nPlumes = EmisState%Cats(c)%Species(s)%nPlmSrc ! temporary variable for number of plumes
-               !    ALLOCATE(EmisState%Cats(c)%Species(s)%PlmSrcFlx(nPlumes), STAT=RC)
-               !    if (RC /= CC_SUCCESS) then
-               !       ErrMsg = 'Error allocating "EmisState%Cats%Species%PlmSrcFlx"!'
-               !       call CC_Error(ErrMsg, RC, ThisLoc)
-               !       return
-               !    endif
-               !    print*, '  PlmSrcFlx allocated for ', EmisState%Cats(c)%Species(s)%name
-
-               !    ALLOCATE(EmisState%Cats(c)%Species(s)%FRP(nPlumes), STAT=RC)
-               !    if (RC /= CC_SUCCESS) then
-               !       ErrMsg = 'Error allocating "EmisState%Cats%Species%FRP"!'
-               !       call CC_Error(ErrMsg, RC, ThisLoc)
-               !       return
-               !    endif
-               !    print*, '  FRP allocated for ', EmisState%Cats(c)%Species(s)%name
-
-               !    ALLOCATE(EmisState%Cats(c)%Species(s)%PlmRiseHgt(nPlumes), STAT=RC)
-               !    if (RC /= CC_SUCCESS) then
-               !       ErrMsg = 'Error allocating "EmisState%Cats%Species%PlmRiseHgt"!'
-               !       call CC_Error(ErrMsg, RC, ThisLoc)
-               !       return
-               !    endif
-               !    print*, '  PlmRiseHgt allocated for ', EmisState%Cats(c)%Species(s)%name
-
-               ! endif
-            end do
-         end do
-
-         ! call TotEmisSpecies_Allocate(GridState, EmisState, RC)
-         ! IF (RC /= CC_success) THEN
-         !    ErrMsg = 'Error in "TotEmisSpecies_Allocate"'
-         !    call CC_Error(ErrMsg, RC, ThisLoc)
-         !    return
-         ! ENDIF
-
-      end if
-
-   end subroutine Emis_Allocate
-
-   ! ! \brief Allocate the total emitted species
-   ! !!
-   ! !! \details Allocate the total emitted species
-   ! !!
-   ! !! \ingroup core_modules
-   ! !!
-   ! !! \param GridState Grid State
-   ! !! \param EmisState Emission State
-   ! !! \param RC Return code
-   ! !!
-   ! !!!>
-   ! subroutine TotEmisSpecies_Allocate(GridState, EmisState, RC)
-
-   !    USE GridState_Mod, ONLY : GridStateType
-
-   !    IMPLICIT NONE
-
-   !    TYPE(GridStateType), INTENT(IN) :: GridState
-
-   !    TYPE(EmisStateType), INTENT(INOUT) :: EmisState
-
-   !    INTEGER, INTENT(OUT) :: RC
-
-   !    integer :: s ! Loop counter for emitted species
-   !    integer :: c ! Loop counter for emission Cats
-   !    integer :: t ! loop counter for total emitted species
-
-   !    ! integer :: nT ! total number of emitted species counter
-   !    ! integer :: nS ! number of the same emitted species in different categories
-
-   !    ! logical :: IsIn
-
-   !    character(len=255) :: ErrMsg
-   !    character(len=255) :: ThisLoc
-
-   !    character(len=10) ::currName
-
-   !    ! Initialize return code
-   !    RC = CC_SUCCESS
-
-   !    ! Initialize local variables
-   !    ErrMsg = ''
-   !    ThisLoc = ' -> at TotEmisSpecies_Allocate (in core/emisstate_mod.F90)'
-
-   !    ALLOCATE(EmisState%TotEmisNames(0), STAT=RC)
-   !    if (EmisState%nCats > 0) then
-   !       EmisState%nEmisTotal = 0
-   !       do c = 1, EmisState%nCats
-   !          do s = 1, EmisState%Cats(c)%nSpecies
-   !             currName = EmisState%Cats(c)%Species(s)%name
-   !             if ( ANY( EmisState%TotEmisNames == TRIM(currName) ) .eqv. .False. ) THEN
-   !                EmisState%nEmisTotal = EmisState%nEmisTotal + 1
-   !                EmisState%TotEmisNames = [EmisState%TotEmisNames, currName]
-   !             endif
-   !          end do
-   !       end do
-
-   !       ALLOCATE(EmisState%TotSpecies(EmisState%nEmisTotal), STAT=RC)
-   !       IF (RC /= CC_SUCCESS) THEN
-   !          ErrMsg = 'Error allocating "EmisState%TotSpecies"!'
-   !          call CC_Error(ErrMsg, RC, ThisLoc)
-   !          return
-   !       ENDIF
-
-   !       do t = 1, EmisState%nEmisTotal
-   !          ! Fill Total Species fluxes and properties
-   !          EmisState%TotSpecies(t)%name = EmisState%TotEmisNames(s)
-   !          EmisState%TotSpecies(t)%Flux(:) = 0. ! set all fluxes to zero
-   !          currName = EmisState%TotEmisNames(t)
-   !          do c = 1, EmisState%nCats
-   !             do s = 1, EmisState%Cats(c)%nSpecies
-   !                if (currName == EmisState%Cats(c)%Species(s)%name) then
-   !                   EmisState%TotSpecies(t)%units = EmisState%Cats(c)%Species(s)%units
-   !                   EmisState%TotSpecies(t)%long_name = EmisState%Cats(c)%Species(s)%long_name
-   !                endif
-   !             end do
-   !          end do
-   !       end do
-   !    endif
-
-   ! end subroutine TotEmisSpecies_Allocate
-
-   ! \brief Find the index of the mapped species
-   !!
-   !! \details Loops through the emitted species and finds the index to all of the mapped emitted species to the chemical species
-   !!
-   !! \ingroup core_modules
-   !!
-   !! \param EmisState Emission State
-   !! \param ChemState Chemical State
-   !! \param RC Return code
-   !!
-   !!!>
-   subroutine Emis_Find_Chem_Map_Index(EmisState, ChemState, RC)
-
-      USE ChemState_Mod, ONLY : ChemStateType, FindSpecByName
-
-      TYPE(EmisStateType), INTENT(INOUT) :: EmisState
-      TYPE(ChemStateType), INTENT(INOUT) :: ChemState
-      INTEGER, INTENT(OUT) :: RC
-
-      ! Local
-      integer :: c ! Loop counter for emission Cats
-      integer :: s ! Loop counter for emitted species
-      integer :: n ! Loop counter for mapped species
-
-      integer :: index ! index of the chemical species species
-
-      ! Error handling
-      CHARACTER(LEN=255) :: ErrMsg
-      CHARACTER(LEN=255) :: ThisLoc
+      INTEGER :: nPlmSrc
 
       ! Initialize
-      RC = CC_SUCCESS
-      ErrMsg = ''
-      ThisLoc = ' -> at Emis_find_chem_map_indexs (in core/emisstate_mod.F90)'
+      call error_mgr%push_context('emisspecies_init', 'emisstate_mod.F90')
+      rc = CC_SUCCESS
 
-      do c = 1, EmisState%nCats
-         do s = 1, EmisState%Cats(c)%nSpecies
-            do n = 1, EmisState%Cats(c)%Species(s)%nEmisMap
-               call FindSpecByName(ChemState, EmisState%Cats(c)%Species(s)%EmisMapName(n), index, RC)
-               if (RC /= CC_SUCCESS) then
-                  ErrMsg = 'Error in find_species_by_name'
-                  call CC_Error(ErrMsg, RC, ThisLoc)
-                  return
-               endif
-               EmisState%Cats(c)%Species(s)%EmisMapIndex(n) = index
-            enddo
-         enddo
-      enddo
-
-   end subroutine Emis_find_chem_map_index
-
-   ! \brief Apply emissions to the chemical state
-   !!
-   !! \details Apply emissions to the chemical state by adding emitted species
-   !!          to the corresponding chemical species concentrations.
-   !! \ingroup core_modules
-   !!
-   !! \param EmisState Emission State containing emission data and fluxes
-   !! \param MetState Meteorological State containing atmospheric conditions
-   !! \param ChemState Chemical State containing species concentrations
-   !! \param RC Return code indicating success or failure
-   !! \param surface_only_flag Optional logical flag to apply emissions only at surface level
-   !!
-   !!!>
-   subroutine Apply_Emis_to_Chem(EmisState, MetState, ChemState, RC, surface_only_flag)
-      USE ChemState_Mod, ONLY : ChemStateType
-      USE MetState_Mod, ONLY : MetStateType
-      use constants, only : g0, AIRMW
-
-      TYPE(EmisStateType), INTENT(IN)    :: EmisState
-      TYPE(MetStateType),  INTENT(IN)    :: MetState
-      TYPE(ChemStateType), INTENT(INOUT) :: ChemState
-      LOGICAL, INTENT(IN), OPTIONAL :: surface_only_flag
-      INTEGER, INTENT(OUT) :: RC
-
-      ! Local
-      integer :: c ! Loop counter for emission Cats
-      integer :: s ! Loop counter for emitted species
-      integer :: n ! Loop counter for mapped species
-      integer :: k ! Loop counter for height levels
-      real(kind=fp) :: scale  ! scaling factor
-      integer :: index        ! index of the mapped chemical species
-      real(kind=fp) :: cdt    ! time step
-      real(kind=fp) :: dqa    ! change in concentration
-      logical :: surface_only ! flag for surface only
-
-      ! Error handling
-      CHARACTER(LEN=255) :: ErrMsg
-      CHARACTER(LEN=255) :: ThisLoc
-
-      ! Initialize
-      RC = CC_SUCCESS
-      ErrMsg = ''
-      ThisLoc = ' -> at Apply_Emis_to_Chem (in core/emisstate_mod.F90)'
-
-      cdt = MetState%TSTEP
-
-      if (present(surface_only_flag)) then
-         surface_only = surface_only_flag
-      else
-         surface_only = .false.
+      ! Validate input
+      if (num_levels <= 0) then
+         call error_mgr%report_error(ERROR_INVALID_INPUT, &
+                                     'Number of levels must be positive', rc)
+         call error_mgr%pop_context()
+         return
       endif
 
-      cats: do c = 1, EmisState%nCats
-         species: do s = 1, EmisState%Cats(c)%nSpecies
-            mapping: do n = 1, EmisState%Cats(c)%Species(s)%nEmisMap
-               ! get the emis mapping and scale
-               scale = EmisState%Cats(c)%Species(s)%Scale(n)
-               index = EmisState%Cats(c)%Species(s)%EmisMapIndex(n)
+      ! Set defaults
+      nPlmSrc = 0
+      if (present(num_plume_sources)) nPlmSrc = num_plume_sources
 
-               !update scale to account for the unit conversion
-               if (ChemState%ChemSpecies(index)%is_gas) then
-                  scale = scale * AIRMW / ChemState%ChemSpecies(index)%mw_g * 1.0e6_fp ! [kg/kg] to [ppmv] for gas
-               else
-                  scale = scale * 1.0e9_fp ! [kg/kg] to [ug/kg] for aerosol
-               endif
+      ! Set basic properties
+      this%name = TRIM(species_name)
+      this%nEmisMap = 0
+      this%plumerise = 0
+      this%nPlmSrc = nPlmSrc
 
-               associate( &
-               ! current flux of the emitted species
-                  emis => EmisState%Cats(c)%Species(s)%Flux, &
-               ! current concentration of the species at `index`
-                  conc => ChemState%ChemSpecies(index)%conc)
+      ! Allocate flux array
+      if (allocated(this%Flux)) deallocate(this%Flux)
+      allocate(this%Flux(num_levels), stat=rc)
+      if (rc /= CC_SUCCESS) then
+         call error_mgr%report_error(ERROR_MEMORY_ALLOCATION, &
+                                     'Error allocating Flux array for species ' // TRIM(species_name), rc)
+         call error_mgr%pop_context()
+         return
+      endif
+      this%Flux = 0.0_fp
 
-                  levs: do k = 1, MetState%NLEVS
-                     dqa = emis(k) * cdt * g0 / MetState%DELP(k) * scale  ! [kg/m2/s] --> [kg/kg] --> [ppmv or ug/kg]
-                     conc(k) = conc(k) + dqa
-                  end do levs
+      ! Allocate plume rise arrays if needed
+      if (nPlmSrc > 0) then
+         if (allocated(this%frp)) deallocate(this%frp)
+         if (allocated(this%PlmSrcFlx)) deallocate(this%PlmSrcFlx)
+         if (allocated(this%PlmRiseHgt)) deallocate(this%PlmRiseHgt)
+         if (allocated(this%STKDM)) deallocate(this%STKDM)
+         if (allocated(this%STKHT)) deallocate(this%STKHT)
+         if (allocated(this%STKTK)) deallocate(this%STKTK)
+         if (allocated(this%STKVE)) deallocate(this%STKVE)
 
-               end associate
+         allocate(this%frp(nPlmSrc), stat=rc)
+         if (rc /= CC_SUCCESS) then
+            call error_mgr%report_error(ERROR_MEMORY_ALLOCATION, &
+                                        'Error allocating frp array', rc)
+            call error_mgr%pop_context()
+            return
+         endif
 
-            enddo mapping
-         enddo species
-      enddo cats
+         allocate(this%PlmSrcFlx(nPlmSrc), stat=rc)
+         if (rc /= CC_SUCCESS) then
+            call error_mgr%report_error(ERROR_MEMORY_ALLOCATION, &
+                                        'Error allocating PlmSrcFlx array', rc)
+            call error_mgr%pop_context()
+            return
+         endif
 
-   end subroutine Apply_Emis_to_Chem
+         allocate(this%PlmRiseHgt(nPlmSrc), stat=rc)
+         if (rc /= CC_SUCCESS) then
+            call error_mgr%report_error(ERROR_MEMORY_ALLOCATION, &
+                                        'Error allocating PlmRiseHgt array', rc)
+            call error_mgr%pop_context()
+            return
+         endif
 
-   ! \brief Clean up the emission state
+         allocate(this%STKDM(nPlmSrc), stat=rc)
+         if (rc /= CC_SUCCESS) then
+            call error_mgr%report_error(ERROR_MEMORY_ALLOCATION, &
+                                        'Error allocating STKDM array', rc)
+            call error_mgr%pop_context()
+            return
+         endif
+
+         allocate(this%STKHT(nPlmSrc), stat=rc)
+         if (rc /= CC_SUCCESS) then
+            call error_mgr%report_error(ERROR_MEMORY_ALLOCATION, &
+                                        'Error allocating STKHT array', rc)
+            call error_mgr%pop_context()
+            return
+         endif
+
+         allocate(this%STKTK(nPlmSrc), stat=rc)
+         if (rc /= CC_SUCCESS) then
+            call error_mgr%report_error(ERROR_MEMORY_ALLOCATION, &
+                                        'Error allocating STKTK array', rc)
+            call error_mgr%pop_context()
+            return
+         endif
+
+         allocate(this%STKVE(nPlmSrc), stat=rc)
+         if (rc /= CC_SUCCESS) then
+            call error_mgr%report_error(ERROR_MEMORY_ALLOCATION, &
+                                        'Error allocating STKVE array', rc)
+            call error_mgr%pop_context()
+            return
+         endif
+
+         ! Initialize arrays
+         this%frp = 0.0_fp
+         this%PlmSrcFlx = 0.0_fp
+         this%PlmRiseHgt = 0.0_fp
+         this%STKDM = 0.0_fp
+         this%STKHT = 0.0_fp
+         this%STKTK = 0.0_fp
+         this%STKVE = 0.0_fp
+      endif
+
+      call error_mgr%pop_context()
+
+   END SUBROUTINE emisspecies_init
+
+   !> \brief Clean up an emission species
    !!
-   !! \ingroup core_modules
-   !!
-   !! \param EmisState Emission State
-   !! \param RC Return code
-   !!
+   !! \param[inout] this The EmisSpeciesType object to clean up
+   !! \param[out] rc Return code
    !!!>
-   subroutine EmisState_CleanUp(EmisState, RC)
+   SUBROUTINE emisspecies_cleanup(this, rc)
+      CLASS(EmisSpeciesType), INTENT(INOUT) :: this
+      INTEGER,                INTENT(OUT)   :: rc
 
-      TYPE(EmisStateType), INTENT(INOUT) :: EmisState
-      INTEGER, INTENT(OUT) :: RC
+      rc = CC_SUCCESS
 
-      character(len=255) :: ErrMsg
-      character(len=255) :: ThisLoc
+      if (allocated(this%EmisMapIndex)) deallocate(this%EmisMapIndex)
+      if (allocated(this%Flux)) deallocate(this%Flux)
+      if (allocated(this%frp)) deallocate(this%frp)
+      if (allocated(this%PlmSrcFlx)) deallocate(this%PlmSrcFlx)
+      if (allocated(this%PlmRiseHgt)) deallocate(this%PlmRiseHgt)
+      if (allocated(this%STKDM)) deallocate(this%STKDM)
+      if (allocated(this%STKHT)) deallocate(this%STKHT)
+      if (allocated(this%STKTK)) deallocate(this%STKTK)
+      if (allocated(this%STKVE)) deallocate(this%STKVE)
 
-      integer :: c ! Loop counter for emission Cats
-      integer :: s ! Loop counter for emitted species
+      this%name = ''
+      this%nEmisMap = 0
+      this%plumerise = 0
+      this%nPlmSrc = 0
 
-      ! Initialize return code
-      RC = CC_SUCCESS
+   END SUBROUTINE emisspecies_cleanup
 
-      ! Initialize local variables
-      ErrMsg = ''
-      ThisLoc = ' -> at EmisState_CleanUp (in core/emisstate_mod.F90)'
+   !> \brief Validate an emission species
+   !!
+   !! \param[in] this The EmisSpeciesType object to validate
+   !! \param[in] error_mgr Error manager for context and error reporting
+   !! \param[out] rc Return code
+   !!!>
+   SUBROUTINE emisspecies_validate(this, error_mgr, rc)
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE, ERROR_INVALID_STATE
 
-      ! Deallocate total variables
-      if (allocated(EmisState%TotEmisNames)) deallocate(EmisState%TotEmisNames)
-      do c = 1, EmisState%nEmisTotal
-         if (allocated(EmisState%TotSpecies(c)%Flux)) deallocate(EmisState%TotSpecies(c)%Flux)
-         if (allocated(EmisState%TotSpecies(c)%Flux)) deallocate(EmisState%TotSpecies(c)%Flux)
-      end do
+      CLASS(EmisSpeciesType), INTENT(IN)  :: this
+      TYPE(ErrorManagerType), POINTER, INTENT(INOUT) :: error_mgr
+      INTEGER,                INTENT(OUT) :: rc
 
-      ! Deallocate emission variables in each category
-      cats: do c = 1, EmisState%nCats
-         species: do s = 1, EmisState%Cats(c)%nSpecies
-            if (allocated(EmisState%Cats(c)%Species(s)%Flux)) &
-               deallocate(EmisState%Cats(c)%Species(s)%Flux)
-            if (allocated(EmisState%Cats(c)%Species(s)%EmisMapIndex)) &
-               deallocate(EmisState%Cats(c)%Species(s)%EmisMapIndex)
-            if (allocated(EmisState%Cats(c)%Species(s)%Scale)) &
-               deallocate(EmisState%Cats(c)%Species(s)%Scale)
-            if (allocated(EmisState%Cats(c)%Species(s)%EmisMapName)) &
-               deallocate(EmisState%Cats(c)%Species(s)%EmisMapName)
-            if (allocated(EmisState%Cats(c)%Species(s)%PlmRiseHgt)) &
-               deallocate(EmisState%Cats(c)%Species(s)%PlmRiseHgt)
-            if (allocated(EmisState%Cats(c)%Species(s)%PlmSrcFlx)) &
-               deallocate(EmisState%Cats(c)%Species(s)%PlmSrcFlx)
-            if (allocated(EmisState%Cats(c)%Species(s)%FRP)) &
-               deallocate(EmisState%Cats(c)%Species(s)%FRP)
-            if (allocated(EmisState%Cats(c)%Species(s)%STKDM)) &
-               deallocate(EmisState%Cats(c)%Species(s)%STKDM)
-            if (allocated(EmisState%Cats(c)%Species(s)%STKHT)) &
-               deallocate(EmisState%Cats(c)%Species(s)%STKHT)
-            if (allocated(EmisState%Cats(c)%Species(s)%STKTK)) &
-               deallocate(EmisState%Cats(c)%Species(s)%STKTK)
-            if (allocated(EmisState%Cats(c)%Species(s)%STKVE)) &
-               deallocate(EmisState%Cats(c)%Species(s)%STKVE)
-         end do species
-      end do cats
-      if (allocated(EmisState%Cats)) deallocate(EmisState%Cats)
-      if (allocated(EmisState%Cats)) deallocate(EmisState%Cats)
+      call error_mgr%push_context('emisspecies_validate', 'emisstate_mod.F90')
+      rc = CC_SUCCESS
 
-   end subroutine EmisState_CleanUp
+      if (LEN_TRIM(this%name) == 0) then
+         call error_mgr%report_error(ERROR_INVALID_STATE, &
+                                     'Species name is empty', rc)
+         call error_mgr%pop_context()
+         return
+      endif
+
+      if (.not. allocated(this%Flux)) then
+         call error_mgr%report_error(ERROR_INVALID_STATE, &
+                                     'Flux array not allocated for species ' // TRIM(this%name), rc)
+         call error_mgr%pop_context()
+         return
+      endif
+
+      call error_mgr%pop_context()
+
+   END SUBROUTINE emisspecies_validate
+
+   !=========================================================================
+   ! EmisCategoryType procedures
+   !=========================================================================
+
+   !> \brief Initialize an emission category
+   !!
+   !! \param[inout] this The EmisCategoryType object to initialize
+   !! \param[in] category_name Name of the category
+   !! \param[in] num_species Number of species in this category
+   !! \param[in] error_mgr Error manager for context and error reporting
+   !! \param[out] rc Return code
+   !!!>
+   SUBROUTINE emiscategory_init(this, category_name, num_species, error_mgr, rc)
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE, ERROR_MEMORY_ALLOCATION, ERROR_INVALID_INPUT
+
+      CLASS(EmisCategoryType), INTENT(INOUT) :: this
+      CHARACTER(LEN=*),        INTENT(IN)    :: category_name
+      INTEGER,                 INTENT(IN)    :: num_species
+      TYPE(ErrorManagerType), POINTER, INTENT(INOUT) :: error_mgr
+      INTEGER,                 INTENT(OUT)   :: rc
+
+      ! Initialize
+      call error_mgr%push_context('emiscategory_init', 'emisstate_mod.F90')
+      rc = CC_SUCCESS
+
+      if (num_species <= 0) then
+         call error_mgr%report_error(ERROR_INVALID_INPUT, &
+                                     'Number of species must be positive', rc)
+         call error_mgr%pop_context()
+         return
+      endif
+
+      ! Set basic properties
+      this%Name = TRIM(category_name)
+      this%nSpecies = num_species
+      this%nPlumerise = 0
+
+      ! Allocate species array
+      if (allocated(this%Species)) deallocate(this%Species)
+      if (num_species > 0) then
+         allocate(this%Species(num_species), stat=rc)
+         if (rc /= CC_SUCCESS) then
+            call error_mgr%report_error(ERROR_MEMORY_ALLOCATION, &
+                                        'Error allocating Species array for category ' // TRIM(category_name), rc)
+            call error_mgr%pop_context()
+            return
+         endif
+      endif
+
+      call error_mgr%pop_context()
+
+   END SUBROUTINE emiscategory_init
+
+   !> \brief Clean up an emission category
+   !!
+   !! \param[inout] this The EmisCategoryType object to clean up
+   !! \param[out] rc Return code
+   !!!>
+   SUBROUTINE emiscategory_cleanup(this, rc)
+      CLASS(EmisCategoryType), INTENT(INOUT) :: this
+      INTEGER,                 INTENT(OUT)   :: rc
+
+      INTEGER :: i
+
+      rc = CC_SUCCESS
+
+      ! Clean up all species
+      if (allocated(this%Species)) then
+         do i = 1, size(this%Species)
+            call this%Species(i)%cleanup(rc)
+            if (rc /= CC_SUCCESS) return
+         end do
+         deallocate(this%Species)
+      endif
+
+      this%Name = ''
+      this%nSpecies = 0
+      this%nPlumerise = 0
+
+   END SUBROUTINE emiscategory_cleanup
+
+   !> \brief Validate an emission category
+   !!
+   !! \param[in] this The EmisCategoryType object to validate
+   !! \param[in] error_mgr Error manager for context and error reporting
+   !! \param[out] rc Return code
+   !!!>
+   SUBROUTINE emiscategory_validate(this, error_mgr, rc)
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE, ERROR_INVALID_STATE
+
+      CLASS(EmisCategoryType), INTENT(IN)  :: this
+      TYPE(ErrorManagerType), POINTER, INTENT(INOUT) :: error_mgr
+      INTEGER,                 INTENT(OUT) :: rc
+
+      INTEGER :: i
+
+      call error_mgr%push_context('emiscategory_validate', 'emisstate_mod.F90')
+      rc = CC_SUCCESS
+
+      if (LEN_TRIM(this%Name) == 0) then
+         call error_mgr%report_error(ERROR_INVALID_STATE, &
+                                     'Category name is empty', rc)
+         call error_mgr%pop_context()
+         return
+      endif
+
+      if (this%nSpecies > 0) then
+         if (.not. allocated(this%Species)) then
+            call error_mgr%report_error(ERROR_INVALID_STATE, &
+                                        'Species array not allocated for category ' // TRIM(this%Name), rc)
+            call error_mgr%pop_context()
+            return
+         endif
+
+         ! Validate all species
+         do i = 1, this%nSpecies
+            call this%Species(i)%validate(error_mgr, rc)
+            if (rc /= CC_SUCCESS) return
+         end do
+      endif
+
+   END SUBROUTINE emiscategory_validate
+
+   !=========================================================================
+   ! EmisStateType procedures
+   !=========================================================================
+
+   !> \brief Initialize an emission state
+   !!
+   !! \param[inout] this The EmisStateType object to initialize
+   !! \param[in] num_categories Number of emission categories
+   !! \param[in] error_mgr Error manager for handling errors
+   !! \param[out] rc Return code
+   !!!>
+   SUBROUTINE emisstate_init(this, num_categories, error_mgr, rc)
+      CLASS(EmisStateType), INTENT(INOUT) :: this
+      INTEGER,              INTENT(IN)    :: num_categories
+      TYPE(ErrorManagerType), POINTER     :: error_mgr
+      INTEGER,              INTENT(OUT)   :: rc
+
+      INTEGER :: alloc_status
+
+      ! Initialize
+      rc = CC_SUCCESS
+
+      ! Set basic properties
+      this%nCats = num_categories
+      this%nEmisTotalPlumerise = 0
+
+      ! Allocate categories array
+      if (allocated(this%Cats)) deallocate(this%Cats)
+      if (num_categories > 0) then
+         allocate(this%Cats(num_categories), stat=alloc_status)
+         if (alloc_status /= 0) then
+            call error_mgr%report_error(ERROR_MEMORY_ALLOCATION, &
+                                      'Error allocating Cats array', &
+                                      rc, 'emisstate_init')
+            rc = CC_FAILURE
+            return
+         endif
+      endif
+
+   END SUBROUTINE emisstate_init
+
+   !> \brief Clean up an emission state
+   !!
+   !! \param[inout] this The EmisStateType object to clean up
+   !! \param[out] rc Return code
+   !!!>
+   SUBROUTINE emisstate_cleanup_method(this, rc)
+      CLASS(EmisStateType), INTENT(INOUT) :: this
+      INTEGER,              INTENT(OUT)   :: rc
+
+      INTEGER :: i
+
+      rc = CC_SUCCESS
+
+      ! Clean up all categories
+      if (allocated(this%Cats)) then
+         do i = 1, size(this%Cats)
+            call this%Cats(i)%cleanup(rc)
+            if (rc /= CC_SUCCESS) return
+         end do
+         deallocate(this%Cats)
+      endif
+
+      this%nCats = 0
+      this%nEmisTotalPlumerise = 0
+
+   END SUBROUTINE emisstate_cleanup_method
+
+   !> \brief Validate an emission state
+   !!
+   !! \param[in] this The EmisStateType object to validate
+   !! \param[in] error_mgr Error manager for handling errors
+   !! \param[out] rc Return code
+   !!!>
+   SUBROUTINE emisstate_validate(this, error_mgr, rc)
+      CLASS(EmisStateType), INTENT(IN)  :: this
+      TYPE(ErrorManagerType), POINTER   :: error_mgr
+      INTEGER,              INTENT(OUT) :: rc
+
+      INTEGER :: i
+
+      rc = CC_SUCCESS
+
+      if (this%nCats > 0) then
+         if (.not. allocated(this%Cats)) then
+            call error_mgr%report_error(ERROR_INVALID_STATE, &
+                                      'Cats array not allocated', &
+                                      rc, 'emisstate_validate')
+            rc = CC_FAILURE
+            return
+         endif
+
+         ! Validate all categories
+         do i = 1, this%nCats
+            call this%Cats(i)%validate(error_mgr, rc)
+            if (rc /= CC_SUCCESS) return
+         end do
+      endif
+
+   END SUBROUTINE emisstate_validate
 
 END MODULE EmisState_Mod
