@@ -13,11 +13,13 @@ module ProcessInterface_Mod
    use precision_mod
    use state_mod, only : StateContainerType
    use error_mod
+   use ColumnInterface_Mod, only : VirtualColumnType, ColumnProcessorType
 
    implicit none
    private
 
    public :: ProcessInterface
+   public :: ColumnProcessInterface
 
    !> \brief Abstract base class for all atmospheric processes
    !!
@@ -66,6 +68,11 @@ module ProcessInterface_Mod
       procedure(run_interface), deferred :: run
       procedure(finalize_interface), deferred :: finalize
 
+      ! Diagnostic registration capabilities
+      procedure :: register_diagnostics => process_register_diagnostics
+      procedure :: update_diagnostics => process_update_diagnostics
+      procedure :: get_diagnostic_registry => process_get_diagnostic_registry
+
       ! Optional interface methods with default implementations
       procedure :: get_name => process_get_name
       procedure :: get_version => process_get_version
@@ -111,7 +118,37 @@ module ProcessInterface_Mod
       procedure :: solve_chemistry_system => process_solve_chemistry_system
       procedure :: partition_species => process_partition_species
       procedure :: check_phase_balance => process_check_phase_balance
+
+      ! Column virtualization support
+      procedure :: supports_column_processing => process_supports_column_processing
+      procedure :: process_column => process_process_column
+      procedure :: process_all_columns => process_process_all_columns
    end type ProcessInterface
+
+   !> \brief Enhanced process interface specifically for column-based processing
+   !!
+   !! This interface extends ProcessInterface to provide column virtualization
+   !! capabilities, allowing processes to work with virtual columns while
+   !! maintaining awareness of 3D spatial relationships.
+   type, abstract, extends(ProcessInterface) :: ColumnProcessInterface
+      private
+
+      logical :: column_processing_enabled = .true.  !< Enable column processing mode
+      integer :: column_batch_size = 100            !< Number of columns to process in batch
+
+   contains
+      ! Required column processing methods
+      procedure(column_init_interface), deferred :: init_column_processing
+      procedure(column_run_interface), deferred :: run_column
+      procedure(column_finalize_interface), deferred :: finalize_column_processing
+
+      ! Optional column processing methods with default implementations
+      procedure :: set_column_batch_size => column_process_set_batch_size
+      procedure :: get_column_batch_size => column_process_get_batch_size
+      procedure :: enable_column_processing => column_process_enable
+      procedure :: disable_column_processing => column_process_disable
+      procedure :: is_column_processing_enabled => column_process_is_enabled
+   end type ColumnProcessInterface
 
    ! Abstract interfaces that must be implemented by concrete processes
    abstract interface
@@ -135,6 +172,33 @@ module ProcessInterface_Mod
       subroutine finalize_interface(this, rc)
          import :: ProcessInterface
          class(ProcessInterface), intent(inout) :: this
+         integer, intent(out) :: rc
+      end subroutine
+   end interface
+
+   ! Column processing interfaces
+   abstract interface
+      !> \brief Initialize column processing for the process
+      subroutine column_init_interface(this, container, rc)
+         import :: ColumnProcessInterface, StateContainerType
+         class(ColumnProcessInterface), intent(inout) :: this
+         type(StateContainerType), intent(inout) :: container
+         integer, intent(out) :: rc
+      end subroutine
+
+      !> \brief Process a single virtual column
+      subroutine column_run_interface(this, column, rc)
+         import :: ColumnProcessInterface, VirtualColumnType
+         class(ColumnProcessInterface), intent(inout) :: this
+         type(VirtualColumnType), intent(inout) :: column
+         integer, intent(out) :: rc
+      end subroutine
+
+      !> \brief Finalize column processing
+      subroutine column_finalize_interface(this, container, rc)
+         import :: ColumnProcessInterface, StateContainerType
+         class(ColumnProcessInterface), intent(inout) :: this
+         type(StateContainerType), intent(inout) :: container
          integer, intent(out) :: rc
       end subroutine
    end interface
@@ -907,6 +971,194 @@ contains
 
    end function process_check_phase_balance
 
+   !========================================================================
+   ! Diagnostic Registration Methods
+   !========================================================================
+
+   !> \brief Register diagnostics for this process
+   !!
+   !! This method should be called during process initialization to register
+   !! all diagnostics that the process will produce. Each process creates
+   !! diagnostic fields and registers them with the diagnostic manager.
+   !!
+   !! \param[inout] this ProcessInterface instance
+   !! \param[inout] container StateContainer for accessing diagnostic manager
+   !! \param[out] rc Return code
+   subroutine process_register_diagnostics(this, container, rc)
+      use DiagnosticInterface_Mod, only: DiagnosticFieldType, DIAG_REAL_2D
+      use DiagnosticManager_Mod, only: DiagnosticManagerType
+      class(ProcessInterface), intent(inout) :: this
+      type(StateContainerType), intent(inout) :: container
+      integer, intent(out) :: rc
+
+      type(DiagnosticManagerType), pointer :: diag_mgr
+      type(ErrorManagerType), pointer :: error_mgr
+
+      rc = CC_SUCCESS
+
+      ! Get diagnostic manager from container
+      diag_mgr => container%get_diagnostic_manager_ptr()
+      if (.not. associated(diag_mgr)) then
+         rc = CC_FAILURE
+         return
+      endif
+
+      ! Get error manager for logging
+      error_mgr => container%get_error_manager()
+
+      ! Register the process with the diagnostic manager
+      call diag_mgr%register_process(this%name, container, rc)
+      if (rc /= CC_SUCCESS) then
+         call error_mgr%report_error(rc, 'Failed to register process with diagnostic manager')
+         return
+      endif
+
+      ! Default implementation registers no diagnostics
+      ! Concrete processes should override this method to register their specific diagnostics
+
+   end subroutine process_register_diagnostics
+
+   !> \brief Update diagnostic values for this process
+   !!
+   !! This method should be called during process execution to update
+   !! diagnostic field values with current data from the process.
+   !!
+   !! \param[inout] this ProcessInterface instance
+   !! \param[inout] container StateContainer for accessing state data
+   !! \param[out] rc Return code
+   subroutine process_update_diagnostics(this, container, rc)
+      use DiagnosticManager_Mod, only: DiagnosticManagerType
+      use DiagnosticInterface_Mod, only: DiagnosticRegistryType
+      class(ProcessInterface), intent(inout) :: this
+      type(StateContainerType), intent(inout) :: container
+      integer, intent(out) :: rc
+
+      type(DiagnosticManagerType), pointer :: diag_mgr
+      type(DiagnosticRegistryType), pointer :: diag_registry
+
+      rc = CC_SUCCESS
+
+      ! Get diagnostic manager from container
+      diag_mgr => container%get_diagnostic_manager_ptr()
+      if (.not. associated(diag_mgr)) then
+         rc = CC_FAILURE
+         return
+      endif
+
+      ! Get this process's diagnostic registry
+      call diag_mgr%get_process_registry(this%name, diag_registry, rc)
+      if (rc /= CC_SUCCESS) then
+         return
+      endif
+
+      ! Default implementation does nothing
+      ! Concrete processes should override this method to update their diagnostic values
+
+   end subroutine process_update_diagnostics
+
+   !> \brief Get diagnostic registry for this process
+   !!
+   !! \param[in] this ProcessInterface instance
+   !! \param[inout] container StateContainer for accessing diagnostic manager
+   !! \param[out] registry Pointer to the diagnostic registry for this process
+   !! \param[out] rc Return code
+   subroutine process_get_diagnostic_registry(this, container, registry, rc)
+      use DiagnosticManager_Mod, only: DiagnosticManagerType
+      use DiagnosticInterface_Mod, only: DiagnosticRegistryType
+      class(ProcessInterface), intent(in) :: this
+      type(StateContainerType), intent(inout) :: container
+      type(DiagnosticRegistryType), pointer, intent(out) :: registry
+      integer, intent(out) :: rc
+
+      type(DiagnosticManagerType), pointer :: diag_mgr
+
+      nullify(registry)
+      rc = CC_SUCCESS
+
+      ! Get diagnostic manager from container
+      diag_mgr => container%get_diagnostic_manager_ptr()
+      if (.not. associated(diag_mgr)) then
+         rc = CC_FAILURE
+         return
+      endif
+
+      ! Get this process's diagnostic registry
+      call diag_mgr%get_process_registry(this%name, registry, rc)
+
+   end subroutine process_get_diagnostic_registry
+
+   !========================================================================
+   ! Column virtualization support methods
+   !========================================================================
+
+   !> \brief Check if process supports column-based processing
+   function process_supports_column_processing(this) result(supports)
+      class(ProcessInterface), intent(in) :: this
+      logical :: supports
+
+      supports = .false.  ! Default implementation - override in subclasses
+   end function process_supports_column_processing
+
+   !> \brief Process a single column (default implementation)
+   subroutine process_process_column(this, column, rc)
+      class(ProcessInterface), intent(inout) :: this
+      type(VirtualColumnType), intent(inout) :: column
+      integer, intent(out) :: rc
+
+      rc = CC_FAILURE  ! Default implementation fails - must be overridden
+   end subroutine process_process_column
+
+   !> \brief Process all columns using column processor
+   subroutine process_process_all_columns(this, container, rc)
+      class(ProcessInterface), intent(inout) :: this
+      type(StateContainerType), intent(inout) :: container
+      integer, intent(out) :: rc
+
+      rc = CC_FAILURE  ! Default implementation fails - must be overridden
+   end subroutine process_process_all_columns
+
+   !========================================================================
+   ! ColumnProcessInterface Implementation
+   !========================================================================
+
+   !> \brief Set column batch size
+   subroutine column_process_set_batch_size(this, batch_size)
+      class(ColumnProcessInterface), intent(inout) :: this
+      integer, intent(in) :: batch_size
+
+      this%column_batch_size = max(1, batch_size)
+   end subroutine column_process_set_batch_size
+
+   !> \brief Get column batch size
+   function column_process_get_batch_size(this) result(batch_size)
+      class(ColumnProcessInterface), intent(in) :: this
+      integer :: batch_size
+
+      batch_size = this%column_batch_size
+   end function column_process_get_batch_size
+
+   !> \brief Enable column processing
+   subroutine column_process_enable(this)
+      class(ColumnProcessInterface), intent(inout) :: this
+
+      this%column_processing_enabled = .true.
+   end subroutine column_process_enable
+
+   !> \brief Disable column processing
+   subroutine column_process_disable(this)
+      class(ColumnProcessInterface), intent(inout) :: this
+
+      this%column_processing_enabled = .false.
+   end subroutine column_process_disable
+
+   !> \brief Check if column processing is enabled
+   function column_process_is_enabled(this) result(is_enabled)
+      class(ColumnProcessInterface), intent(in) :: this
+      logical :: is_enabled
+
+      is_enabled = this%column_processing_enabled
+   end function column_process_is_enabled
+
    ! Private solver implementations (placeholders)
    subroutine solve_euler(this, y_old, y_new, rc)
       class(ProcessInterface), intent(in) :: this
@@ -957,4 +1209,5 @@ contains
       rc = CC_SUCCESS
       y_new = y_old  ! Placeholder - would interface with MICM solver
    end subroutine solve_micm
+
 end module ProcessInterface_Mod
