@@ -15,10 +15,11 @@
 
 Comprehensive documentation is available in the `docs/` directory:
 
-- **[NUOPC Integration Overview](docs/nuopc-overview.rst)** - Architecture and capabilities
-- **[Examples and Tutorials](docs/nuopc-examples.rst)** - Step-by-step guides and common configurations
-- **[Utility Scripts](docs/utilities.rst)** - Weight generation and configuration tools
-- **[Configuration Reference](docs/nuopc-configuration.rst)** - Complete YAML configuration guide
+- **[Documentation Home](docs/index.md)** - Complete documentation portal
+- **[Quick Start Guide](docs/quick-start/index.md)** - Get started quickly
+- **[User Guide](docs/user-guide/index.md)** - Complete user documentation
+- **[Developer Guide](docs/developer-guide/index.md)** - Technical documentation for developers
+- **[API Reference](docs/api/index.md)** - Complete API documentation
 
 ## Quick Start
 

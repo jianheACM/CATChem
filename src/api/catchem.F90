@@ -64,6 +64,20 @@ module CATChem
    use MetState_Mod,   only: MetStateType     ! Meteorology State
    use species_mod,    only: SpeciesType      ! Species State
    use Config_Opt_Mod, only: ConfigType
+   use state_mod,      only: StateContainerType, StateBuilderType  ! Modern state management
+
+   !------------------
+   ! Grid Management
+   !------------------
+   use GridManager_Mod, only: GridManagerType, GridGeometryType, ColumnIteratorType
+   use ColumnInterface_Mod, only: VirtualColumnType, ColumnProcessorType
+
+   !--------------------
+   ! Process Management
+   !--------------------
+   use ProcessInterface_Mod, only: ProcessInterface, ColumnProcessInterface
+   use ProcessManager_Mod, only: ProcessManagerType
+   use ProcessFactory_Mod, only: ProcessFactoryType
 
    !----------------
    ! Core routines
@@ -110,6 +124,14 @@ module CATChem
    use run_mod,  only: cc_run_process => Run_Process    ! Method for running the processes
    use run_mod,  only: cc_finalize_process => Finalize_Process    ! Method for finalizing the processes
 
+   !-----------------------------
+   ! Column Virtualization API
+   !-----------------------------
+   public :: cc_init_grid_manager       ! Initialize grid manager with column virtualization
+   public :: cc_create_virtual_column   ! Create a virtual column for processing
+   public :: cc_run_column_processes    ! Run all column-based processes
+   public :: cc_process_all_columns     ! Process all columns with specified process
+
    !------------------
    ! CATChem Precision
    !------------------
@@ -144,5 +166,93 @@ module CATChem
    implicit none
 
    public
+
+contains
+
+   !> \brief Initialize grid manager with column virtualization
+   !! \param[inout] container State container
+   !! \param[in] nx Number of grid points in x direction
+   !! \param[in] ny Number of grid points in y direction
+   !! \param[in] nz Number of grid points in z direction
+   !! \param[out] rc Return code
+   subroutine cc_init_grid_manager(container, nx, ny, nz, rc)
+      type(StateContainerType), intent(inout) :: container
+      integer, intent(in) :: nx, ny, nz
+      integer, intent(out) :: rc
+
+      type(GridManagerType), pointer :: grid_mgr
+      type(GridGeometryType) :: geometry
+
+      ! Get grid manager from container
+      grid_mgr => container%get_grid_manager()
+      if (.not. associated(grid_mgr)) then
+         rc = CC_FAILURE
+         return
+      endif
+
+      ! Initialize geometry
+      call geometry%init(nx, ny, nz, rc)
+      if (rc /= CC_SUCCESS) return
+
+      ! Initialize grid manager
+      call grid_mgr%init(geometry, rc)
+      if (rc /= CC_SUCCESS) return
+
+      rc = CC_SUCCESS
+   end subroutine cc_init_grid_manager
+
+   !> \brief Create a virtual column for processing
+   !! \param[inout] container State container
+   !! \param[in] col_idx Column index
+   !! \param[out] virtual_col Virtual column object
+   !! \param[out] rc Return code
+   subroutine cc_create_virtual_column(container, col_idx, virtual_col, rc)
+      type(StateContainerType), intent(inout) :: container
+      integer, intent(in) :: col_idx
+      type(VirtualColumnType), intent(out) :: virtual_col
+      integer, intent(out) :: rc
+
+      type(GridManagerType), pointer :: grid_mgr
+
+      ! Get grid manager from container
+      grid_mgr => container%get_grid_manager()
+      if (.not. associated(grid_mgr)) then
+         rc = CC_FAILURE
+         return
+      endif
+
+      ! Create virtual column
+      call grid_mgr%create_virtual_column(col_idx, virtual_col, rc)
+      if (rc /= CC_SUCCESS) return
+
+      ! Extract data from container
+      call virtual_col%extract_from_container(container, rc)
+   end subroutine cc_create_virtual_column
+
+   !> \brief Run all column-based processes using process manager
+   !! \param[inout] proc_mgr Process manager
+   !! \param[inout] container State container
+   !! \param[out] rc Return code
+   subroutine cc_run_column_processes(proc_mgr, container, rc)
+      type(ProcessManagerType), intent(inout) :: proc_mgr
+      type(StateContainerType), intent(inout) :: container
+      integer, intent(out) :: rc
+
+      call proc_mgr%run_column_processes(container, rc)
+   end subroutine cc_run_column_processes
+
+   !> \brief Process all columns with a specific process
+   !! \param[inout] proc_mgr Process manager
+   !! \param[in] process_name Name of process to run
+   !! \param[inout] container State container
+   !! \param[out] rc Return code
+   subroutine cc_process_all_columns(proc_mgr, process_name, container, rc)
+      type(ProcessManagerType), intent(inout) :: proc_mgr
+      character(len=*), intent(in) :: process_name
+      type(StateContainerType), intent(inout) :: container
+      integer, intent(out) :: rc
+
+      call proc_mgr%run_process(process_name, container, rc)
+   end subroutine cc_process_all_columns
 
 end module CATChem

@@ -1,27 +1,27 @@
 set(
   _srcs
-  charpak_mod.F90
-  chemstate_mod.F90
+  Precision_Mod.F90
+  Constants.F90
+  logging_mod.F90
   cmn_size_mod.F90
-  # complete_integration_demo.F90  # Temporarily disabled
-  config/ConfigManager_Mod.F90
-  # config_mod.F90  # Temporarily disabled - replaced by ConfigManager
-  # config_opt_mod.F90  # Temporarily disabled - replaced by ConfigManager
-  constants.F90
-  # core_integration_demo.F90  # Temporarily disabled
-  diagstate_mod.F90
-  emisstate_mod.F90  # Re-enabled after GridState cleanup
-  error_mod.F90
-  # error_handling_example.F90  # Temporarily disabled
-  # gridstate_mod.F90  # Removed - replaced by modern state initialization
-  init_mod.F90
-  metstate_mod.F90
-  precision_mod.F90
-  # qfyaml_mod.F90  # Temporarily disabled due to EmisState dependency
-  species_mod.F90
-  # state_interface.F90  # Temporarily disabled
-  state_mod.F90
-  utilities_mod.F90
+  TimeState_Mod.F90
+  GridGeometry_Mod.F90
+  GridManager_Mod.F90
+  DiagnosticRegistry_Mod.F90
+  EmissionConfigValidator_Mod.F90
+  Species_Mod.F90
+  ChemState_Mod.F90
+  Met_Utilities_Mod.F90
+  MetState_Mod.F90
+  ExtEmisData_Mod.F90
+  ConfigManager_Mod.F90
+  EmisState_Mod.F90
+  Error_Mod.F90
+  Init_Mod.F90
+  State_Interface.F90
+  State_Mod.F90
+  Utilities_Mod.F90
+  ColumnInterface_Mod.F90
 )
 
 add_library(CATChem_core ${_srcs})

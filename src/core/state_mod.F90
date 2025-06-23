@@ -51,6 +51,8 @@ module state_mod
    use EmisState_Mod,  only : EmisStateType
    use DiagState_Mod,  only : DiagStateType
    use Error_Mod,      only : CC_SUCCESS, CC_FAILURE, ErrorManagerType
+   use GridManager_Mod, only : GridManagerType, GridGeometryType
+   use DiagnosticManager_Mod, only : DiagnosticManagerType
 
    IMPLICIT NONE
    PRIVATE
@@ -82,7 +84,13 @@ module state_mod
       type(MetStateType),  allocatable :: met_state   !< Meteorological fields
       type(ChemStateType), allocatable :: chem_state  !< Chemical species concentrations
       type(EmisStateType), allocatable :: emis_state  !< Emission fluxes and mappings
-      type(DiagStateType), allocatable :: diag_state  !< Diagnostic output variables
+      type(DiagStateType), allocatable :: diag_state  !< Diagnostic output variables (legacy)
+
+      ! Modern diagnostic system
+      type(DiagnosticManagerType), allocatable :: diag_mgr  !< Dynamic diagnostic manager
+
+      ! Grid management
+      type(GridManagerType), allocatable :: grid_mgr  !< Grid manager for column virtualization
 
       ! Error handling and debugging
       type(ErrorManagerType) :: error_mgr             !< Integrated error manager
@@ -112,6 +120,16 @@ module state_mod
       procedure :: get_chem_state_ptr => container_get_chem_state_ptr
       procedure :: get_emis_state_ptr => container_get_emis_state_ptr
       procedure :: get_diag_state_ptr => container_get_diag_state_ptr
+
+      ! Grid management accessors
+      procedure :: get_grid_manager => container_get_grid_manager
+      procedure :: get_grid_manager_ptr => container_get_grid_manager_ptr
+      procedure :: init_grid_manager => container_init_grid_manager
+
+      ! Diagnostic management accessors
+      procedure :: get_diagnostic_manager => container_get_diagnostic_manager
+      procedure :: get_diagnostic_manager_ptr => container_get_diagnostic_manager_ptr
+      procedure :: init_diagnostic_manager => container_init_diagnostic_manager
 
       ! Utility methods
       procedure :: is_ready => container_is_ready
@@ -208,7 +226,8 @@ contains
       if (.not. allocated(this%met_state)) allocate(this%met_state)
       if (.not. allocated(this%chem_state)) allocate(this%chem_state)
       if (.not. allocated(this%emis_state)) allocate(this%emis_state)
-      if (.not. allocated(this%diag_state)) allocate(this%diag_state)
+      if (.not. allocated(this%diag_state)) allocate(this%diag_state)  ! Legacy diagnostic state
+      if (.not. allocated(this%diag_mgr)) allocate(this%diag_mgr)      ! Modern diagnostic manager
 
       this%is_initialized = .true.
       this%is_valid = .false.  ! Will be set to true after validation
@@ -230,7 +249,8 @@ contains
       if (allocated(this%met_state)) deallocate(this%met_state)
       if (allocated(this%chem_state)) deallocate(this%chem_state)
       if (allocated(this%emis_state)) deallocate(this%emis_state)
-      if (allocated(this%diag_state)) deallocate(this%diag_state)
+      if (allocated(this%diag_state)) deallocate(this%diag_state)      ! Legacy diagnostic state
+      if (allocated(this%diag_mgr)) deallocate(this%diag_mgr)          ! Modern diagnostic manager
 
       this%is_initialized = .false.
       this%is_valid = .false.
@@ -427,6 +447,8 @@ contains
       write(*,'(A,L1)') 'Chem state allocated: ', allocated(this%chem_state)
       write(*,'(A,L1)') 'Emis state allocated: ', allocated(this%emis_state)
       write(*,'(A,L1)') 'Diag state allocated: ', allocated(this%diag_state)
+      write(*,'(A,L1)') 'Diag manager allocated: ', allocated(this%diag_mgr)
+      write(*,'(A,L1)') 'Grid manager allocated: ', allocated(this%grid_mgr)
       write(*,'(A)') '================================='
 
    end subroutine container_print_info
@@ -813,5 +835,105 @@ contains
 
       error_mgr_ref => this%error_mgr
    end function container_get_error_manager
+
+   !========================================================================
+   ! Grid Manager Implementation
+   !========================================================================
+
+   !> \brief Get const reference to grid manager
+   function container_get_grid_manager(this) result(grid_mgr_ref)
+      implicit none
+      class(StateContainerType), intent(in) :: this
+      type(GridManagerType) :: grid_mgr_ref
+
+      if (allocated(this%grid_mgr)) then
+         grid_mgr_ref = this%grid_mgr
+      endif
+   end function container_get_grid_manager
+
+   !> \brief Get pointer to grid manager for modification
+   function container_get_grid_manager_ptr(this) result(grid_mgr_ptr)
+      implicit none
+      class(StateContainerType), intent(inout), target :: this
+      type(GridManagerType), pointer :: grid_mgr_ptr
+
+      if (allocated(this%grid_mgr)) then
+         grid_mgr_ptr => this%grid_mgr
+      else
+         nullify(grid_mgr_ptr)
+      endif
+   end function container_get_grid_manager_ptr
+
+   !> \brief Initialize grid manager with specified dimensions
+   subroutine container_init_grid_manager(this, nx, ny, nz, grid_type, coord_system, rc)
+      implicit none
+      class(StateContainerType), intent(inout) :: this
+      integer, intent(in) :: nx, ny, nz
+      integer, intent(in), optional :: grid_type, coord_system
+      integer, intent(out) :: rc
+
+      rc = CC_SUCCESS
+
+      ! Allocate grid manager if not already allocated
+      if (.not. allocated(this%grid_mgr)) then
+         allocate(this%grid_mgr)
+      endif
+
+      ! Initialize grid manager
+      call this%grid_mgr%init(nx, ny, nz, this%error_mgr, grid_type, coord_system, rc)
+      if (rc /= CC_SUCCESS) then
+         return
+      endif
+
+   end subroutine container_init_grid_manager
+
+   !========================================================================
+   ! Diagnostic Manager Implementation
+   !========================================================================
+
+   !> \brief Get const reference to diagnostic manager
+   function container_get_diagnostic_manager(this) result(diag_mgr_ref)
+      implicit none
+      class(StateContainerType), intent(in) :: this
+      type(DiagnosticManagerType) :: diag_mgr_ref
+
+      if (allocated(this%diag_mgr)) then
+         diag_mgr_ref = this%diag_mgr
+      endif
+   end function container_get_diagnostic_manager
+
+   !> \brief Get pointer to diagnostic manager for modification
+   function container_get_diagnostic_manager_ptr(this) result(diag_mgr_ptr)
+      implicit none
+      class(StateContainerType), intent(inout), target :: this
+      type(DiagnosticManagerType), pointer :: diag_mgr_ptr
+
+      if (allocated(this%diag_mgr)) then
+         diag_mgr_ptr => this%diag_mgr
+      else
+         nullify(diag_mgr_ptr)
+      endif
+   end function container_get_diagnostic_manager_ptr
+
+   !> \brief Initialize diagnostic manager
+   subroutine container_init_diagnostic_manager(this, rc)
+      implicit none
+      class(StateContainerType), intent(inout) :: this
+      integer, intent(out) :: rc
+
+      rc = CC_SUCCESS
+
+      ! Allocate diagnostic manager if not already allocated
+      if (.not. allocated(this%diag_mgr)) then
+         allocate(this%diag_mgr)
+      endif
+
+      ! Initialize diagnostic manager
+      call this%diag_mgr%init(this, rc)
+      if (rc /= CC_SUCCESS) then
+         return
+      endif
+
+   end subroutine container_init_diagnostic_manager
 
 end module state_mod

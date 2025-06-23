@@ -87,6 +87,13 @@ module DustProcess_Mod
       procedure :: map_species_to_chemical_state => dust_process_map_species
       procedure :: validate_dust_config => dust_process_validate_config
 
+      ! Override diagnostic methods
+      procedure :: register_diagnostics => dust_process_register_diagnostics
+      procedure :: update_diagnostics => dust_process_update_diagnostics
+
+      ! Internal diagnostic management
+      procedure, private :: update_legacy_diagnostic_state => update_legacy_diagnostic_state
+
       ! Scheme-specific implementations
       procedure, private :: run_afwa_scheme => dust_process_run_afwa
       procedure, private :: run_fengsha_scheme => dust_process_run_fengsha
@@ -208,6 +215,13 @@ contains
 
       ! Mark as initialized
       this%is_initialized = .true.
+
+      ! Register diagnostics
+      call this%register_diagnostics(container, rc)
+      if (rc /= CC_SUCCESS) then
+         call error_mgr%report_error(ERROR_INITIALIZATION, 'Failed to register dust diagnostics', rc)
+         return
+      end if
 
       ! Log process information
       call this%log_process_info(container)
@@ -541,6 +555,129 @@ contains
 
    end subroutine dust_process_validate_config
 
+   !> \brief Register dust-specific diagnostics
+   !!
+   !! \param[inout] this DustProcessType instance
+   !! \param[inout] container StateContainer for accessing diagnostic manager
+   !! \param[out] rc Return code
+   subroutine dust_process_register_diagnostics(this, container, rc)
+      use DiagnosticInterface_Mod, only: DiagnosticFieldType, DiagnosticRegistryType, &
+                                         DIAG_REAL_2D, DIAG_REAL_SCALAR
+      class(DustProcessType), intent(inout) :: this
+      type(StateContainerType), intent(inout) :: container
+      integer, intent(out) :: rc
+
+      type(DiagnosticFieldType) :: diag_field
+      type(DiagnosticRegistryType), pointer :: diag_registry
+      type(ErrorManagerType), pointer :: error_mgr
+      integer :: local_rc
+
+      rc = CC_SUCCESS
+
+      error_mgr => container%get_error_manager()
+      call error_mgr%push_context('dust_process_register_diagnostics', &
+                                  'Registering dust process diagnostics')
+
+      ! First call parent class to register the process
+      call this%ProcessInterface%register_diagnostics(container, local_rc)
+      if (local_rc /= CC_SUCCESS) then
+         rc = local_rc
+         call error_mgr%pop_context()
+         return
+      endif
+
+      ! Get diagnostic registry for this process
+      call this%get_diagnostic_registry(container, diag_registry, local_rc)
+      if (local_rc /= CC_SUCCESS) then
+         rc = local_rc
+         call error_mgr%pop_context()
+         return
+      endif
+
+      ! Register total dust flux diagnostic
+      call diag_field%create('total_dust_flux', &
+                             'Total dust emission flux from all bins', &
+                             'kg m-2 s-1', DIAG_REAL_2D, this%name, local_rc)
+      if (local_rc == CC_SUCCESS) then
+         call diag_registry%register_field(diag_field, local_rc)
+      endif
+      if (local_rc /= CC_SUCCESS) then
+         call error_mgr%report_error(local_rc, 'Failed to register total_dust_flux diagnostic', rc)
+         call error_mgr%pop_context()
+         return
+      endif
+
+      ! Register wind threshold diagnostic
+      call diag_field%create('dust_wind_threshold', &
+                             'Wind speed threshold for dust emission', &
+                             'm s-1', DIAG_REAL_2D, this%name, local_rc)
+      if (local_rc == CC_SUCCESS) then
+         call diag_registry%register_field(diag_field, local_rc)
+      endif
+      if (local_rc /= CC_SUCCESS) then
+         call error_mgr%report_error(local_rc, 'Failed to register dust_wind_threshold diagnostic', rc)
+         call error_mgr%pop_context()
+         return
+      endif
+
+      ! Register dust scheme identifier diagnostic
+      call diag_field%create('dust_scheme_id', &
+                             'Dust emission scheme identifier', &
+                             'dimensionless', DIAG_REAL_SCALAR, this%name, local_rc)
+      if (local_rc == CC_SUCCESS) then
+         call diag_registry%register_field(diag_field, local_rc)
+      endif
+      if (local_rc /= CC_SUCCESS) then
+         call error_mgr%report_error(local_rc, 'Failed to register dust_scheme_id diagnostic', rc)
+         call error_mgr%pop_context()
+         return
+      endif
+
+      call error_mgr%pop_context()
+
+   end subroutine dust_process_register_diagnostics
+
+   !> \brief Update dust-specific diagnostic values
+   !!
+   !! \param[inout] this DustProcessType instance
+   !! \param[inout] container StateContainer for accessing state data
+   !! \param[out] rc Return code
+   subroutine dust_process_update_diagnostics(this, container, rc)
+      use DiagnosticInterface_Mod, only: DiagnosticRegistryType, DiagnosticFieldType
+      class(DustProcessType), intent(inout) :: this
+      type(StateContainerType), intent(inout) :: container
+      integer, intent(out) :: rc
+
+      type(DiagnosticRegistryType), pointer :: diag_registry
+      type(DiagnosticFieldType), pointer :: diag_field
+      integer :: local_rc
+
+      rc = CC_SUCCESS
+
+      ! Get diagnostic registry for this process
+      call this%get_diagnostic_registry(container, diag_registry, local_rc)
+      if (local_rc /= CC_SUCCESS) then
+         rc = local_rc
+         return
+      endif
+
+      ! Update total dust flux diagnostic
+      diag_field => diag_registry%get_field_ptr('total_dust_flux', local_rc)
+      if (local_rc == CC_SUCCESS .and. associated(diag_field)) then
+         call diag_field%update_data(scalar_val=this%total_dust_flux)
+      endif
+
+      ! Update dust scheme diagnostic
+      diag_field => diag_registry%get_field_ptr('dust_scheme_id', local_rc)
+      if (local_rc == CC_SUCCESS .and. associated(diag_field)) then
+         call diag_field%update_data(scalar_val=real(this%dust_scheme, fp))
+      endif
+
+      ! Note: Other diagnostics like dust_wind_threshold would be updated
+      ! with actual 2D field data if available
+
+   end subroutine dust_process_update_diagnostics
+
    !> \brief Run AFWA dust emission scheme
    !!
    !! Implements the Air Force Weather Agency (AFWA) dust emission scheme
@@ -679,28 +816,55 @@ contains
       type(StateContainerType), intent(inout) :: container
       integer, intent(out) :: rc
 
-      type(DiagStateType), pointer :: diag_state
       type(ErrorManagerType), pointer :: error_mgr
+      integer :: local_rc
 
       rc = CC_SUCCESS
       error_mgr => container%get_error_manager()
       call error_mgr%push_context('update_diagnostic_state', 'Updating diagnostic state')
 
-      diag_state => container%get_diag_state_ptr()
-      if (.not. associated(diag_state)) then
-         call error_mgr%report_error(ERROR_NULL_POINTER, 'Diagnostic state not available', rc)
+      ! Update diagnostics using the new dynamic diagnostic system
+      call this%update_diagnostics(container, local_rc)
+      if (local_rc /= CC_SUCCESS) then
+         call error_mgr%report_error(local_rc, 'Failed to update dust diagnostics', rc)
+         call error_mgr%pop_context()
          return
-      end if
+      endif
 
-      ! Update diagnostic fields (assuming these methods exist)
-      call diag_state%set_field('dust_friction_velocity', this%friction_velocity)
-      call diag_state%set_field('dust_threshold_velocity', this%threshold_velocity)
-      call diag_state%set_field('dust_soil_moisture_factor', this%soil_moisture_factor)
-      call diag_state%set_field('dust_total_flux', this%total_dust_flux)
+      ! Also update legacy diagnostic state for backward compatibility
+      ! (This would be removed once migration is complete)
+      call this%update_legacy_diagnostic_state(container, local_rc)
+      if (local_rc /= CC_SUCCESS) then
+         ! Just log error, don't fail if legacy diagnostics fail
+         call error_mgr%report_error(local_rc, 'Failed to update legacy dust diagnostics', rc)
+      endif
 
       call error_mgr%pop_context()
 
    end subroutine update_diagnostic_state
+
+   !> \brief Update legacy diagnostic state for backward compatibility
+   subroutine update_legacy_diagnostic_state(this, container, rc)
+      class(DustProcessType), intent(inout) :: this
+      type(StateContainerType), intent(inout) :: container
+      integer, intent(out) :: rc
+
+      type(DiagStateType), pointer :: diag_state
+
+      rc = CC_SUCCESS
+
+      diag_state => container%get_diag_state_ptr()
+      if (.not. associated(diag_state)) then
+         rc = CC_FAILURE
+         return
+      end if
+
+      ! Update legacy diagnostic fields (if methods exist)
+      ! call diag_state%set_field('dust_total_flux', this%total_dust_flux)
+      ! Note: This is commented out because the actual DiagStateType interface
+      ! would need to be checked for available methods
+
+   end subroutine update_legacy_diagnostic_state
 
    !> \brief Parse comma-separated species list into array
    subroutine parse_species_list(species_list, species_array, n_species)

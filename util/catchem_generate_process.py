@@ -374,26 +374,141 @@ class ProcessGenerator:
         self.logger.info(f"Created: {cmake_file}")
 
     def _generate_documentation(self, name: str, process_type: str, schemes: Optional[List[str]]):
-        """Generate documentation files"""
+        """Generate comprehensive documentation files in organized structure"""
 
-        doc_dir = self.base_path / "docs" / "processes"
+        # Create process-specific documentation directory
+        process_name_lower = name.lower()
+        doc_dir = self.base_path / "docs" / "processes" / process_name_lower
         doc_dir.mkdir(parents=True, exist_ok=True)
 
         template_vars = {
             'process_name': name,
             'process_type': process_type,
             'process_description': self.process_types[process_type]['description'],
-            'schemes': schemes or []
+            'schemes': schemes or [],
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'common_methods': self.process_types[process_type]['common_methods'],
+            'state_dependencies': self.process_types[process_type]['state_dependencies']
         }
 
+        # Generate main documentation file
         template = self.jinja_env.get_template('process_documentation.md.j2')
         self.logger.debug(f"Using template: process_documentation.md.j2")
         doc_content = template.render(**template_vars)
 
-        doc_file = doc_dir / f"{name.lower()}_process.md"
+        doc_file = doc_dir / "index.md"
         with open(doc_file, 'w') as f:
             f.write(doc_content)
         self.logger.info(f"Created: {doc_file}")
+
+        # Generate schemes documentation if schemes exist
+        if schemes:
+            self._generate_schemes_documentation(doc_dir, name, schemes, template_vars)
+
+        # Generate examples documentation
+        self._generate_examples_documentation(doc_dir, name, process_type, template_vars)
+
+        # Update main processes index
+        self._update_processes_index(process_name_lower, name, process_type)
+
+    def _generate_schemes_documentation(self, doc_dir: Path, process_name: str,
+                                      schemes: List[str], template_vars: Dict):
+        """Generate documentation for individual schemes"""
+
+        schemes_content = f"# {process_name} Schemes\n\n"
+        schemes_content += "This document describes the available schemes for the " + \
+                          f"{process_name} process.\n\n"
+
+        for scheme in schemes:
+            schemes_content += f"## {scheme.title()} Scheme\n\n"
+            schemes_content += f"### Description\n\n"
+            schemes_content += f"The {scheme} scheme implements...\n\n"
+            schemes_content += f"### Parameters\n\n"
+            schemes_content += f"| Parameter | Type | Default | Description |\n"
+            schemes_content += f"|-----------|------|---------|-------------|\n"
+            schemes_content += f"| example_param | real | 1.0 | Example parameter |\n\n"
+            schemes_content += f"### Usage\n\n"
+            schemes_content += f"```yaml\n"
+            schemes_content += f"processes:\n"
+            schemes_content += f"  - name: {process_name.lower()}\n"
+            schemes_content += f"    scheme: {scheme}\n"
+            schemes_content += f"    parameters:\n"
+            schemes_content += f"      example_param: 1.0\n"
+            schemes_content += f"```\n\n"
+
+        schemes_file = doc_dir / "schemes.md"
+        with open(schemes_file, 'w') as f:
+            f.write(schemes_content)
+        self.logger.info(f"Created: {schemes_file}")
+
+    def _generate_examples_documentation(self, doc_dir: Path, process_name: str,
+                                       process_type: str, template_vars: Dict):
+        """Generate examples documentation"""
+
+        examples_content = f"# {process_name} Examples\n\n"
+        examples_content += f"This document provides usage examples for the {process_name} process.\n\n"
+
+        # Basic configuration example
+        examples_content += "## Basic Configuration\n\n"
+        examples_content += "```yaml\n"
+        examples_content += "processes:\n"
+        examples_content += f"  - name: {process_name.lower()}\n"
+        examples_content += "    enabled: true\n"
+        if template_vars['schemes']:
+            examples_content += f"    scheme: {template_vars['schemes'][0]}\n"
+        examples_content += "    species: [O3, NO2, SO2]\n"
+        examples_content += "    diagnostics: [process_rate, tendency]\n"
+        examples_content += "```\n\n"
+
+        # Fortran usage example
+        examples_content += "## Fortran Usage\n\n"
+        examples_content += "```fortran\n"
+        examples_content += f"use {process_name}Process_Mod\n"
+        examples_content += f"type({process_name}ProcessType) :: process\n"
+        examples_content += "type(StateContainerType) :: container\n"
+        examples_content += "integer :: rc\n\n"
+        examples_content += "! Initialize\n"
+        examples_content += "call process%init(container, rc)\n\n"
+        examples_content += "! Run for timestep\n"
+        examples_content += "call process%run(container, rc)\n\n"
+        examples_content += "! Clean up\n"
+        examples_content += "call process%finalize(rc)\n"
+        examples_content += "```\n\n"
+
+        examples_file = doc_dir / "examples.md"
+        with open(examples_file, 'w') as f:
+            f.write(examples_content)
+        self.logger.info(f"Created: {examples_file}")
+
+    def _update_processes_index(self, process_name_lower: str, process_name: str, process_type: str):
+        """Update the main processes index to include the new process"""
+
+        processes_index_path = self.base_path / "docs" / "processes" / "index.md"
+
+        # Create processes index if it doesn't exist
+        if not processes_index_path.exists():
+            processes_index_path.parent.mkdir(parents=True, exist_ok=True)
+            index_content = "# CATChem Processes\n\n"
+            index_content += "This section contains documentation for all available CATChem processes.\n\n"
+            index_content += "## Available Processes\n\n"
+        else:
+            with open(processes_index_path, 'r') as f:
+                index_content = f.read()
+
+        # Add new process entry if not already present
+        process_line = f"- **[{process_name}]({process_name_lower}/)** - {self.process_types[process_type]['description']}"
+
+        if process_line not in index_content:
+            # Find where to insert (after "## Available Processes" section)
+            if "## Available Processes\n\n" in index_content:
+                insert_pos = index_content.find("## Available Processes\n\n") + len("## Available Processes\n\n")
+                index_content = index_content[:insert_pos] + process_line + "\n" + index_content[insert_pos:]
+            else:
+                index_content += f"\n{process_line}\n"
+
+            with open(processes_index_path, 'w') as f:
+                f.write(index_content)
+            self.logger.info(f"Updated: {processes_index_path}")
 
     def _validate_process_config(self, name: str, process_type: str, schemes: Optional[List[str]]) -> bool:
         """Validate process configuration"""

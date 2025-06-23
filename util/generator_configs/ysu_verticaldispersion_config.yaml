@@ -1,0 +1,144 @@
+# Configuration for YSU Vertical Dispersion Process
+# This process implements the Yonsei University boundary layer scheme for tracer transport
+
+name: "YSUVerticalDispersion"
+type: "transport"
+description: "YSU (Yonsei University) boundary layer scheme for vertical tracer dispersion"
+author: "CATChem Development Team"
+
+# Process configuration
+process_config:
+  activate: true
+  enable_diagnostics: true
+  
+# Schemes available for this process
+schemes:
+  - name: "YSUScheme"
+    description: "Standard YSU boundary layer scheme for tracer transport"
+    options:
+      prandtl_number: 1.0
+      stability_function: "louis"
+      mixing_length_scale: "blackadar"
+      entrainment: true
+      counter_gradient: true
+      
+  - name: "YSUModified"
+    description: "Modified YSU scheme with enhanced stability functions"
+    options:
+      prandtl_number: 0.85
+      stability_function: "modified_louis"
+      mixing_length_scale: "bougeault_lacarrere"
+      entrainment: true
+      counter_gradient: true
+
+# Input variables required
+inputs:
+  met_variables:
+    - temperature        # K
+    - pressure          # Pa
+    - wind_u            # m/s
+    - wind_v            # m/s
+    - surface_heat_flux # W/m^2
+    - friction_velocity # m/s
+    - boundary_layer_height # m
+    - surface_roughness # m
+    - sensible_heat_flux # W/m^2
+    - latent_heat_flux  # W/m^2
+    - potential_temperature # K
+    
+  grid_variables:
+    - layer_thickness   # m
+    - layer_heights     # m
+    - interface_heights # m
+
+# Output variables
+outputs:
+  diagnostic_variables:
+    - eddy_diffusivity  # m^2/s
+    - mixing_length     # m
+    - stability_parameter # dimensionless
+    - richardson_number # dimensionless
+    - turbulent_kinetic_energy # m^2/s^2
+    - boundary_layer_height_diagnosed # m
+    - entrainment_rate  # m/s
+    
+  tendency_variables:
+    - tracer_tendency_vertical_mixing # kg/kg/s
+
+# Species to transport (will be read from main species config)
+transport_species: "all_tracers"
+
+# Physical parameters
+parameters:
+  vonkarman_constant: 0.4
+  gravity: 9.80665
+  gas_constant_dry_air: 287.04
+  cp_dry_air: 1004.0
+  reference_pressure: 100000.0
+  
+  # YSU-specific parameters
+  ysu_a: 100.0          # Asymptotic mixing length (m)
+  ysu_b: 15.0           # Surface layer constant
+  ysu_c: 5.0            # Free convection parameter
+  critical_richardson: 0.25  # Critical bulk Richardson number
+  
+  # Numerical parameters
+  minimum_eddy_diffusivity: 1.0e-6   # m^2/s
+  maximum_eddy_diffusivity: 1000.0   # m^2/s
+  convergence_tolerance: 1.0e-6
+  maximum_iterations: 100
+
+# Diagnostics configuration
+diagnostics:
+  enable_profile_output: true
+  output_frequency: "every_timestep"
+  levels_to_output: "all"
+  
+  # Specific diagnostics for boundary layer analysis
+  boundary_layer_diagnostics:
+    - mixing_ratios_in_bl
+    - vertical_gradients
+    - flux_profiles
+    - stability_profiles
+    
+  # Performance diagnostics
+  performance_diagnostics:
+    - computation_time
+    - convergence_iterations
+    - stability_violations
+
+# Dependencies
+dependencies:
+  required_modules:
+    - "met_utilities_mod"
+    - "constants"
+    - "precision_mod"
+    - "error_mod"
+    
+  optional_modules:
+    - "netcdf_io_mod"  # For reading boundary layer height from files
+    
+# Validation and testing
+validation:
+  test_cases:
+    - name: "stable_boundary_layer"
+      description: "Stable nocturnal boundary layer case"
+      
+    - name: "convective_boundary_layer" 
+      description: "Daytime convective boundary layer case"
+      
+    - name: "neutral_boundary_layer"
+      description: "Near-neutral boundary layer case"
+      
+  reference_data:
+    - source: "LES_reference_data.nc"
+      variables: ["eddy_diffusivity", "mixing_length"]
+      
+# Build configuration
+build:
+  dependencies:
+    - "src/core/met_utilities_mod.F90"
+    - "src/core/constants.F90"
+    
+  optional_dependencies:
+    - "external/netcdf_io/netcdf_io_mod.F90"
