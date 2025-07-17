@@ -1,0 +1,540 @@
+!> \file Process{{ config.class_name }}Interface_Mod.F90
+!! \brief {{ config.description }}
+!!
+!! This module provides the main interface for the {{ config.name }} process
+!! following the CATChem Process Infrastructure Guide.
+!!
+!! Generated on: {{ timestamp }}
+!! Author: {{ config.author }}
+!! Version: {{ config.version }}
+
+module Process{{ config.class_name }}Interface_Mod
+
+   use iso_fortran_env, only: fp => real64, error_unit
+   use StateManager_Mod
+   use ProcessInterface_Mod
+   use DiagnosticManager_Mod
+   use ErrorHandler_Mod
+   use FieldManager_Mod
+   use {{ config.class_name }}Common_Mod
+{% for scheme in config.schemes %}
+   use {{ config.class_name }}Scheme_{{ scheme.class_name }}_Mod
+{% endfor %}
+
+   implicit none
+   private
+
+   public :: Process{{ config.class_name }}Interface
+
+   !> Main {{ config.name }} process interface type
+   type, extends(ProcessInterface) :: Process{{ config.class_name }}Interface
+      private
+
+      ! Process metadata
+      character(len=64) :: process_name = '{{ config.name }}'
+      character(len=64) :: process_version = '{{ config.version }}'
+      character(len=256) :: process_description = '{{ config.description }}'
+
+      ! Configuration
+      type({{ config.class_name }}Config), pointer :: config => null()
+      type({{ config.class_name }}State), pointer :: state => null()
+
+      ! Scheme selection and configuration
+      character(len=32) :: active_scheme = '{{ config.default_scheme }}'
+{% for scheme in config.schemes %}
+      class({{ config.class_name }}Scheme{{ scheme.class_name }}Config), allocatable :: config_{{ scheme.name }}
+      class({{ config.class_name }}Scheme{{ scheme.class_name }}State), allocatable :: state_{{ scheme.name }}
+{% endfor %}
+
+      ! Species management
+      integer :: n_species = 0
+      character(len=32), allocatable :: species_names(:)
+      integer, allocatable :: species_indices(:)
+
+{% if config.has_size_bins %}
+      ! Size bin management
+      integer :: n_size_bins = {{ config.size_bins.n_bins if config.size_bins else 0 }}
+      real(fp), allocatable :: size_bin_bounds(:)
+      real(fp), allocatable :: size_bin_centers(:)
+      character(len=16) :: size_type = '{{ config.size_bins.type if config.size_bins else "radius" }}'
+{% endif %}
+
+      ! Diagnostic indices
+{% for diagnostic in config.diagnostics %}
+      integer :: diag_{{ diagnostic.name | lower_snake }}_idx = -1
+{% endfor %}
+{% for scheme in config.schemes %}
+{% for diagnostic in scheme.diagnostics %}
+      integer :: diag_{{ scheme.name }}_{{ diagnostic.name | lower_snake }}_idx = -1
+{% endfor %}
+{% endfor %}
+
+{% if config.process_type == "emission" %}
+      ! Emission tendencies for diagnostic tracking
+      real(fp), allocatable :: emission_tendencies(:,:)  ! (n_species, n_columns)
+{% endif %}
+
+   contains
+
+      ! Required interface methods
+      procedure, public :: init => init_{{ config.name }}_process
+      procedure, public :: run => run_{{ config.name }}_process
+      procedure, public :: finalize => finalize_{{ config.name }}_process
+
+      ! Configuration methods
+      procedure, public :: load_config => load_{{ config.name }}_config
+      procedure, public :: validate_config => validate_{{ config.name }}_config
+
+      ! Species management methods
+      procedure, public :: get_species_list => get_{{ config.name }}_species_list
+      procedure, public :: set_species_mapping => set_{{ config.name }}_species_mapping
+
+      ! Diagnostic methods
+      procedure, public :: register_diagnostics => register_{{ config.name }}_diagnostics
+      procedure, public :: update_diagnostics => update_{{ config.name }}_diagnostics
+
+      ! Required meteorological fields
+      procedure, public :: get_required_met_fields => get_{{ config.name }}_required_met_fields
+
+{% if config.process_type == "emission" %}
+      ! Emission-specific methods
+      procedure, public :: apply_emission_tendencies => apply_{{ config.name }}_emission_tendencies
+{% endif %}
+
+   end type Process{{ config.class_name }}Interface
+
+contains
+
+   !> Initialize the {{ config.name }} process
+   subroutine init_{{ config.name }}_process(this, state_manager, config_data, error_handler)
+      class(Process{{ config.class_name }}Interface), intent(inout) :: this
+      type(StateManagerType), intent(inout) :: state_manager
+      character(len=*), intent(in) :: config_data
+      type(ErrorHandler), intent(inout) :: error_handler
+
+      character(len=256) :: error_msg
+      integer :: i, rc
+
+      ! Initialize parent
+      call this%ProcessInterface%init(state_manager, config_data, error_handler)
+      if (error_handler%has_error()) return
+
+      ! Load and validate configuration
+      call this%load_config(config_data, error_handler)
+      if (error_handler%has_error()) return
+
+      call this%validate_config(error_handler)
+      if (error_handler%has_error()) return
+
+      ! Set up species mapping
+      call this%set_species_mapping(state_manager, error_handler)
+      if (error_handler%has_error()) return
+
+{% if config.has_size_bins %}
+      ! Initialize size bins
+      call this%init_size_bins(error_handler)
+      if (error_handler%has_error()) return
+{% endif %}
+
+      ! Register diagnostics
+      call this%register_diagnostics(state_manager, error_handler)
+      if (error_handler%has_error()) return
+
+      ! Initialize scheme-specific configurations and states
+{% for scheme in config.schemes %}
+      if (trim(this%active_scheme) == '{{ scheme.name }}') then
+         allocate(this%config_{{ scheme.name }})
+         allocate(this%state_{{ scheme.name }})
+         call this%config_{{ scheme.name }}%init(this%config, error_handler)
+         if (error_handler%has_error()) return
+         call this%state_{{ scheme.name }}%init(this%state, error_handler)
+         if (error_handler%has_error()) return
+      end if
+{% endfor %}
+
+{% if config.process_type == "emission" %}
+      ! Allocate emission tendencies
+      allocate(this%emission_tendencies(this%n_species, state_manager%get_n_columns()))
+      this%emission_tendencies = 0.0_fp
+{% endif %}
+
+      this%is_initialized = .true.
+
+   end subroutine init_{{ config.name }}_process
+
+   !> Run the {{ config.name }} process
+   subroutine run_{{ config.name }}_process(this, state_manager, dt, error_handler)
+      class(Process{{ config.class_name }}Interface), intent(inout) :: this
+      type(StateManagerType), intent(inout) :: state_manager
+      real(fp), intent(in) :: dt
+      type(ErrorHandler), intent(inout) :: error_handler
+
+      character(len=256) :: error_msg
+      integer :: i_col, n_columns
+
+      if (.not. this%is_initialized) then
+         call error_handler%set_error(ERROR_PROCESS, &
+            "{{ config.class_name }} process not initialized")
+         return
+      end if
+
+      n_columns = state_manager%get_n_columns()
+
+{% if config.process_type == "emission" %}
+      ! Reset emission tendencies
+      this%emission_tendencies = 0.0_fp
+{% endif %}
+
+      ! Process each column
+      do i_col = 1, n_columns
+
+         ! Run active scheme
+{% for scheme in config.schemes %}
+{% if loop.first %}
+         if (trim(this%active_scheme) == '{{ scheme.name }}') then
+{% else %}
+         else if (trim(this%active_scheme) == '{{ scheme.name }}') then
+{% endif %}
+            call this%run_{{ scheme.name }}_scheme(state_manager, i_col, dt, error_handler)
+            if (error_handler%has_error()) return
+{% if loop.last %}
+         else
+            call error_handler%set_error(ERROR_PROCESS, &
+               "Unknown {{ config.name }} scheme: " // trim(this%active_scheme))
+            return
+         end if
+{% endif %}
+{% endfor %}
+
+      end do
+
+{% if config.process_type == "emission" %}
+      ! Apply emission tendencies to chemical state
+      call this%apply_emission_tendencies(state_manager, dt, error_handler)
+      if (error_handler%has_error()) return
+{% endif %}
+
+      ! Update diagnostics
+      call this%update_diagnostics(state_manager, error_handler)
+      if (error_handler%has_error()) return
+
+   end subroutine run_{{ config.name }}_process
+
+{% for scheme in config.schemes %}
+   !> Run the {{ scheme.name }} scheme
+   subroutine run_{{ scheme.name }}_scheme(this, state_manager, i_col, dt, error_handler)
+      class(Process{{ config.class_name }}Interface), intent(inout) :: this
+      type(StateManagerType), intent(inout) :: state_manager
+      integer, intent(in) :: i_col
+      real(fp), intent(in) :: dt
+      type(ErrorHandler), intent(inout) :: error_handler
+
+      ! TODO: Implement {{ scheme.name }} scheme calculation
+      ! This is a template - implement actual algorithm here
+
+      ! Example structure:
+      ! 1. Get required meteorological fields
+      ! 2. Get current chemical concentrations
+      ! 3. Calculate process rates/tendencies
+      ! 4. Update emission tendencies or chemical state
+      ! 5. Update scheme-specific diagnostics
+
+   end subroutine run_{{ scheme.name }}_scheme
+
+{% endfor %}
+
+   !> Load configuration from input data
+   subroutine load_{{ config.name }}_config(this, config_data, error_handler)
+      class(Process{{ config.class_name }}Interface), intent(inout) :: this
+      character(len=*), intent(in) :: config_data
+      type(ErrorHandler), intent(inout) :: error_handler
+
+      ! Allocate configuration
+      allocate(this%config)
+      allocate(this%state)
+
+      ! TODO: Parse configuration from config_data (YAML, namelist, etc.)
+      ! For now, use defaults
+      this%config%active_scheme = '{{ config.default_scheme }}'
+      this%active_scheme = this%config%active_scheme
+
+      ! Set species information
+{% if config.species %}
+      this%n_species = {{ config.species | length }}
+      allocate(this%species_names(this%n_species))
+      allocate(this%species_indices(this%n_species))
+{% for species in config.species %}
+      this%species_names({{ loop.index }}) = '{{ species }}'
+{% endfor %}
+{% endif %}
+
+   end subroutine load_{{ config.name }}_config
+
+   !> Validate configuration
+   subroutine validate_{{ config.name }}_config(this, error_handler)
+      class(Process{{ config.class_name }}Interface), intent(inout) :: this
+      type(ErrorHandler), intent(inout) :: error_handler
+
+      character(len=256) :: error_msg
+
+      ! Validate scheme selection
+{% for scheme in config.schemes %}
+{% if loop.first %}
+      if (trim(this%active_scheme) /= '{{ scheme.name }}' .and. &
+{% else %}
+          trim(this%active_scheme) /= '{{ scheme.name }}' .and. &
+{% endif %}
+{% if loop.last %}
+          .true.) then
+{% endif %}
+{% endfor %}
+         write(error_msg, '(A)') "Invalid {{ config.name }} scheme: " // trim(this%active_scheme)
+         call error_handler%set_error(ERROR_CONFIG, error_msg)
+         return
+      end if
+
+      ! Additional validation as needed
+
+   end subroutine validate_{{ config.name }}_config
+
+   !> Get list of species handled by this process
+   function get_{{ config.name }}_species_list(this) result(species_names)
+      class(Process{{ config.class_name }}Interface), intent(in) :: this
+      character(len=32), allocatable :: species_names(:)
+
+      allocate(species_names(this%n_species))
+      species_names = this%species_names
+
+   end function get_{{ config.name }}_species_list
+
+   !> Set species mapping from chemical state
+   subroutine set_{{ config.name }}_species_mapping(this, state_manager, error_handler)
+      class(Process{{ config.class_name }}Interface), intent(inout) :: this
+      type(StateManagerType), intent(inout) :: state_manager
+      type(ErrorHandler), intent(inout) :: error_handler
+
+      integer :: i, idx
+      character(len=256) :: error_msg
+
+      ! Map species names to indices in chemical state
+      do i = 1, this%n_species
+         idx = state_manager%get_species_index(this%species_names(i))
+         if (idx <= 0) then
+            write(error_msg, '(A)') "Species not found in chemical state: " // &
+               trim(this%species_names(i))
+            call error_handler%set_error(ERROR_SPECIES, error_msg)
+            return
+         end if
+         this%species_indices(i) = idx
+      end do
+
+   end subroutine set_{{ config.name }}_species_mapping
+
+   !> Register diagnostic fields
+   subroutine register_{{ config.name }}_diagnostics(this, state_manager, error_handler)
+      class(Process{{ config.class_name }}Interface), intent(inout) :: this
+      type(StateManagerType), intent(inout) :: state_manager
+      type(ErrorHandler), intent(inout) :: error_handler
+
+      type(DiagnosticManager), pointer :: diag_mgr
+
+      diag_mgr => state_manager%get_diagnostic_manager()
+
+      ! Register common diagnostics
+{% for diagnostic in config.diagnostics %}
+      this%diag_{{ diagnostic.name | lower_snake }}_idx = diag_mgr%register_diagnostic( &
+         name='{{ config.name }}_{{ diagnostic.name }}', &
+         description='{{ diagnostic.description }}', &
+         units='{{ diagnostic.units }}', &
+         error_handler=error_handler)
+      if (error_handler%has_error()) return
+{% endfor %}
+
+{% if config.process_type == "emission" %}
+      ! Register emission tendency diagnostics for each species
+      do i = 1, this%n_species
+         write(name, '(A,A,A)') '{{ config.name }}_emission_', trim(this%species_names(i)), '_tendency'
+         write(description, '(A,A)') 'Emission tendency for ', trim(this%species_names(i))
+         idx = diag_mgr%register_diagnostic( &
+            name=trim(name), &
+            description=trim(description), &
+            units='kg/m2/s', &
+            error_handler=error_handler)
+         if (error_handler%has_error()) return
+      end do
+{% endif %}
+
+      ! Register scheme-specific diagnostics
+{% for scheme in config.schemes %}
+      if (trim(this%active_scheme) == '{{ scheme.name }}') then
+{% for diagnostic in scheme.diagnostics %}
+         this%diag_{{ scheme.name }}_{{ diagnostic.name | lower_snake }}_idx = diag_mgr%register_diagnostic( &
+            name='{{ config.name }}_{{ scheme.name }}_{{ diagnostic.name }}', &
+            description='{{ diagnostic.description }}', &
+            units='{{ diagnostic.units }}', &
+            error_handler=error_handler)
+         if (error_handler%has_error()) return
+{% endfor %}
+      end if
+{% endfor %}
+
+   end subroutine register_{{ config.name }}_diagnostics
+
+   !> Update diagnostic fields
+   subroutine update_{{ config.name }}_diagnostics(this, state_manager, error_handler)
+      class(Process{{ config.class_name }}Interface), intent(inout) :: this
+      type(StateManagerType), intent(inout) :: state_manager
+      type(ErrorHandler), intent(inout) :: error_handler
+
+      type(DiagnosticManager), pointer :: diag_mgr
+      integer :: i
+
+      diag_mgr => state_manager%get_diagnostic_manager()
+
+      ! Update common diagnostics
+{% for diagnostic in config.diagnostics %}
+      if (this%diag_{{ diagnostic.name | lower_snake }}_idx > 0) then
+         ! TODO: Calculate and update {{ diagnostic.name }}
+         ! call diag_mgr%update_diagnostic(this%diag_{{ diagnostic.name | lower_snake }}_idx, values)
+      end if
+{% endfor %}
+
+{% if config.process_type == "emission" %}
+      ! Update emission tendency diagnostics
+      do i = 1, this%n_species
+         if (this%diag_emission_tendency_indices(i) > 0) then
+            call diag_mgr%update_diagnostic( &
+               this%diag_emission_tendency_indices(i), &
+               this%emission_tendencies(i, :))
+         end if
+      end do
+{% endif %}
+
+      ! Update scheme-specific diagnostics
+{% for scheme in config.schemes %}
+      if (trim(this%active_scheme) == '{{ scheme.name }}') then
+{% for diagnostic in scheme.diagnostics %}
+         if (this%diag_{{ scheme.name }}_{{ diagnostic.name | lower_snake }}_idx > 0) then
+            ! TODO: Calculate and update {{ scheme.name }} {{ diagnostic.name }}
+            ! call diag_mgr%update_diagnostic(this%diag_{{ scheme.name }}_{{ diagnostic.name | lower_snake }}_idx, values)
+         end if
+{% endfor %}
+      end if
+{% endfor %}
+
+   end subroutine update_{{ config.name }}_diagnostics
+
+   !> Get required meteorological fields
+   function get_{{ config.name }}_required_met_fields(this) result(field_names)
+      class(Process{{ config.class_name }}Interface), intent(in) :: this
+      character(len=32), allocatable :: field_names(:)
+
+      character(len=32) :: common_fields({{ config.required_met_fields | length }})
+      character(len=32), allocatable :: scheme_fields(:)
+      integer :: n_common, n_scheme, n_total
+
+      ! Common required fields
+{% for field in config.required_met_fields %}
+      common_fields({{ loop.index }}) = '{{ field }}'
+{% endfor %}
+      n_common = {{ config.required_met_fields | length }}
+
+      ! Scheme-specific fields
+{% for scheme in config.schemes %}
+{% if loop.first %}
+      if (trim(this%active_scheme) == '{{ scheme.name }}') then
+{% else %}
+      else if (trim(this%active_scheme) == '{{ scheme.name }}') then
+{% endif %}
+         allocate(scheme_fields({{ scheme.required_met_fields | length }}))
+{% for field in scheme.required_met_fields %}
+         scheme_fields({{ loop.index }}) = '{{ field }}'
+{% endfor %}
+         n_scheme = {{ scheme.required_met_fields | length }}
+{% if loop.last %}
+      else
+         allocate(scheme_fields(0))
+         n_scheme = 0
+      end if
+{% endif %}
+{% endfor %}
+
+      ! Combine fields (TODO: remove duplicates)
+      n_total = n_common + n_scheme
+      allocate(field_names(n_total))
+      field_names(1:n_common) = common_fields
+      if (n_scheme > 0) then
+         field_names(n_common+1:n_total) = scheme_fields
+      end if
+
+   end function get_{{ config.name }}_required_met_fields
+
+{% if config.process_type == "emission" %}
+   !> Apply emission tendencies to chemical state
+   subroutine apply_{{ config.name }}_emission_tendencies(this, state_manager, dt, error_handler)
+      class(Process{{ config.class_name }}Interface), intent(inout) :: this
+      type(StateManagerType), intent(inout) :: state_manager
+      real(fp), intent(in) :: dt
+      type(ErrorHandler), intent(inout) :: error_handler
+
+      real(fp), pointer :: chem_state(:,:,:)  ! (n_species, n_levels, n_columns)
+      integer :: i, i_spec, n_levels, n_columns
+
+      ! Get chemical state
+      chem_state => state_manager%get_chem_state()
+      n_levels = state_manager%get_n_levels()
+      n_columns = state_manager%get_n_columns()
+
+      ! Apply emission tendencies to surface level
+      do i = 1, this%n_species
+         i_spec = this%species_indices(i)
+         chem_state(i_spec, 1, :) = chem_state(i_spec, 1, :) + &
+            this%emission_tendencies(i, :) * dt
+      end do
+
+   end subroutine apply_{{ config.name }}_emission_tendencies
+{% endif %}
+
+   !> Finalize the {{ config.name }} process
+   subroutine finalize_{{ config.name }}_process(this, error_handler)
+      class(Process{{ config.class_name }}Interface), intent(inout) :: this
+      type(ErrorHandler), intent(inout) :: error_handler
+
+      ! Deallocate arrays
+      if (allocated(this%species_names)) deallocate(this%species_names)
+      if (allocated(this%species_indices)) deallocate(this%species_indices)
+{% if config.has_size_bins %}
+      if (allocated(this%size_bin_bounds)) deallocate(this%size_bin_bounds)
+      if (allocated(this%size_bin_centers)) deallocate(this%size_bin_centers)
+{% endif %}
+{% if config.process_type == "emission" %}
+      if (allocated(this%emission_tendencies)) deallocate(this%emission_tendencies)
+{% endif %}
+
+      ! Deallocate configuration and state
+      if (associated(this%config)) then
+         call this%config%finalize()
+         deallocate(this%config)
+      end if
+      if (associated(this%state)) then
+         call this%state%finalize()
+         deallocate(this%state)
+      end if
+
+      ! Finalize scheme configurations and states
+{% for scheme in config.schemes %}
+      if (allocated(this%config_{{ scheme.name }})) then
+         call this%config_{{ scheme.name }}%finalize()
+         deallocate(this%config_{{ scheme.name }})
+      end if
+      if (allocated(this%state_{{ scheme.name }})) then
+         call this%state_{{ scheme.name }}%finalize()
+         deallocate(this%state_{{ scheme.name }})
+      end if
+{% endfor %}
+
+      this%is_initialized = .false.
+
+   end subroutine finalize_{{ config.name }}_process
+
+end module Process{{ config.class_name }}Interface_Mod

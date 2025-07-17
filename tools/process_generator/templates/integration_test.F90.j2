@@ -1,0 +1,204 @@
+!> \file test_integration_{{ config.name }}.F90
+!! \brief Integration test for {{ config.name }} process
+!!
+!! Tests the complete {{ config.name }} process integration
+!! Generated on: {{ timestamp }}
+
+program test_integration_{{ config.name }}
+
+   use iso_fortran_env, only: fp => real64, error_unit
+   use Process{{ config.class_name }}Interface_Mod
+   use {{ config.class_name }}ProcessCreator_Mod
+   use StateManager_Mod
+   use ColumnState_Mod
+
+   implicit none
+
+   type(StateManager_t) :: state_manager
+   type(ColumnState_t) :: column_state
+   type(Process{{ config.class_name }}Interface_t) :: process
+   type({{ config.class_name }}ProcessCreator_t) :: creator
+
+   character(len=256) :: config_file = "{{ config.name }}_config.yaml"
+   integer :: status = 0
+   integer :: num_layers = 10
+   integer :: num_species = {{ config.species | length }}
+
+   write(*,*) "Running integration test for {{ config.name }} process..."
+
+   ! Initialize state manager
+   call state_manager%initialize(num_layers, num_species)
+
+   ! Create column state with test data
+   call setup_test_column_state(column_state, num_layers)
+
+   ! Create process from configuration
+   call creator%create_from_config(config_file, process, status)
+   if (status /= 0) then
+      write(error_unit,*) "ERROR: Failed to create process from config"
+      stop 1
+   end if
+
+   ! Run initialization
+   call process%pre_chemistry(column_state, status)
+   if (status /= 0) then
+      write(error_unit,*) "ERROR: pre_chemistry failed"
+      stop 1
+   end if
+
+   ! Run main computation
+   call process%compute(column_state, status)
+   if (status /= 0) then
+      write(error_unit,*) "ERROR: compute failed"
+      stop 1
+   end if
+
+   ! Run finalization
+   call process%post_chemistry(column_state, status)
+   if (status /= 0) then
+      write(error_unit,*) "ERROR: post_chemistry failed"
+      stop 1
+   end if
+
+   ! Validate results
+   call validate_results(column_state, status)
+   if (status /= 0) then
+      write(error_unit,*) "ERROR: Result validation failed"
+      stop 1
+   end if
+
+   ! Cleanup
+   call process%finalize()
+   call state_manager%finalize()
+
+   write(*,*) "Integration test completed successfully!"
+
+contains
+
+   !> Setup test column state with realistic atmospheric conditions
+   subroutine setup_test_column_state(column_state, num_layers)
+      type(ColumnState_t), intent(inout) :: column_state
+      integer, intent(in) :: num_layers
+
+      integer :: k
+      real(fp) :: height, pressure_base, temperature_base
+
+      call column_state%initialize(num_layers, num_species)
+
+      ! Set up vertical profile
+      pressure_base = 101325.0_fp  ! Pa
+      temperature_base = 298.15_fp  ! K
+
+      do k = 1, num_layers
+         height = real(k-1, fp) * 1000.0_fp  ! m
+
+         ! Set meteorological fields
+         call column_state%set_pressure(k, pressure_base * exp(-height/8000.0_fp))
+         call column_state%set_temperature(k, temperature_base - height * 0.0065_fp/1000.0_fp)
+         call column_state%set_humidity(k, 0.6_fp)
+
+         ! Set specific met fields for {{ config.process_type }}
+{% for field in config.required_met_fields %}
+         call column_state%set_met_field("{{ field }}", k, get_test_value_{{ field.replace('-', '_') }}(k))
+{% endfor %}
+
+         ! Initialize species concentrations
+{% for species in config.species %}
+         call column_state%set_species_concentration("{{ species }}", k, 1.0e-9_fp)  ! ppb
+{% endfor %}
+      end do
+
+   end subroutine setup_test_column_state
+
+   !> Validate computation results
+   subroutine validate_results(column_state, status)
+      type(ColumnState_t), intent(in) :: column_state
+      integer, intent(out) :: status
+
+      real(fp) :: concentration
+      integer :: k, species_idx
+      logical :: all_valid = .true.
+
+      status = 0
+
+      ! Check that concentrations are reasonable
+      do k = 1, num_layers
+{% for species in config.species %}
+         call column_state%get_species_concentration("{{ species }}", k, concentration)
+         if (concentration < 0.0_fp .or. concentration > 1.0e-3_fp) then
+            write(error_unit,*) "ERROR: Invalid {{ species }} concentration at layer", k, ":", concentration
+            all_valid = .false.
+         end if
+{% endfor %}
+      end do
+
+      ! Check diagnostics if available
+{% for diagnostic in config.diagnostics %}
+      call validate_diagnostic_{{ diagnostic.name }}(column_state, all_valid)
+{% endfor %}
+
+      if (.not. all_valid) then
+         status = 1
+      end if
+
+   end subroutine validate_results
+
+{% for field in config.required_met_fields %}
+   !> Get test value for {{ field }}
+   pure function get_test_value_{{ field.replace('-', '_') }}(layer) result(value)
+      integer, intent(in) :: layer
+      real(fp) :: value
+
+      ! Provide realistic test values
+{% if field == "temperature_2m" %}
+      value = 298.15_fp - real(layer-1, fp) * 0.5_fp  ! Decreasing with height
+{% elif field == "solar_zenith_angle" %}
+      value = 30.0_fp  ! degrees
+{% elif field == "leaf_area_index" %}
+      value = 3.0_fp  ! m2/m2
+{% elif field == "wind_speed" %}
+      value = 5.0_fp + real(layer-1, fp) * 0.1_fp  ! m/s
+{% elif field == "pressure" %}
+      value = 101325.0_fp * exp(-real(layer-1, fp) * 1000.0_fp / 8000.0_fp)  ! Pa
+{% elif field == "humidity" %}
+      value = 0.6_fp - real(layer-1, fp) * 0.05_fp  ! relative humidity
+{% else %}
+      value = 1.0_fp  ! Generic default
+{% endif %}
+
+   end function get_test_value_{{ field.replace('-', '_') }}
+{% endfor %}
+
+{% for diagnostic in config.diagnostics %}
+   !> Validate diagnostic: {{ diagnostic.name }}
+   subroutine validate_diagnostic_{{ diagnostic.name }}(column_state, is_valid)
+      type(ColumnState_t), intent(in) :: column_state
+      logical, intent(inout) :: is_valid
+
+      real(fp) :: diagnostic_value
+      integer :: k
+
+      ! Get diagnostic values and check ranges
+      do k = 1, num_layers
+         call column_state%get_diagnostic("{{ diagnostic.name }}", k, diagnostic_value)
+
+         ! Check for reasonable ranges based on diagnostic type
+{% if "emission" in diagnostic.name %}
+         if (diagnostic_value < 0.0_fp .or. diagnostic_value > 1.0e-6_fp) then
+            write(error_unit,*) "WARNING: {{ diagnostic.name }} out of range:", diagnostic_value
+         end if
+{% elif "rate" in diagnostic.name %}
+         if (diagnostic_value < 0.0_fp .or. diagnostic_value > 1.0e-3_fp) then
+            write(error_unit,*) "WARNING: {{ diagnostic.name }} out of range:", diagnostic_value
+         end if
+{% else %}
+         if (diagnostic_value < 0.0_fp) then
+            write(error_unit,*) "WARNING: Negative {{ diagnostic.name }}:", diagnostic_value
+         end if
+{% endif %}
+      end do
+
+   end subroutine validate_diagnostic_{{ diagnostic.name }}
+{% endfor %}
+
+end program test_integration_{{ config.name }}

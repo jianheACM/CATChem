@@ -1,0 +1,180 @@
+!> \file {{ config.class_name }}Scheme_{{ scheme.class_name }}_Mod.F90
+!! \brief {{ scheme.description }}
+!!
+!! Pure science kernel for {{ scheme.name }} scheme in {{ config.name }} process.
+!! This module contains ONLY the computational algorithm with NO infrastructure dependencies.
+!! Uses only basic Fortran types for maximum portability and reusability.
+!!
+!! SCIENCE CUSTOMIZATION GUIDE:
+!! 1. Modify the algorithm in compute_{{ scheme.name }} (search for "TODO")
+!! 2. Add scheme-specific helper subroutines as needed
+!! 3. Update physical constants for your scheme
+!! 4. Customize the environmental response functions
+!!
+!! INFRASTRUCTURE RESPONSIBILITIES (handled by host model):
+!! - Parameter initialization and validation
+!! - Input array validation and error handling
+!! - Memory management and array allocation
+!! - Integration with host model time stepping
+!!
+!! Generated on: {{ timestamp }}
+!! Author: {{ scheme.author }}
+!! Reference: {% if scheme.reference %}{{ scheme.reference }}{% else %}Add your scheme reference here{% endif %}
+
+module {{ config.class_name }}Scheme_{{ scheme.class_name }}_Mod
+
+   use iso_fortran_env, only: fp => real64
+
+   implicit none
+   private
+
+   ! Public interface - pure science only
+   public :: compute_{{ scheme.name }}
+   public :: {{ scheme.name }}_params_t
+
+   ! Physical constants (modify as needed for your scheme)
+   real(fp), parameter :: R_GAS = 8.314_fp           ! Universal gas constant [J/mol/K]
+   real(fp), parameter :: T_STANDARD = 303.15_fp    ! Standard reference temperature [K]
+   real(fp), parameter :: DEFAULT_SCALING = 1.0e-9_fp ! Default emission scaling factor
+
+
+   !> Science parameters for {{ scheme.name }} scheme
+   !! Host model is responsible for initializing and validating these
+   type :: {{ scheme.name }}_params_t
+{% if scheme.parameters and scheme.parameters|length > 0 %}
+{% for param_name, param in scheme.parameters.items() %}
+      real(fp) :: {{ param_name }}  ! {{ param.description }}
+{% endfor %}
+{% else %}
+      ! (No scheme parameters defined. Add your parameters here.)
+{% endif %}
+   end type {{ scheme.name }}_params_t
+
+
+contains
+
+   !> Pure science computation for {{ scheme.name }} scheme
+   !!
+   !! This is a pure computational kernel implementing {{ scheme.description }}.
+   !! NO error checking, validation, or infrastructure concerns.
+   !! Host model must ensure all inputs are valid before calling.
+   !!
+   !! @param[in]  num_layers     Number of vertical layers
+   !! @param[in]  num_species    Number of chemical species
+   !! @param[in]  params         Scheme parameters (pre-validated by host)
+{% for field in scheme.required_met_fields %}
+   !! @param[in]  {{ field }}    {{ field }} field [appropriate units]
+{% endfor %}
+   !! @param[in]  species_conc   Species concentrations [mol/mol] (num_layers, num_species)
+   !! @param[out] emission_flux  Emission fluxes [kg/m²/s] (num_layers, num_species)
+   pure subroutine compute_{{ scheme.name }}( &
+      num_layers, &
+      num_species, &
+      params{% if scheme.required_met_fields and scheme.required_met_fields|length > 0 %}, &
+{% for field in scheme.required_met_fields %}
+      {{ field }}{% if not loop.last %}, &{% endif %}
+{% endfor %}{% endif %}, &
+      species_conc, &
+      emission_flux &
+   )
+
+      ! Arguments
+      integer, intent(in) :: num_layers
+      integer, intent(in) :: num_species
+      type({{ scheme.name }}_params_t), intent(in) :: params
+{% if scheme.required_met_fields and scheme.required_met_fields|length > 0 %}
+{% for field in scheme.required_met_fields %}
+      real(fp), intent(in) :: {{ field }}(num_layers)
+{% endfor %}
+{% endif %}
+      real(fp), intent(in) :: species_conc(num_layers, num_species)
+      real(fp), intent(out) :: emission_flux(num_layers, num_species)
+
+      ! Local variables
+      integer :: k, species_idx
+      real(fp) :: base_emission_factor
+      real(fp) :: temperature_factor
+      real(fp) :: light_factor
+      real(fp) :: combined_factor
+
+      ! Initialize output (pure subroutines must initialize all outputs)
+      emission_flux = 0.0_fp
+
+      ! Main computation loop - CUSTOMIZE THIS SECTION FOR YOUR SCHEME
+      do k = 1, num_layers
+
+         ! TODO: Replace this generic implementation with your scheme's algorithm
+         ! This is a placeholder that demonstrates the expected structure
+
+         ! Initialize environmental factors
+         temperature_factor = 1.0_fp
+         light_factor = 1.0_fp
+
+         ! Apply scheme-specific environmental responses
+{% if scheme.required_met_fields and scheme.required_met_fields|length > 0 %}
+{% for field in scheme.required_met_fields %}
+{% if field == "temperature_2m" %}
+         ! Temperature response (customize for your scheme)
+         {% if scheme.parameters and 'temperature_dependency' in scheme.parameters %}
+         temperature_factor = 1.0_fp + params%temperature_dependency * &
+                             ({{ field }}(k) - T_STANDARD) / T_STANDARD
+         {% else %}
+         ! (Add temperature response logic here if needed)
+         {% endif %}
+{% elif field == "solar_zenith_angle" %}
+         ! Light response (customize for your scheme)
+         light_factor = max(0.0_fp, cos({{ field }}(k) * 3.14159_fp / 180.0_fp))
+{% elif field == "leaf_area_index" %}
+         ! Vegetation response (customize for your scheme)
+         light_factor = light_factor * min({{ field }}(k), 10.0_fp) / 3.0_fp
+{% else %}
+         ! Generic field usage (customize for your scheme)
+         ! Consider how {{ field }} affects your emissions
+{% endif %}
+{% endfor %}
+{% endif %}
+
+         ! Combine environmental factors
+         {% if scheme.parameters and 'emission_factor' in scheme.parameters %}
+         combined_factor = temperature_factor * light_factor * params%emission_factor
+         {% else %}
+         combined_factor = temperature_factor * light_factor
+         {% endif %}
+
+         ! Apply to each species
+         do species_idx = 1, num_species
+            ! Base emission factor (customize this for species-specific emissions)
+            base_emission_factor = DEFAULT_SCALING
+
+            ! Compute emission flux using your scheme's formula
+            ! This is a simple example - replace with your actual algorithm
+            emission_flux(k, species_idx) = base_emission_factor * combined_factor * &
+                                          species_conc(k, species_idx)
+
+            ! Ensure non-negative emissions
+            emission_flux(k, species_idx) = max(0.0_fp, emission_flux(k, species_idx))
+         end do
+
+      end do
+
+   end subroutine compute_{{ scheme.name }}
+
+   ! =======================================================================
+   ! SCHEME-SPECIFIC HELPER SUBROUTINES
+   ! =======================================================================
+   ! Add your custom scientific algorithms here as pure functions/subroutines
+   ! Examples: environmental response functions, species-specific calculations, etc.
+
+   ! Example helper subroutine template:
+   !
+   ! !> Compute custom environmental response for {{ scheme.name }} scheme
+   ! pure function compute_temperature_response_{{ scheme.name }}(temperature, params) result(factor)
+   !    real(fp), intent(in) :: temperature     ! Temperature [K]
+   !    type({{ scheme.name }}_params_t), intent(in) :: params
+   !    real(fp) :: factor
+   !
+   !    ! Add your temperature response algorithm here
+   !    factor = exp(params%temperature_dependency * (temperature - T_STANDARD) / T_STANDARD)
+   ! end function compute_temperature_response_{{ scheme.name }}
+
+end module {{ config.class_name }}Scheme_{{ scheme.class_name }}_Mod

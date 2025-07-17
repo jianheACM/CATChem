@@ -1,0 +1,147 @@
+# CMakeLists.txt for {{ config.name }} process tests
+# Generated on: {{ timestamp }}
+
+cmake_minimum_required(VERSION 3.12)
+
+# Test executables
+set(TEST_SOURCES
+    test_unit_{{ config.name }}.F90
+    test_integration_{{ config.name }}.F90
+{% for scheme in config.schemes %}
+    test_scheme_{{ scheme.name }}.F90
+{% endfor %}
+)
+
+# Create test executables
+foreach(test_source ${TEST_SOURCES})
+    get_filename_component(test_name ${test_source} NAME_WE)
+
+    add_executable(${test_name} ${test_source})
+
+    # Link against process modules
+    target_link_libraries(${test_name}
+        Process{{ config.class_name }}Interface_Mod
+        {{ config.class_name }}Common_Mod
+        {{ config.class_name }}ProcessCreator_Mod
+{% for scheme in config.schemes %}
+        {{ config.class_name }}Scheme_{{ scheme.class_name }}_Mod
+{% endfor %}
+        StateManager_Mod
+        ColumnState_Mod
+    )
+
+    # Set Fortran module directory
+    set_target_properties(${test_name} PROPERTIES
+        Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules"
+    )
+
+    # Add to test suite
+    add_test(NAME ${test_name} COMMAND ${test_name})
+
+    # Set test properties
+    set_tests_properties(${test_name} PROPERTIES
+        TIMEOUT 60
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+endforeach()
+
+# Test data files
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_data/{{ config.name }}_config.yaml"
+    "${CMAKE_CURRENT_BINARY_DIR}/{{ config.name }}_config.yaml"
+    COPYONLY
+)
+
+# Additional test data files
+file(GLOB TEST_DATA_FILES "${CMAKE_CURRENT_SOURCE_DIR}/test_data/*")
+foreach(test_data_file ${TEST_DATA_FILES})
+    get_filename_component(filename ${test_data_file} NAME)
+    configure_file(
+        "${test_data_file}"
+        "${CMAKE_CURRENT_BINARY_DIR}/${filename}"
+        COPYONLY
+    )
+endforeach()
+
+# Custom test targets
+add_custom_target(test_{{ config.name }}_unit
+    COMMAND test_unit_{{ config.name }}
+    DEPENDS test_unit_{{ config.name }}
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMENT "Running unit tests for {{ config.name }} process"
+)
+
+add_custom_target(test_{{ config.name }}_integration
+    COMMAND test_integration_{{ config.name }}
+    DEPENDS test_integration_{{ config.name }}
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMENT "Running integration tests for {{ config.name }} process"
+)
+
+add_custom_target(test_{{ config.name }}_all
+    DEPENDS test_{{ config.name }}_unit test_{{ config.name }}_integration
+    COMMENT "Running all tests for {{ config.name }} process"
+)
+
+# Scheme-specific test targets
+{% for scheme in config.schemes %}
+add_custom_target(test_{{ config.name }}_scheme_{{ scheme.name }}
+    COMMAND test_scheme_{{ scheme.name }}
+    DEPENDS test_scheme_{{ scheme.name }}
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMENT "Running tests for {{ scheme.name }} scheme"
+)
+{% endfor %}
+
+# Test coverage (if available)
+if(CODE_COVERAGE)
+    find_program(GCOV_PATH gcov)
+    find_program(LCOV_PATH lcov)
+    find_program(GENHTML_PATH genhtml)
+
+    if(GCOV_PATH AND LCOV_PATH AND GENHTML_PATH)
+        # Add coverage flags
+        set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} --coverage")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
+
+        # Coverage target
+        add_custom_target(coverage_{{ config.name }}
+            COMMAND ${LCOV_PATH} --directory . --capture --output-file coverage_{{ config.name }}.info
+            COMMAND ${LCOV_PATH} --remove coverage_{{ config.name }}.info '/usr/*' --output-file coverage_{{ config.name }}.info
+            COMMAND ${GENHTML_PATH} -o coverage_{{ config.name }}_html coverage_{{ config.name }}.info
+            DEPENDS test_{{ config.name }}_all
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+            COMMENT "Generating test coverage report for {{ config.name }} process"
+        )
+    endif()
+endif()
+
+# Performance benchmarks
+add_custom_target(benchmark_{{ config.name }}
+    DEPENDS test_integration_{{ config.name }}
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMENT "Running performance benchmarks for {{ config.name }} process"
+)
+
+# Memory checking with valgrind (if available)
+find_program(VALGRIND_PATH valgrind)
+if(VALGRIND_PATH)
+    add_custom_target(memcheck_{{ config.name }}
+        COMMAND ${VALGRIND_PATH} --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes
+                ./test_integration_{{ config.name }}
+        DEPENDS test_integration_{{ config.name }}
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        COMMENT "Running memory check for {{ config.name }} process"
+    )
+endif()
+
+# Install test executables (optional)
+if(INSTALL_TESTS)
+    install(TARGETS ${TEST_SOURCES}
+        RUNTIME DESTINATION bin/tests
+    )
+
+    install(FILES test_data/{{ config.name }}_config.yaml
+        DESTINATION share/tests/{{ config.name }}
+    )
+endif()

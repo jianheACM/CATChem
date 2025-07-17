@@ -1,0 +1,114 @@
+name: "dust"
+description: "Process for computing windblown dust emissions"
+class_name: "Dust"
+process_type: "emission"
+author: "Barry Baker"
+
+required_met_fields:
+  - "ustar"
+  - "solar_zenith_angle"
+  - "leaf_area_index"
+
+schemes:
+  fengsha:
+    name: "fengsha"
+    class_name: "FENGSHA"
+    description: "Fengsha Dust emission scheme developed at NOAA ARL for use at NOAA NWS"
+    algorithm_type: "explicit"
+    reference: "Zhang et al. 2022"
+    author: "Barry Baker"
+
+    required_met_fields:
+      - IsLand
+      - USTAR
+      - LWI
+      - GVF
+      - LAI
+      - FROCEAN
+      - CLAYFRAC
+      - SANDFRAC
+      - FRSNO
+      - RDRAG
+      - SSM
+      - USTAR_THRESHOLD
+
+    parameters:
+      alpha:
+        default: 0.16
+        min: 0.001
+        max: 100.0
+        description: "linear scaling factor"
+      beta:
+        default: 1.0
+        min: 0.0
+        max: 10.0
+        description: "Exponential scaling factor on source parameter"
+      drylimit_factor:
+        default: 1.0
+        min: 0
+        max: 10
+        description: "Dry Limit factor modifying the Fecan dry limit following Zender 2003"
+      drag_option:
+        default: 1
+        min: 1
+        max: 4
+        description: "Drag Partition Option: 1 - use input drag, 2 - Darmenova, 3 - Leung 2022, 4 - MB95"
+      moist_option:
+        default: 1 - fecan
+        min: 1
+        max: 3
+        description: "Moisture parameterization: 1 - Fecan, 2 - shao, 3 - modified shao"
+      distribution_option:
+        default: 1
+        min: 1
+        max: 2
+        description: "Dust Distribution option: 1 - Kok 2011, 2 - Meng 2022"
+
+    diagnostics:
+      - name: "dust_horizontal_flux"
+        description: "Total horizontal flux - Q"
+        units: "kg/m2/s"
+      - name: "dust_moisture_correction"
+        description: "Moisture Correction - H"
+        units: "dimensionless"
+      - name: "dust_effective_threshold"
+        description: "Effective Dust threshold friction velocity: u_thres * H / R"
+        units: "m/s"
+
+  ginoux:
+    name: "ginoux"
+    class_name: "GINOUX"
+    description: "Ginoux dust emission scheme"
+    algorithm_type: "explicit"
+    reference: "Ginoux et al. [2001]"
+    author: "Barry Baker"
+
+    required_met_fields:
+      - FRLAKE
+      - GWETTOP
+      - U10M
+      - V10M
+      - SSM
+
+    parameters:
+      Ch_DU:
+        default: [0.1, 0.1, 0.1, 0.1, 0.1]
+        min: 0.001
+        max: 100.0
+        description: "Dust tuning coefficient per species "
+
+    diagnostics:
+      - name: "dust_horizontal_flux"
+        description: "Total horizontal flux - Q"
+        units: "kg/m2/s"
+      - name: "dust_moisture_correction"
+        description: "Moisture Correction - H"
+        units: "dimensionless"
+      - name: "dust_effective_threshold"
+        description: "Effective Dust threshold friction velocity: u_thres * H / R"
+        units: "m/s"
+
+diagnostics:
+  - name: "total_dust_emission"
+    description: "Total dust emissions for all species"
+    units: "kg/m2/s"
