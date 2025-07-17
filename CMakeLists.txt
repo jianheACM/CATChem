@@ -1,6 +1,10 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 
 project(CATChem VERSION 0.1.0 LANGUAGES Fortran C CXX)
+
+# Set C++ standard for yaml-cpp compatibility
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(CMakePrintHelpers)
 
