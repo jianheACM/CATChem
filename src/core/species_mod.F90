@@ -22,6 +22,7 @@
 module species_mod
    use precision_mod
    use error_mod
+   use, intrinsic :: ieee_arithmetic
    implicit none
    private
 
@@ -97,7 +98,7 @@ module species_mod
       integer :: gocart_aero_index    !< GOCART aerosol index in gocart_aero array
 
       ! Concentration
-      real(kind=fp), ALLOCATABLE :: conc(:)             !< Species concentration [v/v] or [kg/kg]
+      real(kind=fp), POINTER :: conc(:,:,:)             !< Species concentration [v/v] or [kg/kg]
 
       ! Validation and status
       logical :: is_valid = .false.                     !< Validation status
@@ -273,6 +274,20 @@ contains
          endif
       endif
 
+      ! Check concentration array: all values must be positive and finite
+      if (associated(this%conc)) then
+         if (any(this%conc < 0.0_fp)) then
+            is_valid = .false.
+            rc = ERROR_INVALID_INPUT
+            return
+         endif
+         if (any(.not. ieee_is_finite(this%conc))) then
+            is_valid = .false.
+            rc = ERROR_INVALID_INPUT
+            return
+         endif
+      endif
+
    end function species_validate
 
    !> \brief Set species concentration with bounds checking
@@ -287,17 +302,17 @@ contains
       implicit none
       class(SpeciesType), intent(inout) :: this
       real(fp), intent(in) :: concentration
-      integer, intent(in) :: grid_index
+      integer, intent(in), dimension(3) :: grid_index
       integer, intent(out) :: rc
 
       ! Check if concentration array is allocated
-      if (.not. allocated(this%conc)) then
+      if (.not. associated(this%conc)) then
          rc = ERROR_STATE_INCONSISTENCY
          return
       endif
 
       ! Check bounds
-      if (grid_index < 1 .or. grid_index > size(this%conc)) then
+      if (any(grid_index < 1) .or. any(grid_index > shape(this%conc))) then
          rc = ERROR_BOUNDS_CHECK
          return
       endif
@@ -308,7 +323,7 @@ contains
          return
       endif
 
-      this%conc(grid_index) = concentration
+      this%conc(grid_index(1), grid_index(2), grid_index(3)) = concentration
       rc = CC_SUCCESS
 
    end subroutine species_set_concentration
@@ -324,7 +339,7 @@ contains
       class(SpeciesType), intent(inout) :: this
       integer, intent(out) :: rc
 
-      if (allocated(this%conc)) deallocate(this%conc)
+      if (associated(this%conc)) deallocate(this%conc)
 
       this%is_valid = .false.
       rc = CC_SUCCESS
@@ -479,7 +494,7 @@ contains
    function species_get_concentration(this, grid_index, rc) result(concentration)
       implicit none
       class(SpeciesType), intent(in) :: this
-      integer, intent(in) :: grid_index
+      integer, intent(in), dimension(3) :: grid_index
       integer, intent(out) :: rc
       real(fp) :: concentration
 
@@ -487,18 +502,18 @@ contains
       concentration = 0.0_fp
 
       ! Check if concentration array is allocated
-      if (.not. allocated(this%conc)) then
+      if (.not. associated(this%conc)) then
          rc = ERROR_MEMORY_ALLOCATION
          return
       endif
 
       ! Check bounds
-      if (grid_index < 1 .or. grid_index > size(this%conc)) then
+      if (any(grid_index < 1) .or. any(grid_index > shape(this%conc))) then
          rc = ERROR_BOUNDS_CHECK
          return
       endif
 
-      concentration = this%conc(grid_index)
+      concentration = this%conc(grid_index(1), grid_index(2), grid_index(3))
 
    end function species_get_concentration
 
@@ -548,9 +563,9 @@ contains
       this%gocart_aero_index = source%gocart_aero_index
 
       ! Copy concentration array if allocated
-      if (allocated(source%conc)) then
-         if (allocated(this%conc)) deallocate(this%conc)
-         allocate(this%conc(size(source%conc)), stat=rc)
+      if (associated(source%conc)) then
+         if (associated(this%conc)) deallocate(this%conc)
+         allocate(this%conc(size(source%conc,1), size(source%conc,2), size(source%conc,3)), stat=rc)
          if (rc /= 0) then
             rc = ERROR_MEMORY_ALLOCATION
             return
@@ -585,7 +600,7 @@ contains
       write(*, '(A,L1)') 'Undergoes dry deposition: ', this%is_drydep
       write(*, '(A,L1)') 'Undergoes photolysis: ', this%is_photolysis
       write(*, '(A,I0)') 'Species index: ', this%species_index
-      if (allocated(this%conc)) then
+      if (associated(this%conc)) then
          write(*, '(A,I0)') 'Concentration grid size: ', size(this%conc)
       else
          write(*, '(A)') 'Concentration: Not allocated'

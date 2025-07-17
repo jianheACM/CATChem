@@ -14,6 +14,8 @@ module ChemState_Mod
    USE Error_Mod
    USE Precision_Mod
    USE species_mod, only: SpeciesType
+   USE GridGeometry_Mod, only: GridGeometryType
+   ! USE state_interface_mod   ! Removed for decoupling
 
    IMPLICIT NONE
    PRIVATE
@@ -84,6 +86,7 @@ module ChemState_Mod
       ! Reals
       !---------------------------------------------------------------------
       type(SpeciesType), allocatable :: ChemSpecies(:)
+      type(GridGeometryType), pointer :: Grid => null()  ! Pointer to grid geometry
 
    contains
       ! Type-bound procedures for modern initialization and cleanup
@@ -98,7 +101,18 @@ module ChemState_Mod
       procedure :: find_species => chemstate_find_species
       procedure :: get_concentration => chemstate_get_concentration
       procedure :: set_concentration => chemstate_set_concentration
+      procedure :: get_column_ptr => chemstate_get_column_ptr
+      procedure :: get_num_species => chemstate_get_num_species
+      procedure :: get_species => chemstate_get_species
 
+      ! Concentration accessors - multiple interfaces for flexibility
+      procedure :: get_concentrations => chemstate_get_concentrations          ! Get column at i,j
+      procedure :: set_concentrations => chemstate_set_concentrations          ! Set column at i,j
+      procedure :: get_all_concentrations => chemstate_get_all_concentrations  ! Get full 4D array
+      procedure :: set_all_concentrations => chemstate_set_all_concentrations  ! Set full 4D array
+
+      procedure :: has_species => chemstate_has_species
+      procedure :: get_dimensions => chemstate_get_dimensions
    end type ChemStateType
 
 CONTAINS
@@ -263,7 +277,7 @@ CONTAINS
    !    IF ( RC /= CC_SUCCESS ) THEN
    !       errMsg = 'Error allocating Chemstate%DryDepIndex'
    !       call CC_Error(errMsg, RC, thisLoc)
-   !       RETURN
+   !
    !    ENDIF
    !
    !    ! Find indices for species groups
@@ -506,17 +520,17 @@ CONTAINS
    !! \param[in] max_species Maximum number of species to allocate for
    !! \param[in] error_mgr Error manager for context and error reporting
    !! \param[out] rc Return code
-   subroutine chemstate_init(this, max_species, error_mgr, rc)
+   subroutine chemstate_init(this, max_species, error_mgr, rc, grid)
       use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE, ERROR_MEMORY_ALLOCATION
-
+      use GridGeometry_Mod, only: GridGeometryType
       implicit none
       class(ChemStateType), intent(inout) :: this
       integer, intent(in) :: max_species
       type(ErrorManagerType), pointer, intent(inout) :: error_mgr
       integer, intent(out) :: rc
-
+      type(GridGeometryType), pointer, optional, intent(in) :: grid
       character(len=256) :: thisLoc
-      integer :: allocStat
+      integer :: allocStat, nx, ny, nz, s
 
       thisLoc = 'chemstate_init (in core/chemstate_mod.F90)'
       call error_mgr%push_context('chemstate_init', 'initializing chemistry state')
@@ -533,6 +547,13 @@ CONTAINS
       this%nSpeciesDust = 0
       this%nSpeciesSeaSalt = 0
 
+      ! Store grid pointer if provided
+      if (present(grid)) then
+         this%Grid => grid
+      else
+         this%Grid => null()
+      endif
+
       ! Allocate species arrays
       if (max_species > 0) then
          allocate(this%SpeciesIndex(max_species), stat=allocStat)
@@ -547,8 +568,8 @@ CONTAINS
          allocate(this%TracerIndex(max_species), stat=allocStat)
          if (allocStat /= 0) then
             call error_mgr%report_error(ERROR_MEMORY_ALLOCATION, &
-                                        'Failed to allocate TracerIndex', rc, &
-                                        thisLoc, 'Check available memory')
+                                    'Failed to allocate TracerIndex', rc, &
+                                    thisLoc, 'Check available memory')
             call error_mgr%pop_context()
             return
          endif
@@ -616,17 +637,25 @@ CONTAINS
             return
          endif
 
-         ! Initialize arrays
-         this%SpeciesIndex = 0
-         this%TracerIndex = 0
-         this%AeroIndex = 0
-         this%GasIndex = 0
-         this%DustIndex = 0
-         this%SeaSaltIndex = 0
-         this%DryDepIndex = 0
-         this%SpeciesNames = ''
+         ! Allocate ChemSpecies(:)%conc(nx,ny,nz) if grid is present
+         if (associated(this%Grid)) then
+            nx = this%Grid%nx
+            ny = this%Grid%ny
+            nz = this%Grid%nz
+            do s = 1, max_species
+               if (.not. associated(this%ChemSpecies(s)%conc)) then
+                  allocate(this%ChemSpecies(s)%conc(nx,ny,nz), stat=allocStat)
+                  if (allocStat /= 0) then
+                     call error_mgr%report_error(ERROR_MEMORY_ALLOCATION, &
+                        'Failed to allocate ChemSpecies(s)%conc', rc, thisLoc, 'Check available memory')
+                     call error_mgr%pop_context()
+                     return
+                  endif
+                  this%ChemSpecies(s)%conc = 0.0_fp
+               endif
+            end do
+         endif
       endif
-
       call error_mgr%pop_context()
    end subroutine chemstate_init
 
@@ -941,7 +970,202 @@ CONTAINS
 
    end subroutine chemstate_set_concentration
 
-   !========================================================================
-   ! Legacy Procedures (maintained for backward compatibility)
-   !========================================================================
+   !> \brief Get a pointer to a vertical column for a given field name and (i,j) indices (type-safe)
+subroutine chemstate_get_column_ptr(this, field_name, i, j, col_ptr, rc)
+   use GridGeometry_Mod, only: GridGeometryType
+   class(ChemStateType), intent(inout) :: this
+   character(len=*), intent(in) :: field_name
+   integer, intent(in) :: i, j
+   real(fp), pointer :: col_ptr(:)
+   integer, intent(out) :: rc
+   integer :: species_idx, nz
+
+   rc = CC_FAILURE
+   nullify(col_ptr)
+
+   species_idx = -1
+   if (allocated(this%SpeciesNames)) then
+      do species_idx = 1, size(this%SpeciesNames)
+         if (trim(this%SpeciesNames(species_idx)) == trim(field_name)) exit
+      end do
+      if (species_idx < 1 .or. species_idx > size(this%SpeciesNames)) species_idx = -1
+   endif
+
+   if (species_idx > 0 .and. allocated(this%ChemSpecies)) then
+      if (associated(this%ChemSpecies(species_idx)%conc)) then
+         if (associated(this%Grid)) then
+            nz = this%Grid%nz
+            if (i >= 1 .and. j >= 1 .and. i <= this%Grid%nx .and. j <= this%Grid%ny) then
+               col_ptr => this%ChemSpecies(species_idx)%conc(i,j,:)
+               if (associated(col_ptr)) then
+                  rc = CC_SUCCESS
+                  return
+               endif
+            endif
+         endif
+      endif
+   endif
+   nullify(col_ptr)
+   rc = CC_FAILURE
+end subroutine chemstate_get_column_ptr
+
+   !> \brief Get the number of species in the chemical state
+   function chemstate_get_num_species(this) result(num_species)
+      class(ChemStateType), intent(in) :: this
+      integer :: num_species
+
+      if (allocated(this%SpeciesNames)) then
+         num_species = size(this%SpeciesNames)
+      else
+         num_species = 0
+      end if
+   end function chemstate_get_num_species
+
+   !> \brief Get species names array
+   function chemstate_get_species(this) result(species_names)
+      class(ChemStateType), intent(in) :: this
+      character(len=64), allocatable :: species_names(:)
+
+      if (allocated(this%SpeciesNames)) then
+         allocate(species_names(size(this%SpeciesNames)))
+         species_names = this%SpeciesNames
+      else
+         allocate(species_names(0))
+      end if
+   end function chemstate_get_species
+
+   !> \brief Get concentrations for all species at a grid point
+   function chemstate_get_concentrations(this, i, j) result(concentrations)
+      class(ChemStateType), intent(in) :: this
+      integer, intent(in) :: i, j
+      real(fp), allocatable :: concentrations(:,:)
+      integer :: s
+
+      if (allocated(this%ChemSpecies) .and. associated(this%Grid)) then
+         allocate(concentrations(size(this%ChemSpecies), this%Grid%nz))
+         do s = 1, size(this%ChemSpecies)
+            if (associated(this%ChemSpecies(s)%conc)) then
+               concentrations(s, :) = this%ChemSpecies(s)%conc(i, j, :)
+            else
+               concentrations(s, :) = 0.0_fp
+            end if
+         end do
+      else
+         allocate(concentrations(0, 0))
+      end if
+   end function chemstate_get_concentrations
+
+   !> \brief Set concentrations for all species at a grid point
+   subroutine chemstate_set_concentrations(this, i, j, concentrations, rc)
+      class(ChemStateType), intent(inout) :: this
+      integer, intent(in) :: i, j
+      real(fp), intent(in) :: concentrations(:,:)
+      integer, intent(out) :: rc
+      integer :: s
+
+      rc = CC_FAILURE
+      if (.not. allocated(this%ChemSpecies) .or. .not. associated(this%Grid)) return
+      if (size(concentrations, 1) /= size(this%ChemSpecies)) return
+      if (size(concentrations, 2) /= this%Grid%nz) return
+
+      do s = 1, size(this%ChemSpecies)
+         if (associated(this%ChemSpecies(s)%conc)) then
+            this%ChemSpecies(s)%conc(i, j, :) = concentrations(s, :)
+         end if
+      end do
+      rc = CC_SUCCESS
+   end subroutine chemstate_set_concentrations
+
+   !> \brief Check if a species exists in the chemical state
+   function chemstate_has_species(this, species_name) result(has_it)
+      class(ChemStateType), intent(in) :: this
+      character(len=*), intent(in) :: species_name
+      logical :: has_it
+
+      has_it = (this%find_species(species_name) > 0)
+   end function chemstate_has_species
+
+   !> \brief Get grid dimensions
+   function chemstate_get_dimensions(this) result(dims)
+      class(ChemStateType), intent(in) :: this
+      integer :: dims(3)
+
+      if (associated(this%Grid)) then
+         dims = [this%Grid%nx, this%Grid%ny, this%Grid%nz]
+      else
+         dims = [0, 0, 0]
+      end if
+   end function chemstate_get_dimensions
+
+   !> \brief Get all concentrations as a full 4D array
+   !!
+   !! Returns the complete concentration array for all species and grid points.
+   !! This is useful for processes that need to work with the entire domain.
+   !!
+   !! \param[in] this ChemStateType instance
+   !! \param[out] concentrations Full 4D concentration array (nx, ny, nz, n_species)
+   !! \param[out] rc Return code
+   subroutine chemstate_get_all_concentrations(this, concentrations, rc)
+      class(ChemStateType), intent(in) :: this
+      real(fp), allocatable, intent(out) :: concentrations(:,:,:,:)
+      integer, intent(out) :: rc
+      integer :: s
+
+      rc = CC_FAILURE
+      if (.not. allocated(this%ChemSpecies) .or. .not. associated(this%Grid)) return
+
+      ! Allocate the full 4D array
+      allocate(concentrations(this%Grid%nx, this%Grid%ny, this%Grid%nz, size(this%ChemSpecies)), stat=rc)
+      if (rc /= 0) then
+         rc = CC_FAILURE
+         return
+      end if
+
+      ! Copy data from individual species arrays
+      do s = 1, size(this%ChemSpecies)
+         if (associated(this%ChemSpecies(s)%conc)) then
+            concentrations(:, :, :, s) = this%ChemSpecies(s)%conc(:, :, :)
+         else
+            concentrations(:, :, :, s) = 0.0_fp
+         end if
+      end do
+
+      rc = CC_SUCCESS
+   end subroutine chemstate_get_all_concentrations
+
+   !> \brief Set all concentrations from a full 4D array
+   !!
+   !! Updates the complete concentration arrays for all species and grid points.
+   !! This is useful for processes that compute tendencies for the entire domain.
+   !!
+   !! \param[inout] this ChemStateType instance
+   !! \param[in] concentrations Full 4D concentration array (nx, ny, nz, n_species)
+   !! \param[out] rc Return code
+   subroutine chemstate_set_all_concentrations(this, concentrations, rc)
+      class(ChemStateType), intent(inout) :: this
+      real(fp), intent(in) :: concentrations(:,:,:,:)
+      integer, intent(out) :: rc
+      integer :: s
+
+      rc = CC_FAILURE
+      if (.not. allocated(this%ChemSpecies) .or. .not. associated(this%Grid)) return
+
+      ! Validate array dimensions
+      if (size(concentrations, 1) /= this%Grid%nx .or. &
+          size(concentrations, 2) /= this%Grid%ny .or. &
+          size(concentrations, 3) /= this%Grid%nz .or. &
+          size(concentrations, 4) /= size(this%ChemSpecies)) then
+         return
+      end if
+
+      ! Copy data to individual species arrays
+      do s = 1, size(this%ChemSpecies)
+         if (associated(this%ChemSpecies(s)%conc)) then
+            this%ChemSpecies(s)%conc(:, :, :) = concentrations(:, :, :, s)
+         end if
+      end do
+
+      rc = CC_SUCCESS
+   end subroutine chemstate_set_all_concentrations
+
 end module ChemState_Mod

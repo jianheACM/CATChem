@@ -4,8 +4,6 @@ CATChem is a modern atmospheric chemistry transport model designed for operation
 
 ## Architecture
 
-CATChem follows a modular, process-based architecture that separates concerns and enables flexible configuration:
-
 ```mermaid
 flowchart TB
     A["Host Model/Driver"] --> B["CATChem API"]

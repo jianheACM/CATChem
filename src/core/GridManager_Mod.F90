@@ -23,7 +23,7 @@
 !!
 module GridManager_Mod
    use Precision_Mod, only: fp
-   use Error_Mod, only: CC_SUCCESS, CC_FAILURE, ErrorManagerType
+   use Error_Mod, only: CC_SUCCESS, CC_FAILURE, ErrorManagerType, ERROR_PROCESS_INITIALIZATION
    use ColumnInterface_Mod, only: ColumnViewType
 
    implicit none
@@ -154,7 +154,6 @@ module GridManager_Mod
 
       ! Column management
       integer :: n_local_columns = 0            !< Number of local columns
-      type(ColumnViewType), allocatable :: columns(:) !< Column views
 
    contains
       ! Initialization and cleanup
@@ -167,9 +166,9 @@ module GridManager_Mod
       procedure :: get_decomposition => grid_manager_get_decomposition
       procedure :: get_total_columns => grid_manager_get_total_columns
       procedure :: get_local_columns => grid_manager_get_local_columns
+      procedure :: get_shape => grid_manager_get_shape
 
       ! Column virtualization interface
-      procedure :: get_column_view => grid_manager_get_column_view
       procedure :: create_column_iterator => grid_manager_create_column_iterator
       procedure :: get_column_by_indices => grid_manager_get_column_by_indices
       procedure :: get_column_by_location => grid_manager_get_column_by_location
@@ -447,7 +446,7 @@ contains
    function iterator_get_current_column(this) result(column_view)
       class(ColumnIteratorType), intent(in) :: this
       type(ColumnViewType) :: column_view
-
+      ! Returns the column view for the current (i,j) indices. If indices are invalid, returns an invalid column_view.
       column_view = this%grid_mgr%get_column_by_indices(this%current_i, this%current_j)
    end function iterator_get_current_column
 
@@ -477,7 +476,7 @@ contains
    subroutine grid_manager_init(this, nx, ny, nz, error_mgr, grid_type, coord_system, rc)
       class(GridManagerType), intent(inout) :: this
       integer, intent(in) :: nx, ny, nz
-      type(ErrorManagerType), target, intent(in) :: error_mgr
+      type(ErrorManagerType), target, intent(inout) :: error_mgr
       integer, intent(in), optional :: grid_type, coord_system
       integer, intent(out) :: rc
 
@@ -492,7 +491,7 @@ contains
       ! Initialize geometry
       call this%geometry%init(nx, ny, nz, grid_type, coord_system, local_rc)
       if (local_rc /= CC_SUCCESS) then
-         call error_mgr%report_error(ERROR_INITIALIZATION, &
+         call error_mgr%report_error(ERROR_PROCESS_INITIALIZATION, &
               'Failed to initialize grid geometry', rc, thisLoc)
          return
       endif
@@ -500,7 +499,7 @@ contains
       ! Initialize decomposition (default: single processor)
       call this%decomp%init(this%geometry, 1, 0, local_rc)
       if (local_rc /= CC_SUCCESS) then
-         call error_mgr%report_error(ERROR_INITIALIZATION, &
+         call error_mgr%report_error(ERROR_PROCESS_INITIALIZATION, &
               'Failed to initialize grid decomposition', rc, thisLoc)
          return
       endif
@@ -518,8 +517,6 @@ contains
       class(GridManagerType), intent(inout) :: this
 
       call this%geometry%cleanup()
-
-      if (allocated(this%columns)) deallocate(this%columns)
 
       this%is_initialized = .false.
       this%error_mgr => null()
@@ -567,16 +564,30 @@ contains
       local_columns = this%n_local_columns
    end function grid_manager_get_local_columns
 
+   !> \brief Get grid shape (nx, ny, nz) as a convenience
+   subroutine grid_manager_get_shape(this, nx, ny, nz)
+      class(GridManagerType), intent(in) :: this
+      integer, intent(out) :: nx, ny, nz
+      call this%geometry%get_dimensions(nx, ny, nz)
+   end subroutine grid_manager_get_shape
+
    !> \brief Get column view for specific indices
    function grid_manager_get_column_by_indices(this, i, j) result(column_view)
       class(GridManagerType), intent(in) :: this
       integer, intent(in) :: i, j
       type(ColumnViewType) :: column_view
+      integer :: rc
 
-      ! This would be implemented to return the appropriate column view
-      ! For now, just a placeholder
+      ! Check bounds for safety
+      if (.not. this%geometry%is_valid_position(i, j)) then
+         ! Return an uninitialized column_view to mark as invalid
+         ! The column_view will have its default null() pointers
+         return
+      endif
+
+      ! For now, return an uninitialized column_view
+      ! TODO: Implement proper column_view initialization when StateManager integration is complete
       ! call column_view%init(container, rc)
-      ! call column_view%set_column_position(i, j, rc)
    end function grid_manager_get_column_by_indices
 
    !> \brief Get column view by geographic location

@@ -1,414 +1,564 @@
 !> \file DustCommon_Mod.F90
-!! \brief Common utilities and data types for dust emission processes
-!! \ingroup catchem_dust_process
+!! \brief Common types and utilities for dust process
 !!
-!! \author Barry Baker
-!! \date 05/2024
-!! \version 2.0 - Refactored for StateContainer architecture
+!! This module defines the configuration and state types used by the
+!! dust process and its schemes.
 !!
-!! This module provides common utilities and shared functions
-!! for dust emission calculations in the CATChem atmospheric chemistry model.
-!! It includes soil moisture parameterizations, size distribution functions,
-!! and horizontal flux calculations used by various dust emission schemes.
-!!
-!! \details
-!! **Refactored for v2.0:**
-!! - Modernized for StateContainer architecture
-!! - Enhanced error handling with ErrorManager integration
-!! - Improved parameter validation and bounds checking
-!! - Added comprehensive unit tests support
-!! - Memory-safe allocations and cleanup
-!!
-!! **Key Functions:**
-!! - Fecan_SoilMoisture: Fecan et al. (1999) soil moisture parameterization
-!! - Shao_SoilMoisture: Shao et al. (2006) soil moisture parameterization
-!! - KokDistribution: Kok (2011) size distribution theory
-!! - Soil_Erosion_Potential: Soil erodibility calculations
-!! - Draxler_HorizFlux: Draxler horizontal flux calculations
-!! - Kawamura_HorizFlux: Kawamura horizontal flux calculations
-!! - MB95_DragPartition: Marticorena & Bergametti (1995) drag partition
-!! - MB97_threshold_velocity: Marticorena & Bergametti (1997) threshold velocity
-!!
+!! Generated on: 2025-07-09T12:43:17.982946
+!! Author: Barry Baker
+!! Version: 1.0.0
+
 module DustCommon_Mod
 
-   use precision_mod
-   use error_mod
-   use constants
+   use iso_fortran_env, only: fp => real64
+   use ErrorHandler_Mod
 
    implicit none
    private
 
-   ! Public procedures - all original functions preserved
-   public :: Fecan_SoilMoisture
-   public :: Shao_SoilMoisture
-   public :: KokDistribution
-   public :: Soil_Erosion_Potential
-   public :: Draxler_HorizFlux
-   public :: Kawamura_HorizFlux
-   public :: MB95_DragPartition
-   public :: MB97_threshold_velocity
+   ! Export types
+   public :: DustConfig
+   public :: DustState
+   public :: DustSchemeFENGSHAConfig
+   public :: DustSchemeFENGSHAState
+   public :: DustSchemeGINOUXConfig
+   public :: DustSchemeGINOUXState
+
+   ! Export utility functions
+   public :: int_to_string
+
+   !> Main configuration type for dust process
+   type :: DustConfig
+
+      ! Process settings
+      character(len=32) :: active_scheme = ''
+      logical :: is_active = .true.
+      real(fp) :: dt_min = 1.0_fp     ! Minimum time step (seconds)
+      real(fp) :: dt_max = 3600.0_fp  ! Maximum time step (seconds)
+
+      ! Species configuration
+      integer :: n_species = 0
+      character(len=32) :: species_names(1)
+
+
+
+      ! Diagnostic configuration
+      logical :: output_diagnostics = .true.
+      real(fp) :: diagnostic_frequency = 3600.0_fp  ! Output frequency (seconds)
+
+   contains
+      procedure, public :: init => init_dust_config
+      procedure, public :: validate => validate_dust_config
+      procedure, public :: finalize => finalize_dust_config
+      procedure, public :: print_summary => print_dust_config_summary
+   end type DustConfig
+
+   !> Main state type for dust process
+   type :: DustState
+
+      ! Runtime state
+      logical :: is_initialized = .false.
+      real(fp) :: current_time = 0.0_fp
+      real(fp) :: last_update_time = 0.0_fp
+      integer :: n_columns = 0
+      integer :: n_levels = 0
+
+      ! Working arrays (allocated during initialization)
+      real(fp), allocatable :: emission_rates(:,:)    ! (n_species, n_columns)
+      real(fp), allocatable :: total_emissions(:)     ! (n_columns)
+
+      ! Diagnostic arrays
+      real(fp), allocatable :: total_dust_emission(:)  ! Total dust emissions for all species
+
+   contains
+      procedure, public :: init => init_dust_state
+      procedure, public :: allocate_arrays => allocate_dust_state_arrays
+      procedure, public :: reset => reset_dust_state
+      procedure, public :: finalize => finalize_dust_state
+   end type DustState
+
+   !> Configuration type for fengsha scheme
+   type :: DustSchemeFENGSHAConfig
+
+      ! Scheme metadata
+      character(len=64) :: scheme_name = 'fengsha'
+      character(len=256) :: description = 'Fengsha Dust emission scheme developed at NOAA ARL for use at NOAA NWS'
+      character(len=64) :: author = 'Barry Baker'
+      character(len=16) :: algorithm_type = 'explicit'
+
+      ! Scheme parameters
+      real(fp) :: alpha = 0.16  ! linear scaling factor
+      real(fp) :: beta = 1.0  ! Exponential scaling factor on source parameter
+      real(fp) :: drylimit_factor = 1.0  ! Dry Limit factor modifying the Fecan dry limit following Zender 2003
+      real(fp) :: drag_option = 1  ! Drag Partition Option: 1 - use input drag, 2 - Darmenova, 3 - Leung 2022, 4 - MB95
+      real(fp) :: moist_option = 1 - fecan  ! Moisture parameterization: 1 - Fecan, 2 - shao, 3 - modified shao
+      real(fp) :: distribution_option = 1  ! Dust Distribution option: 1 - Kok 2011, 2 - Meng 2022
+
+      ! Required meteorological fields
+      integer :: n_required_met_fields = 12
+      character(len=32) :: required_met_fields(12)
+
+   contains
+      procedure, public :: init => init_fengsha_config
+      procedure, public :: validate => validate_fengsha_config
+      procedure, public :: finalize => finalize_fengsha_config
+   end type DustSchemeFENGSHAConfig
+
+   !> State type for fengsha scheme
+   type :: DustSchemeFENGSHAState
+
+      ! Scheme working arrays
+      real(fp), allocatable :: work_array_1(:,:)
+      real(fp), allocatable :: work_array_2(:,:)
+
+      ! Scheme-specific diagnostic arrays
+      real(fp), allocatable :: dust_horizontal_flux(:)  ! Total horizontal flux - Q
+      real(fp), allocatable :: dust_moisture_correction(:)  ! Moisture Correction - H
+      real(fp), allocatable :: dust_effective_threshold(:)  ! Effective Dust threshold friction velocity: u_thres * H / R
+
+   contains
+      procedure, public :: init => init_fengsha_state
+      procedure, public :: allocate_arrays => allocate_fengsha_state_arrays
+      procedure, public :: reset => reset_fengsha_state
+      procedure, public :: finalize => finalize_fengsha_state
+   end type DustSchemeFENGSHAState
+
+   !> Configuration type for ginoux scheme
+   type :: DustSchemeGINOUXConfig
+
+      ! Scheme metadata
+      character(len=64) :: scheme_name = 'ginoux'
+      character(len=256) :: description = 'Ginoux dust emission scheme'
+      character(len=64) :: author = 'Barry Baker'
+      character(len=16) :: algorithm_type = 'explicit'
+
+      ! Scheme parameters
+      real(fp) :: Ch_DU = [0.1, 0.1, 0.1, 0.1, 0.1]  ! Dust tuning coefficient per species 
+
+      ! Required meteorological fields
+      integer :: n_required_met_fields = 5
+      character(len=32) :: required_met_fields(5)
+
+   contains
+      procedure, public :: init => init_ginoux_config
+      procedure, public :: validate => validate_ginoux_config
+      procedure, public :: finalize => finalize_ginoux_config
+   end type DustSchemeGINOUXConfig
+
+   !> State type for ginoux scheme
+   type :: DustSchemeGINOUXState
+
+      ! Scheme working arrays
+      real(fp), allocatable :: work_array_1(:,:)
+      real(fp), allocatable :: work_array_2(:,:)
+
+      ! Scheme-specific diagnostic arrays
+      real(fp), allocatable :: dust_horizontal_flux(:)  ! Total horizontal flux - Q
+      real(fp), allocatable :: dust_moisture_correction(:)  ! Moisture Correction - H
+      real(fp), allocatable :: dust_effective_threshold(:)  ! Effective Dust threshold friction velocity: u_thres * H / R
+
+   contains
+      procedure, public :: init => init_ginoux_state
+      procedure, public :: allocate_arrays => allocate_ginoux_state_arrays
+      procedure, public :: reset => reset_ginoux_state
+      procedure, public :: finalize => finalize_ginoux_state
+   end type DustSchemeGINOUXState
+
 
 contains
 
-   !> \brief Computes the soil moisture attenuation factor for dust emission
-   !!
-   !! Fecan, F., Marticorena, B., and Bergametti, G.: Parametrization of the increase of the aeolian
-   !! erosion threshold wind friction velocity due to soil moisture for arid and semi-arid areas,
-   !! Ann. Geophys., 17, 149–157, https://doi.org/10.1007/s00585-999-0149-7, 1999.
-   !!
-   !! \param clay Fractional clay content [0-1]
-   !! \param sand Fractional sand content [0-1]
-   !! \param volumetric_soil_moisture Volumetric soil moisture [m3 m-3]
-   !! \param H Soil moisture attenuation factor for dust emission [dimensionless]
-   !! \param error_mgr Error manager for error handling
-   !! \param rc Return code
-   !!
-   !! \ingroup catchem_dust_process
-   subroutine Fecan_SoilMoisture(clay, sand, volumetric_soil_moisture, H, error_mgr, rc)
-      implicit none
+   !> Initialize dust configuration
+   subroutine init_dust_config(this, error_handler)
+      class(DustConfig), intent(inout) :: this
+      type(ErrorHandler), intent(inout) :: error_handler
 
-      ! Parameters
-      real(fp), intent(in) :: clay                      !< Fractional Clay Content [0-1]
-      real(fp), intent(in) :: sand                      !< Fractional Sand Content [0-1]
-      real(fp), intent(in) :: volumetric_soil_moisture  !< Volumetric soil moisture [m3 m-3]
-      real(fp), intent(out) :: H                        !< Soil Moisture attenuation factor [dimensionless]
-      type(ErrorManagerType), intent(inout) :: error_mgr !< Error manager
-      integer, intent(out) :: rc                        !< Return code
+      ! Set default species names
 
-      ! Local Variables
-      real(fp) :: vsat                      ! Saturated volumetric water content [m3 m-3]
-      real(fp) :: gravimetric_soil_moisture ! Gravimetric soil moisture [kg/kg]
-      real(fp) :: DryLimit                  ! Dry limit of the soil moisture [kg/kg]
 
-      call error_mgr%push_context('Fecan_SoilMoisture', 'Computing Fecan soil moisture attenuation')
 
-      ! Initialize
-      H = 0.0_fp
-      rc = CC_SUCCESS
+   end subroutine init_dust_config
 
-      ! Input validation
-      if (clay < 0.0_fp .or. clay > 1.0_fp) then
-         call error_mgr%report_error(ERROR_INVALID_INPUT, &
-              'Clay fraction must be between 0 and 1', rc)
+   !> Validate dust configuration
+   subroutine validate_dust_config(this, error_handler)
+      class(DustConfig), intent(inout) :: this
+      type(ErrorHandler), intent(inout) :: error_handler
+
+      character(len=256) :: error_msg
+
+      ! Validate time step bounds
+      if (this%dt_min <= 0.0_fp) then
+         call error_handler%set_error(ERROR_CONFIG, &
+            "Minimum time step must be positive")
          return
-      endif
+      end if
 
-      if (sand < 0.0_fp .or. sand > 1.0_fp) then
-         call error_mgr%report_error(ERROR_INVALID_INPUT, &
-              'Sand fraction must be between 0 and 1', rc)
+      if (this%dt_max < this%dt_min) then
+         call error_handler%set_error(ERROR_CONFIG, &
+            "Maximum time step must be >= minimum time step")
          return
-      endif
+      end if
 
-      if (volumetric_soil_moisture < 0.0_fp) then
-         call error_mgr%report_error(ERROR_INVALID_INPUT, &
-              'Volumetric soil moisture must be non-negative', rc)
+      ! Validate active scheme
+      if (trim(this%active_scheme) /= 'fengsha' .and. &
+          trim(this%active_scheme) /= 'ginoux' .and. &
+          .true.) then
+         write(error_msg, '(A)') "Invalid scheme: " // trim(this%active_scheme)
+         call error_handler%set_error(ERROR_CONFIG, error_msg)
          return
-      endif
+      end if
 
-      ! Compute Saturated Volumetric Water Content
-      vsat = 0.489_fp - 0.00126_fp * (100.0_fp * sand)
+   end subroutine validate_dust_config
 
-      if (vsat <= 0.0_fp) then
-         call error_mgr%report_error(ERROR_COMPUTATION, &
-              'Invalid saturated water content computed', rc)
+   !> Print configuration summary
+   subroutine print_dust_config_summary(this)
+      class(DustConfig), intent(in) :: this
+
+      write(*, '(A)') "=== Dust Process Configuration ==="
+      write(*, '(A,A)') "  Active scheme: ", trim(this%active_scheme)
+      write(*, '(A,I0)') "  Number of species: ", this%n_species
+      write(*, '(A,F0.1,A)') "  Minimum time step: ", this%dt_min, " s"
+      write(*, '(A,F0.1,A)') "  Maximum time step: ", this%dt_max, " s"
+      write(*, '(A,L1)') "  Output diagnostics: ", this%output_diagnostics
+      write(*, '(A)') "============================================="
+
+   end subroutine print_dust_config_summary
+
+   !> Finalize dust configuration
+   subroutine finalize_dust_config(this)
+      class(DustConfig), intent(inout) :: this
+
+      ! Nothing to deallocate for basic configuration
+
+   end subroutine finalize_dust_config
+
+   !> Initialize dust state
+   subroutine init_dust_state(this, n_columns, n_levels, error_handler)
+      class(DustState), intent(inout) :: this
+      integer, intent(in) :: n_columns
+      integer, intent(in) :: n_levels
+      type(ErrorHandler), intent(inout) :: error_handler
+
+      this%n_columns = n_columns
+      this%n_levels = n_levels
+      this%current_time = 0.0_fp
+      this%last_update_time = 0.0_fp
+
+      call this%allocate_arrays(error_handler)
+      if (error_handler%has_error()) return
+
+      this%is_initialized = .true.
+
+   end subroutine init_dust_state
+
+   !> Allocate state arrays
+   subroutine allocate_dust_state_arrays(this, error_handler)
+      class(DustState), intent(inout) :: this
+      type(ErrorHandler), intent(inout) :: error_handler
+
+      integer :: alloc_stat
+
+      ! Allocate emission arrays
+      allocate(this%emission_rates(1, this%n_columns), &
+               stat=alloc_stat)
+      if (alloc_stat /= 0) then
+         call error_handler%set_error(ERROR_MEMORY, &
+            "Failed to allocate emission_rates array")
          return
-      endif
+      end if
 
-      ! Compute Gravimetric Soil moisture
-      gravimetric_soil_moisture = volumetric_soil_moisture * 1000.0_fp / (1.0_fp - vsat)
-
-      ! Compute Dry Limit
-      DryLimit = clay * (14.0_fp * clay + 17.0_fp)
-
-      ! Compute attenuation factor
-      H = sqrt(1.0_fp + 1.21_fp * max(0.0_fp, gravimetric_soil_moisture - DryLimit)**0.68_fp)
-
-      call error_mgr%pop_context()
-   end subroutine Fecan_SoilMoisture
-
-   !> \brief Computes the soil moisture attenuation factor for dust emission
-   !!
-   !! Zhao, T. L., S. L. Gong, X. Y. Zhang, A. Abdel-Mawgoud, and Y. P. Shao (2006),
-   !! An assessment of dust emission schemes in modeling east Asian dust storms,
-   !! J. Geophys. Res., 111, D05S90, doi:10.1029/2004JD005746.
-   !!
-   !! \param volumetric_soil_moisture Volumetric soil moisture [m3 m-3]
-   !! \param H Soil moisture attenuation factor for dust emission [dimensionless]
-   !! \param error_mgr Error manager for error handling
-   !! \param rc Return code
-   !!
-   !! \ingroup catchem_dust_process
-   subroutine Shao_SoilMoisture(volumetric_soil_moisture, H, error_mgr, rc)
-      implicit none
-
-      ! Parameters
-      real(fp), intent(in) :: volumetric_soil_moisture  !< Volumetric soil moisture [m3 m-3]
-      real(fp), intent(out) :: H                        !< Soil Moisture attenuation factor [dimensionless]
-      type(ErrorManagerType), intent(inout) :: error_mgr !< Error manager
-      integer, intent(out) :: rc                        !< Return code
-
-      call error_mgr%push_context('Shao_SoilMoisture', 'Computing Shao soil moisture attenuation')
-
-      ! Initialize
-      H = 0.0_fp
-      rc = CC_SUCCESS
-
-      ! Input validation
-      if (volumetric_soil_moisture < 0.0_fp) then
-         call error_mgr%report_error(ERROR_INVALID_INPUT, &
-              'Volumetric soil moisture must be non-negative', rc)
+      allocate(this%total_emissions(this%n_columns), stat=alloc_stat)
+      if (alloc_stat /= 0) then
+         call error_handler%set_error(ERROR_MEMORY, &
+            "Failed to allocate total_emissions array")
          return
-      endif
+      end if
 
-      ! Compute attenuation factor
-      if (volumetric_soil_moisture <= 0.03_fp) then
-         H = exp(22.7_fp * volumetric_soil_moisture)
-      else
-         H = exp(93.5_fp * volumetric_soil_moisture - 2.029_fp)
-      endif
-
-      call error_mgr%pop_context()
-   end subroutine Shao_SoilMoisture
-
-   !> \brief KokDistribution
-   !!
-   !! Kok, J. F. (2011a), A scaling theory for the size distribution of emitted
-   !! dust aerosols suggests climate models underestimate the size of the global
-   !! dust cycle, Proc. Natl. Acad. Sci. U. S. A., 108(3), 1016–1021,
-   !! doi:10.1073/pnas.1014798108.
-   !!
-   !! \param radius Radius [m]
-   !! \param rLow Lower radius [m]
-   !! \param rUp Upper radius [m]
-   !! \param dist Distribution [normalized]
-   !! \param error_mgr Error manager for error handling
-   !! \param rc Return code
-   !!
-   !! \ingroup catchem_dust_process
-   subroutine KokDistribution(radius, rLow, rUp, dist, error_mgr, rc)
-      implicit none
-
-      ! Parameters
-      real(fp), dimension(:), intent(in) :: radius      !< Radius [m]
-      real(fp), dimension(:), intent(in) :: rLow        !< Lower radius [m]
-      real(fp), dimension(:), intent(in) :: rUp         !< Upper radius [m]
-      real(fp), dimension(:), intent(out) :: dist       !< Distribution [normalized]
-      type(ErrorManagerType), intent(inout) :: error_mgr !< Error manager
-      integer, intent(out) :: rc                        !< Return code
-
-      ! Local Variables
-      integer :: n, nbins
-      real(fp) :: diameter, dlam, dvol
-
-      ! Constants
-      real(fp), parameter :: mmd = 3.4_fp                               ! median mass diameter [microns]
-      real(fp), parameter :: stddev = 3.0_fp                            ! standard deviation [microns]
-      real(fp), parameter :: lambda = 12.0_fp                           ! crack propagation length [um]
-      real(fp), parameter :: factor = 1.0_fp / (sqrt(2.0_fp) * log(stddev)) ! auxiliary constant
-
-      call error_mgr%push_context('KokDistribution', 'Computing Kok size distribution')
-
-      ! Initialize
-      dist = 0.0_fp
-      dvol = 0.0_fp
-      nbins = size(radius)
-      rc = CC_SUCCESS
-
-      ! Input validation
-      if (size(rLow) /= nbins .or. size(rUp) /= nbins) then
-         call error_mgr%report_error(ERROR_INVALID_INPUT, &
-              'Array size mismatch in KokDistribution', rc)
+      ! Allocate diagnostic arrays
+      allocate(this%total_dust_emission(this%n_columns), stat=alloc_stat)
+      if (alloc_stat /= 0) then
+         call error_handler%set_error(ERROR_MEMORY, &
+            "Failed to allocate total_dust_emission array")
          return
-      endif
+      end if
 
-      ! Compute distribution
-      do n = 1, nbins
-         diameter = radius(n) * 2.0_fp
-         dlam = diameter / lambda
-         dvol = 4.0_fp / 3.0_fp * PI * diameter**3.0_fp
-         dist(n) = (1.0_fp + erf(factor * log(diameter/mmd))) * &
-                   exp(-dlam * dlam * dlam) * log(rUp(n)/rLow(n))
-         dvol = dvol + dist(n)
-      enddo
+   end subroutine allocate_dust_state_arrays
 
-      ! Normalize Distribution
-      if (dvol > 0.0_fp) then
-         do n = 1, nbins
-            dist(n) = dist(n) / dvol
-         enddo
-      else
-         call error_mgr%report_error(ERROR_COMPUTATION, &
-              'Zero total volume in KokDistribution', rc)
+   !> Reset state arrays to zero
+   subroutine reset_dust_state(this)
+      class(DustState), intent(inout) :: this
+
+      if (allocated(this%emission_rates)) this%emission_rates = 0.0_fp
+      if (allocated(this%total_emissions)) this%total_emissions = 0.0_fp
+
+      if (allocated(this%total_dust_emission)) this%total_dust_emission = 0.0_fp
+
+   end subroutine reset_dust_state
+
+   !> Finalize dust state
+   subroutine finalize_dust_state(this)
+      class(DustState), intent(inout) :: this
+
+      if (allocated(this%emission_rates)) deallocate(this%emission_rates)
+      if (allocated(this%total_emissions)) deallocate(this%total_emissions)
+
+      if (allocated(this%total_dust_emission)) deallocate(this%total_dust_emission)
+
+      this%is_initialized = .false.
+
+   end subroutine finalize_dust_state
+
+   !> Initialize fengsha scheme configuration
+   subroutine init_fengsha_config(this, parent_config, error_handler)
+      class(DustSchemeFENGSHAConfig), intent(inout) :: this
+      type(DustConfig), intent(in) :: parent_config
+      type(ErrorHandler), intent(inout) :: error_handler
+
+      ! Set required meteorological fields
+      this%required_met_fields(1) = 'IsLand'
+      this%required_met_fields(2) = 'USTAR'
+      this%required_met_fields(3) = 'LWI'
+      this%required_met_fields(4) = 'GVF'
+      this%required_met_fields(5) = 'LAI'
+      this%required_met_fields(6) = 'FROCEAN'
+      this%required_met_fields(7) = 'CLAYFRAC'
+      this%required_met_fields(8) = 'SANDFRAC'
+      this%required_met_fields(9) = 'FRSNO'
+      this%required_met_fields(10) = 'RDRAG'
+      this%required_met_fields(11) = 'SSM'
+      this%required_met_fields(12) = 'USTAR_THRESHOLD'
+
+      ! Initialize scheme-specific parameters
+      ! TODO: Load from configuration file or use defaults
+
+   end subroutine init_fengsha_config
+
+   !> Validate fengsha scheme configuration
+   subroutine validate_fengsha_config(this, error_handler)
+      class(DustSchemeFENGSHAConfig), intent(inout) :: this
+      type(ErrorHandler), intent(inout) :: error_handler
+
+      ! TODO: Add scheme-specific validation
+
+   end subroutine validate_fengsha_config
+
+   !> Finalize fengsha scheme configuration
+   subroutine finalize_fengsha_config(this)
+      class(DustSchemeFENGSHAConfig), intent(inout) :: this
+
+      ! Nothing to deallocate for basic configuration
+
+   end subroutine finalize_fengsha_config
+
+   !> Initialize fengsha scheme state
+   subroutine init_fengsha_state(this, parent_state, error_handler)
+      class(DustSchemeFENGSHAState), intent(inout) :: this
+      type(DustState), intent(in) :: parent_state
+      type(ErrorHandler), intent(inout) :: error_handler
+
+      call this%allocate_arrays(parent_state%n_columns, error_handler)
+
+   end subroutine init_fengsha_state
+
+   !> Allocate fengsha scheme state arrays
+   subroutine allocate_fengsha_state_arrays(this, n_columns, error_handler)
+      class(DustSchemeFENGSHAState), intent(inout) :: this
+      integer, intent(in) :: n_columns
+      type(ErrorHandler), intent(inout) :: error_handler
+
+      integer :: alloc_stat
+
+      ! Allocate working arrays
+      allocate(this%work_array_1(1, n_columns), &
+               stat=alloc_stat)
+      if (alloc_stat /= 0) then
+         call error_handler%set_error(ERROR_MEMORY, &
+            "Failed to allocate fengsha work_array_1")
          return
-      endif
+      end if
 
-      call error_mgr%pop_context()
-   end subroutine KokDistribution
-
-   !> \brief Computes the soil erosion potential
-   !!
-   !! TODO: Find reference for this
-   !!
-   !! \param clayfrac clay fraction [0-1]
-   !! \param sandfrac sand fraction [0-1]
-   !! \param SEP soil erosion potential [0-1]
-   !! \param error_mgr Error manager for error handling
-   !! \param rc Return code
-   !!
-   !! \ingroup catchem_dust_process
-   subroutine Soil_Erosion_Potential(clayfrac, sandfrac, SEP, error_mgr, rc)
-      implicit none
-
-      ! Parameters
-      real(fp), intent(in) :: clayfrac    !< Fractional Clay Content [0-1]
-      real(fp), intent(in) :: sandfrac    !< Fractional Sand Content [0-1]
-      real(fp), intent(out) :: SEP        !< Soil Erosion Potential [0-1]
-      type(ErrorManagerType), intent(inout) :: error_mgr !< Error manager
-      integer, intent(out) :: rc          !< Return code
-
-      call error_mgr%push_context('Soil_Erosion_Potential', 'Computing soil erosion potential')
-
-      ! Initialize
-      SEP = 0.0_fp
-      rc = CC_SUCCESS
-
-      ! Input validation
-      if (clayfrac < 0.0_fp .or. clayfrac > 1.0_fp) then
-         call error_mgr%report_error(ERROR_INVALID_INPUT, &
-              'Clay fraction must be between 0 and 1', rc)
+      allocate(this%work_array_2(1, n_columns), &
+               stat=alloc_stat)
+      if (alloc_stat /= 0) then
+         call error_handler%set_error(ERROR_MEMORY, &
+            "Failed to allocate fengsha work_array_2")
          return
-      endif
+      end if
 
-      if (sandfrac < 0.0_fp .or. sandfrac > 1.0_fp) then
-         call error_mgr%report_error(ERROR_INVALID_INPUT, &
-              'Sand fraction must be between 0 and 1', rc)
+      ! Allocate diagnostic arrays
+      allocate(this%dust_horizontal_flux(n_columns), stat=alloc_stat)
+      if (alloc_stat /= 0) then
+         call error_handler%set_error(ERROR_MEMORY, &
+            "Failed to allocate fengsha dust_horizontal_flux array")
          return
-      endif
+      end if
+      allocate(this%dust_moisture_correction(n_columns), stat=alloc_stat)
+      if (alloc_stat /= 0) then
+         call error_handler%set_error(ERROR_MEMORY, &
+            "Failed to allocate fengsha dust_moisture_correction array")
+         return
+      end if
+      allocate(this%dust_effective_threshold(n_columns), stat=alloc_stat)
+      if (alloc_stat /= 0) then
+         call error_handler%set_error(ERROR_MEMORY, &
+            "Failed to allocate fengsha dust_effective_threshold array")
+         return
+      end if
 
-      ! Compute SEP (simplified implementation - needs proper reference)
-      SEP = max(0.0_fp, min(1.0_fp, sandfrac * (1.0_fp - clayfrac)))
+   end subroutine allocate_fengsha_state_arrays
 
-      call error_mgr%pop_context()
-   end subroutine Soil_Erosion_Potential
+   !> Reset fengsha scheme state
+   subroutine reset_fengsha_state(this)
+      class(DustSchemeFENGSHAState), intent(inout) :: this
 
-   !> \brief Draxler horizontal flux calculation
-   !!
-   !! TODO: Add proper reference
-   !!
-   !! \param u_friction Friction velocity [m s-1]
-   !! \param u_threshold Threshold velocity [m s-1]
-   !! \param flux Horizontal flux [kg m-1 s-1]
-   !! \param error_mgr Error manager for error handling
-   !! \param rc Return code
-   !!
-   !! \ingroup catchem_dust_process
-   subroutine Draxler_HorizFlux(u_friction, u_threshold, flux, error_mgr, rc)
-      implicit none
+      if (allocated(this%work_array_1)) this%work_array_1 = 0.0_fp
+      if (allocated(this%work_array_2)) this%work_array_2 = 0.0_fp
 
-      real(fp), intent(in) :: u_friction   !< Friction velocity [m s-1]
-      real(fp), intent(in) :: u_threshold  !< Threshold velocity [m s-1]
-      real(fp), intent(out) :: flux        !< Horizontal flux [kg m-1 s-1]
-      type(ErrorManagerType), intent(inout) :: error_mgr !< Error manager
-      integer, intent(out) :: rc           !< Return code
+      if (allocated(this%dust_horizontal_flux)) this%dust_horizontal_flux = 0.0_fp
+      if (allocated(this%dust_moisture_correction)) this%dust_moisture_correction = 0.0_fp
+      if (allocated(this%dust_effective_threshold)) this%dust_effective_threshold = 0.0_fp
 
-      call error_mgr%push_context('Draxler_HorizFlux', 'Computing Draxler horizontal flux')
+   end subroutine reset_fengsha_state
 
-      flux = 0.0_fp
-      rc = CC_SUCCESS
+   !> Finalize fengsha scheme state
+   subroutine finalize_fengsha_state(this)
+      class(DustSchemeFENGSHAState), intent(inout) :: this
 
-      if (u_friction > u_threshold) then
-         flux = u_friction * u_friction * (u_friction - u_threshold)
-      endif
+      if (allocated(this%work_array_1)) deallocate(this%work_array_1)
+      if (allocated(this%work_array_2)) deallocate(this%work_array_2)
 
-      call error_mgr%pop_context()
-   end subroutine Draxler_HorizFlux
+      if (allocated(this%dust_horizontal_flux)) deallocate(this%dust_horizontal_flux)
+      if (allocated(this%dust_moisture_correction)) deallocate(this%dust_moisture_correction)
+      if (allocated(this%dust_effective_threshold)) deallocate(this%dust_effective_threshold)
 
-   !> \brief Kawamura horizontal flux calculation
-   !!
-   !! TODO: Add proper reference
-   !!
-   !! \param u_friction Friction velocity [m s-1]
-   !! \param u_threshold Threshold velocity [m s-1]
-   !! \param flux Horizontal flux [kg m-1 s-1]
-   !! \param error_mgr Error manager for error handling
-   !! \param rc Return code
-   !!
-   !! \ingroup catchem_dust_process
-   subroutine Kawamura_HorizFlux(u_friction, u_threshold, flux, error_mgr, rc)
-      implicit none
+   end subroutine finalize_fengsha_state
 
-      real(fp), intent(in) :: u_friction   !< Friction velocity [m s-1]
-      real(fp), intent(in) :: u_threshold  !< Threshold velocity [m s-1]
-      real(fp), intent(out) :: flux        !< Horizontal flux [kg m-1 s-1]
-      type(ErrorManagerType), intent(inout) :: error_mgr !< Error manager
-      integer, intent(out) :: rc           !< Return code
+   !> Initialize ginoux scheme configuration
+   subroutine init_ginoux_config(this, parent_config, error_handler)
+      class(DustSchemeGINOUXConfig), intent(inout) :: this
+      type(DustConfig), intent(in) :: parent_config
+      type(ErrorHandler), intent(inout) :: error_handler
 
-      call error_mgr%push_context('Kawamura_HorizFlux', 'Computing Kawamura horizontal flux')
+      ! Set required meteorological fields
+      this%required_met_fields(1) = 'FRLAKE'
+      this%required_met_fields(2) = 'GWETTOP'
+      this%required_met_fields(3) = 'U10M'
+      this%required_met_fields(4) = 'V10M'
+      this%required_met_fields(5) = 'SSM'
 
-      flux = 0.0_fp
-      rc = CC_SUCCESS
+      ! Initialize scheme-specific parameters
+      ! TODO: Load from configuration file or use defaults
 
-      if (u_friction > u_threshold) then
-         flux = u_friction * u_friction * u_friction * (1.0_fp - u_threshold / u_friction)
-      endif
+   end subroutine init_ginoux_config
 
-      call error_mgr%pop_context()
-   end subroutine Kawamura_HorizFlux
+   !> Validate ginoux scheme configuration
+   subroutine validate_ginoux_config(this, error_handler)
+      class(DustSchemeGINOUXConfig), intent(inout) :: this
+      type(ErrorHandler), intent(inout) :: error_handler
 
-   !> \brief Marticorena & Bergametti (1995) drag partition
-   !!
-   !! TODO: Add proper reference
-   !!
-   !! \param roughness Surface roughness [m]
-   !! \param drag_partition Drag partition factor [dimensionless]
-   !! \param error_mgr Error manager for error handling
-   !! \param rc Return code
-   !!
-   !! \ingroup catchem_dust_process
-   subroutine MB95_DragPartition(roughness, drag_partition, error_mgr, rc)
-      implicit none
+      ! TODO: Add scheme-specific validation
 
-      real(fp), intent(in) :: roughness       !< Surface roughness [m]
-      real(fp), intent(out) :: drag_partition !< Drag partition factor [dimensionless]
-      type(ErrorManagerType), intent(inout) :: error_mgr !< Error manager
-      integer, intent(out) :: rc              !< Return code
+   end subroutine validate_ginoux_config
 
-      call error_mgr%push_context('MB95_DragPartition', 'Computing MB95 drag partition')
+   !> Finalize ginoux scheme configuration
+   subroutine finalize_ginoux_config(this)
+      class(DustSchemeGINOUXConfig), intent(inout) :: this
 
-      ! Simplified implementation
-      drag_partition = 1.0_fp / (1.0_fp + roughness * 1000.0_fp)
-      rc = CC_SUCCESS
+      ! Nothing to deallocate for basic configuration
 
-      call error_mgr%pop_context()
-   end subroutine MB95_DragPartition
+   end subroutine finalize_ginoux_config
 
-   !> \brief Marticorena & Bergametti (1997) threshold velocity
-   !!
-   !! TODO: Add proper reference
-   !!
-   !! \param particle_diameter Particle diameter [m]
-   !! \param particle_density Particle density [kg m-3]
-   !! \param u_threshold Threshold velocity [m s-1]
-   !! \param error_mgr Error manager for error handling
-   !! \param rc Return code
-   !!
-   !! \ingroup catchem_dust_process
-   subroutine MB97_threshold_velocity(particle_diameter, particle_density, u_threshold, error_mgr, rc)
-      implicit none
+   !> Initialize ginoux scheme state
+   subroutine init_ginoux_state(this, parent_state, error_handler)
+      class(DustSchemeGINOUXState), intent(inout) :: this
+      type(DustState), intent(in) :: parent_state
+      type(ErrorHandler), intent(inout) :: error_handler
 
-      real(fp), intent(in) :: particle_diameter !< Particle diameter [m]
-      real(fp), intent(in) :: particle_density  !< Particle density [kg m-3]
-      real(fp), intent(out) :: u_threshold      !< Threshold velocity [m s-1]
-      type(ErrorManagerType), intent(inout) :: error_mgr !< Error manager
-      integer, intent(out) :: rc                !< Return code
+      call this%allocate_arrays(parent_state%n_columns, error_handler)
 
-      call error_mgr%push_context('MB97_threshold_velocity', 'Computing MB97 threshold velocity')
+   end subroutine init_ginoux_state
 
-      ! Simplified implementation
-      u_threshold = sqrt(particle_diameter * particle_density / 1000.0_fp)
-      rc = CC_SUCCESS
+   !> Allocate ginoux scheme state arrays
+   subroutine allocate_ginoux_state_arrays(this, n_columns, error_handler)
+      class(DustSchemeGINOUXState), intent(inout) :: this
+      integer, intent(in) :: n_columns
+      type(ErrorHandler), intent(inout) :: error_handler
 
-      call error_mgr%pop_context()
-   end subroutine MB97_threshold_velocity
+      integer :: alloc_stat
+
+      ! Allocate working arrays
+      allocate(this%work_array_1(1, n_columns), &
+               stat=alloc_stat)
+      if (alloc_stat /= 0) then
+         call error_handler%set_error(ERROR_MEMORY, &
+            "Failed to allocate ginoux work_array_1")
+         return
+      end if
+
+      allocate(this%work_array_2(1, n_columns), &
+               stat=alloc_stat)
+      if (alloc_stat /= 0) then
+         call error_handler%set_error(ERROR_MEMORY, &
+            "Failed to allocate ginoux work_array_2")
+         return
+      end if
+
+      ! Allocate diagnostic arrays
+      allocate(this%dust_horizontal_flux(n_columns), stat=alloc_stat)
+      if (alloc_stat /= 0) then
+         call error_handler%set_error(ERROR_MEMORY, &
+            "Failed to allocate ginoux dust_horizontal_flux array")
+         return
+      end if
+      allocate(this%dust_moisture_correction(n_columns), stat=alloc_stat)
+      if (alloc_stat /= 0) then
+         call error_handler%set_error(ERROR_MEMORY, &
+            "Failed to allocate ginoux dust_moisture_correction array")
+         return
+      end if
+      allocate(this%dust_effective_threshold(n_columns), stat=alloc_stat)
+      if (alloc_stat /= 0) then
+         call error_handler%set_error(ERROR_MEMORY, &
+            "Failed to allocate ginoux dust_effective_threshold array")
+         return
+      end if
+
+   end subroutine allocate_ginoux_state_arrays
+
+   !> Reset ginoux scheme state
+   subroutine reset_ginoux_state(this)
+      class(DustSchemeGINOUXState), intent(inout) :: this
+
+      if (allocated(this%work_array_1)) this%work_array_1 = 0.0_fp
+      if (allocated(this%work_array_2)) this%work_array_2 = 0.0_fp
+
+      if (allocated(this%dust_horizontal_flux)) this%dust_horizontal_flux = 0.0_fp
+      if (allocated(this%dust_moisture_correction)) this%dust_moisture_correction = 0.0_fp
+      if (allocated(this%dust_effective_threshold)) this%dust_effective_threshold = 0.0_fp
+
+   end subroutine reset_ginoux_state
+
+   !> Finalize ginoux scheme state
+   subroutine finalize_ginoux_state(this)
+      class(DustSchemeGINOUXState), intent(inout) :: this
+
+      if (allocated(this%work_array_1)) deallocate(this%work_array_1)
+      if (allocated(this%work_array_2)) deallocate(this%work_array_2)
+
+      if (allocated(this%dust_horizontal_flux)) deallocate(this%dust_horizontal_flux)
+      if (allocated(this%dust_moisture_correction)) deallocate(this%dust_moisture_correction)
+      if (allocated(this%dust_effective_threshold)) deallocate(this%dust_effective_threshold)
+
+   end subroutine finalize_ginoux_state
+
+
+   !> Convert integer to string (utility function)
+   function int_to_string(int_val) result(str_val)
+      integer, intent(in) :: int_val
+      character(len=32) :: str_val
+
+      write(str_val, '(I0)') int_val
+      str_val = adjustl(str_val)
+
+   end function int_to_string
 
 end module DustCommon_Mod

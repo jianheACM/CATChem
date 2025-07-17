@@ -46,6 +46,7 @@ module utilities_mod
    public :: is_valid_pressure
    public :: check_array_bounds
    public :: safe_divide
+   public :: calculate_geopotential_height
 
 contains
 
@@ -234,15 +235,19 @@ contains
 
    end function calculate_air_density
 
-   !> \brief Calculate atmospheric scale height
+   !> \brief Calculate atmospheric scale height using geopotential height
    !!
    !! \param[in] temperature Temperature [K]
    !! \param[out] rc Return code
-   function calculate_scale_height(temperature, rc) result(scale_height)
+   !! \param[in] z (optional) Geometric height above surface [m]
+   function calculate_scale_height(temperature, rc, z) result(scale_height)
+      use constants, only: g0, Rd, Re
       implicit none
       real(fp), intent(in) :: temperature
       integer, intent(out) :: rc
+      real(fp), intent(in), optional :: z
       real(fp) :: scale_height
+      real(fp) :: g_local
 
       rc = CC_SUCCESS
 
@@ -252,7 +257,13 @@ contains
          return
       endif
 
-      scale_height = Rd * temperature / g0
+      if (present(z)) then
+         g_local = g0 * (Re / (Re + z))
+      else
+         g_local = g0
+      endif
+
+      scale_height = Rd * temperature / g_local
 
    end function calculate_scale_height
 
@@ -323,5 +334,35 @@ contains
       endif
 
    end function safe_divide
+
+   !> \brief Calculate geopotential height difference between two pressure levels
+   !!
+   !! \param[in] p1 Pressure at lower level [Pa]
+   !! \param[in] p2 Pressure at upper level [Pa]
+   !! \param[in] Tv_mean Mean virtual temperature between levels [K]
+   !! \param[out] rc Return code
+   function calculate_geopotential_height(p1, p2, Tv_mean, rc) result(z)
+      use constants, only: g0, Rd
+      implicit none
+      real(fp), intent(in) :: p1, p2, Tv_mean
+      integer, intent(out) :: rc
+      real(fp) :: z
+
+      rc = CC_SUCCESS
+      z = 0.0_fp
+
+      if (p1 <= 0.0_fp .or. p2 <= 0.0_fp .or. Tv_mean <= 0.0_fp) then
+         rc = ERROR_INVALID_INPUT
+         return
+      endif
+
+      if (p1 <= p2) then
+         rc = ERROR_INVALID_INPUT
+         return
+      endif
+
+      z = (Rd * Tv_mean / g0) * log(p1 / p2)
+
+   end function calculate_geopotential_height
 
 end module utilities_mod

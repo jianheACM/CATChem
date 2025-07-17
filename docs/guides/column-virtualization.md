@@ -19,16 +19,40 @@ Column virtualization treats atmospheric columns as the primary computational un
 module ColumnInterface_Mod
   implicit none
 
-  type :: ColumnDataType
-    real(fp), allocatable :: temperature(:)    ! K
-    real(fp), allocatable :: pressure(:)       ! Pa
-    real(fp), allocatable :: density(:)        ! kg/m³
-    real(fp), allocatable :: species(:,:)      ! kg/kg
-  end type
+  type :: VirtualColumnType
+    real(fp), pointer :: temperature(:) => null()    ! K
+    real(fp), pointer :: pressure(:) => null()       ! Pa
+    real(fp), pointer :: density(:) => null()        ! kg/m³
+    real(fp), pointer :: species(:,:) => null()      ! kg/kg
+    integer :: column_index
+    integer :: num_levels
+  contains
+    procedure :: extract_from_state => vc_extract_from_state
+    procedure :: update_state => vc_update_state
+    procedure :: is_valid => vc_is_valid
+  end type VirtualColumnType
+
+  type :: ColumnProcessorType
+    integer :: batch_size = 1000
+    logical :: use_openmp = .true.
+  contains
+    procedure :: process_batch => cp_process_batch
+    procedure :: set_batch_size => cp_set_batch_size
+    procedure :: enable_openmp => cp_enable_openmp
+  end type ColumnProcessorType
+
+  type :: ColumnViewType
+    class(*), pointer :: data_ptr => null()
+    integer :: dimensions(3)
+    integer :: column_index
+  contains
+    procedure :: create_view => cv_create_view
+    procedure :: get_column_pointer => cv_get_column_pointer
+  end type ColumnViewType
 
   interface
     subroutine process_column(column_data, params, rc)
-      type(ColumnDataType), intent(inout) :: column_data
+      type(VirtualColumnType), intent(inout) :: column_data
     end subroutine
   end interface
 
@@ -38,12 +62,20 @@ end module
 ### Column Processing Loop
 
 ```fortran
-! Automatic parallelization
+! Automatic parallelization with batch processing
+type(ColumnProcessorType) :: processor
+type(VirtualColumnType), allocatable :: columns(:)
+
+! Configure batch processing
+call processor%set_batch_size(1000)
+call processor%enable_openmp(.true.)
+
+! Process columns in batches
 !$OMP PARALLEL DO PRIVATE(column_data)
 do i = 1, num_columns
-  call extract_column(state_container, i, column_data)
-  call process_column(column_data, params, rc)
-  call update_column(state_container, i, column_data)
+  call extract_column(state_manager, i, columns(i), rc)
+  call process_column(columns(i), params, rc)
+  call update_column(state_manager, i, columns(i), rc)
 end do
 !$OMP END PARALLEL DO
 ```

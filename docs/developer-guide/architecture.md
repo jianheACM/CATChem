@@ -19,32 +19,46 @@ CATChem follows a modern, modular architecture designed for:
 ```mermaid
 graph TB
     A[User Interface Layer] --> B[API Layer]
-    B --> C[Configuration Management]
-    B --> D[State Management]
-    B --> E[Process Management]
+    B --> C[CATChem Core Framework]
 
-    C --> F[YAML Parser]
-    C --> G[Validation Engine]
+    C --> D[Configuration Manager]
+    C --> E[State Manager]
+    C --> F[Grid Manager]
+    C --> G[Process Manager]
+    C --> H[Diagnostic Manager]
+    C --> I[Error Manager]
 
-    D --> H[StateContainer]
-    D --> I[Column Virtualization]
+    D --> J[YAML Parser]
+    D --> K[Config Validation]
 
-    E --> J[Process Registry]
-    E --> K[Process Factory]
-    E --> L[Process Scheduler]
+    E --> L[Met State]
+    E --> M[Chem State]
+    E --> N[State Validation]
 
-    J --> M[Chemistry Processes]
-    J --> N[Transport Processes]
-    J --> O[Emission Processes]
-    J --> P[Loss Processes]
+    F --> O[Grid Geometry]
+    F --> P[Column Iterator]
 
-    M --> Q[Diagnostic System]
-    N --> Q
-    O --> Q
-    P --> Q
+    G --> Q[Process Factory]
+    G --> R[Column Processor]
+    G --> S[Process Registry]
 
-    Q --> R[Output Management]
-    Q --> S[Performance Monitoring]
+    S --> T[Chemistry Processes]
+    S --> U[Transport Processes]
+    S --> V[Emission Processes]
+    S --> W[Loss Processes]
+
+    H --> X[Diagnostic Registry]
+    H --> Y[Output Management]
+    H --> Z[Performance Monitoring]
+
+    T --> AA[Column Interface]
+    U --> AA
+    V --> AA
+    W --> AA
+
+    AA --> BB[Virtual Columns]
+    AA --> CC[Column Views]
+    AA --> DD[Batch Processing]
 ```
 
 ### Layer Responsibilities
@@ -154,84 +168,227 @@ end type Configuration_t
 
 ## Core Architecture Components
 
+### CATChem Core Framework
+
+```fortran
+module CATChemCore_Mod
+  ! Central CATChem core that owns and manages all major components
+  type :: CATChemCoreType
+    type(ConfigManagerType) :: config_manager
+    type(StateManagerType) :: state_manager
+    type(GridManagerType) :: grid_manager
+    type(DiagnosticManagerType) :: diagnostic_manager
+    type(ProcessManagerType) :: process_manager
+    type(ErrorManagerType) :: error_manager
+  contains
+    procedure :: init => core_init
+    procedure :: run_timestep => core_run_timestep
+    procedure :: finalize => core_finalize
+    procedure :: get_state_manager => core_get_state_manager
+    procedure :: get_diagnostic_manager => core_get_diagnostic_manager
+  end type CATChemCoreType
+```
+
 ### Configuration Management
 
 ```fortran
 module ConfigManager_Mod
-
-  ! Main configuration manager
-  type :: ConfigManager_t
-    type(ConfigValidator_t) :: validator
-    type(ConfigurationTree_t) :: config_tree
-    character(len=:), allocatable :: source_file
+  ! Enhanced configuration management with YAML support
+  type :: ConfigManagerType
+    type(ConfigDataType) :: config_data
+    type(ErrorManagerType), pointer :: error_manager
+    character(len=:), allocatable :: config_file_path
+    logical :: is_initialized = .false.
   contains
-    procedure :: load_from_file => cm_load_from_file
-    procedure :: validate => cm_validate
-    procedure :: get_configuration => cm_get_configuration
-  end type ConfigManager_t
-
-  ! Configuration validation
-  type :: ConfigValidator_t
-    type(SchemaDefinition_t) :: schema
-  contains
-    procedure :: validate_against_schema => cv_validate_against_schema
-    procedure :: check_required_fields => cv_check_required_fields
-    procedure :: validate_constraints => cv_validate_constraints
-  end type ConfigValidator_t
+    procedure :: init => config_manager_init
+    procedure :: load_from_file => config_manager_load_from_file
+    procedure :: validate_config => config_manager_validate_config
+    procedure :: apply_to_container => config_manager_apply_to_container
+    procedure :: get_config_data => config_manager_get_config_data
+  end type ConfigManagerType
 ```
 
 ### State Management
 
 ```fortran
-module StateInterface_Mod
-
-  ! Main state interface
-  type :: StateInterface_t
-    type(StateContainer_t) :: container
-    type(ColumnVirtualization_t) :: column_manager
+module StateManager_Mod
+  ! Unified state management for all CATChem data
+  type :: StateManagerType
+    type(MetStateType) :: met_state
+    type(ChemStateType) :: chem_state
+    type(StateValidatorUtilsType) :: validator
+    integer :: status = STATE_STATUS_UNINITIALIZED
   contains
-    procedure :: get_species => si_get_species
-    procedure :: update_species => si_update_species
-    procedure :: get_meteorology => si_get_meteorology
-    procedure :: update_meteorology => si_update_meteorology
-  end type StateInterface_t
+    procedure :: init => state_manager_init
+    procedure :: validate_state => state_manager_validate_state
+    procedure :: get_met_state => state_manager_get_met_state
+    procedure :: get_chem_state => state_manager_get_chem_state
+    procedure :: finalize => state_manager_finalize
+  end type StateManagerType
 
-  ! State storage container
-  type :: StateContainer_t
-    type(FieldDictionary_t) :: fields
-    type(MetadataDictionary_t) :: metadata
+  ! State validation utilities
+  type :: StateValidatorUtilsType
   contains
-    procedure :: add_field => sc_add_field
-    procedure :: get_field => sc_get_field
-    procedure :: update_field => sc_update_field
-  end type StateContainer_t
+    procedure :: validate_met_fields => svu_validate_met_fields
+    procedure :: validate_chem_fields => svu_validate_chem_fields
+    procedure :: check_physical_consistency => svu_check_physical_consistency
+  end type StateValidatorUtilsType
 ```
 
 ### Process Management
 
 ```fortran
 module ProcessManager_Mod
-
-  ! Process manager coordinates all processes
-  type :: ProcessManager_t
-    type(ProcessRegistry_t) :: registry
-    type(ProcessScheduler_t) :: scheduler
-    class(ProcessInterface_t), allocatable :: processes(:)
+  ! High-level process management following architecture guide
+  type :: ProcessManagerType
+    class(ProcessInterface), allocatable :: processes(:)
+    integer :: num_processes = 0
+    integer :: max_processes = 50
+    type(ProcessFactoryType) :: factory
+    type(ColumnProcessorType) :: column_processor
   contains
-    procedure :: initialize => pm_initialize
-    procedure :: add_process => pm_add_process
-    procedure :: run_processes => pm_run_processes
-    procedure :: finalize => pm_finalize
-  end type ProcessManager_t
+    procedure :: init => manager_init
+    procedure :: add_process => manager_add_process
+    procedure :: run_all => manager_run_all
+    procedure :: run_column_processes => manager_run_column_processes
+    procedure :: finalize => manager_finalize
+    procedure :: configure_run_phases => manager_configure_run_phases
+  end type ProcessManagerType
 
-  ! Process scheduling and dependencies
-  type :: ProcessScheduler_t
-    type(DependencyGraph_t) :: dependencies
-    integer, allocatable :: execution_order(:)
+  ! Process factory for creating process instances
+  type :: ProcessFactoryType
   contains
-    procedure :: calculate_execution_order => ps_calculate_execution_order
-    procedure :: check_dependencies => ps_check_dependencies
-  end type ProcessScheduler_t
+    procedure :: create_process => factory_create_process
+    procedure :: register_process_type => factory_register_process_type
+  end type ProcessFactoryType
+```
+
+### Grid Management
+
+```fortran
+module GridManager_Mod
+  ! Grid and domain management
+  type :: GridManagerType
+    type(GridGeometryType) :: geometry
+    type(ColumnIteratorType) :: column_iterator
+    integer :: total_columns
+  contains
+    procedure :: init => grid_manager_init
+    procedure :: get_column_iterator => grid_manager_get_column_iterator
+    procedure :: get_geometry => grid_manager_get_geometry
+  end type GridManagerType
+
+  ! Column iteration for parallelization
+  type :: ColumnIteratorType
+    integer :: current_column = 0
+    integer :: total_columns = 0
+  contains
+    procedure :: next => column_iterator_next
+    procedure :: reset => column_iterator_reset
+    procedure :: get_current => column_iterator_get_current
+  end type ColumnIteratorType
+```
+
+### Diagnostic Management
+
+```fortran
+module DiagnosticManager_Mod
+  ! Central diagnostic manager
+  type :: DiagnosticManagerType
+    type(DiagnosticRegistryType) :: registry
+    type(ErrorManagerType), pointer :: error_manager
+    logical :: is_initialized = .false.
+  contains
+    procedure :: init => diagnostic_manager_init
+    procedure :: register_process_diagnostics => dm_register_process_diagnostics
+    procedure :: collect_all_diagnostics => dm_collect_all_diagnostics
+    procedure :: write_output => dm_write_output
+    procedure :: finalize => diagnostic_manager_finalize
+  end type DiagnosticManagerType
+```
+
+### Additional Core Modules
+
+#### Species Management
+
+```fortran
+module Species_Mod
+  ! Chemical species definition and utilities
+  type :: SpeciesType
+    character(len=:), allocatable :: name
+    character(len=:), allocatable :: units
+    real(fp) :: molecular_weight
+    logical :: is_active
+  end type SpeciesType
+```
+
+#### Chemical Species Utilities
+
+```fortran
+module ChemSpeciesUtils_Mod
+  ! Utilities for chemical species handling
+  contains
+    procedure :: validate_species_data
+    procedure :: convert_species_units
+    procedure :: check_species_consistency
+```
+
+#### Unit Conversion
+
+```fortran
+module UnitConversion_Mod
+  ! Comprehensive unit conversion utilities
+  contains
+    procedure :: convert_concentration_units
+    procedure :: convert_pressure_units
+    procedure :: convert_temperature_units
+    procedure :: validate_unit_compatibility
+```
+
+#### Meteorological Utilities
+
+```fortran
+module Met_Utilities_Mod
+  ! Meteorological data processing utilities
+  contains
+    procedure :: interpolate_met_data
+    procedure :: calculate_air_density
+    procedure :: compute_scale_heights
+    procedure :: validate_met_consistency
+```
+
+#### External Emission Data
+
+```fortran
+module ExtEmisData_Mod
+  ! External emission data management
+  type :: ExtEmisDataType
+    real(fp), allocatable :: emission_rates(:,:,:,:)
+    character(len=:), allocatable :: species_names(:)
+    logical :: is_initialized = .false.
+  contains
+    procedure :: load_emission_data
+    procedure :: interpolate_emissions
+    procedure :: validate_emission_data
+  end type ExtEmisDataType
+```
+
+#### Time State Management
+
+```fortran
+module TimeState_Mod
+  ! Time state and temporal processing
+  type :: TimeStateType
+    integer :: current_year
+    integer :: current_month
+    integer :: current_day
+    integer :: current_hour
+    real(fp) :: time_step_seconds
+  contains
+    procedure :: advance_time
+    procedure :: get_current_time
+    procedure :: validate_time_step
+  end type TimeStateType
 ```
 
 ## Column Virtualization Architecture
@@ -241,13 +398,52 @@ module ProcessManager_Mod
 Column virtualization transforms 3D atmospheric modeling into efficient 1D processing:
 
 ```fortran
-! Original 3D processing (inefficient)
-do i = 1, nx
-  do j = 1, ny
-    do k = 1, nz
-      ! Process point (i,j,k)
-      call process_point(data(i,j,k), ...)
-    end do
+! Column-based processing (efficient)
+!$OMP PARALLEL DO PRIVATE(column_data)
+do col = 1, num_columns
+  call extract_column(state_container, col, column_data)
+  call process_column(column_data, ...)
+  call update_column(state_container, col, column_data)
+end do
+!$OMP END PARALLEL DO
+```
+
+### Column Interface Implementation
+
+```fortran
+module ColumnInterface_Mod
+  ! Virtual column interface for multi-dimensional data
+  type :: VirtualColumnType
+    real(fp), pointer :: temperature(:) => null()
+    real(fp), pointer :: pressure(:) => null()
+    real(fp), pointer :: species(:,:) => null()
+    integer :: column_index
+    integer :: num_levels
+  contains
+    procedure :: extract_from_state => vc_extract_from_state
+    procedure :: update_state => vc_update_state
+    procedure :: is_valid => vc_is_valid
+  end type VirtualColumnType
+
+  ! Column processor for batch operations
+  type :: ColumnProcessorType
+    integer :: batch_size = 1000
+    logical :: use_openmp = .true.
+  contains
+    procedure :: process_batch => cp_process_batch
+    procedure :: set_batch_size => cp_set_batch_size
+    procedure :: enable_openmp => cp_enable_openmp
+  end type ColumnProcessorType
+
+  ! Column view for zero-copy access
+  type :: ColumnViewType
+    class(*), pointer :: data_ptr => null()
+    integer :: dimensions(3)
+    integer :: column_index
+  contains
+    procedure :: create_view => cv_create_view
+    procedure :: get_column_pointer => cv_get_column_pointer
+  end type ColumnViewType
   end do
 end do
 

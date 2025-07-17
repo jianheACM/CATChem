@@ -1,193 +1,157 @@
-!> \file DustScheme_Ginoux_Mod.F90
-!! \brief Modern Ginoux dust emission scheme implementation - StateContainer independent
-!! \ingroup dust_schemes
+!> \file DustScheme_GINOUX_Mod.F90
+!! \brief Ginoux dust emission scheme
 !!
-!! \author CATChem Development Team
-!! \date 2025
-!! \version 2.0
+!! Pure science kernel for ginoux scheme in dust process.
+!! This module contains ONLY the computational algorithm with NO infrastructure dependencies.
+!! Uses only basic Fortran types for maximum portability and reusability.
 !!
-!! \details
-!! The Ginoux scheme calculates dust emissions based on surface wind speed,
-!! soil moisture, and surface characteristics. It provides size-resolved
-!! dust emission fluxes for integration with atmospheric transport models.
+!! SCIENCE CUSTOMIZATION GUIDE:
+!! 1. Modify the algorithm in compute_ginoux (search for "TODO")
+!! 2. Add scheme-specific helper subroutines as needed
+!! 3. Update physical constants for your scheme
+!! 4. Customize the environmental response functions
 !!
-!! \section ginoux_reference Reference
-!! Ginoux, P., "Sources and distributions of dust aerosols simulated with the GOCART model",
-!! Journal of Geophysical Research, vol. 106, no. D17, pp. 20,255–20,273, 2001.
-!! doi:10.1029/2000JD000053.
+!! INFRASTRUCTURE RESPONSIBILITIES (handled by host model):
+!! - Parameter initialization and validation
+!! - Input array validation and error handling
+!! - Memory management and array allocation
+!! - Integration with host model time stepping
+!!
+!! Generated on: 2025-07-09T12:43:18.000561
+!! Author: Barry Baker
+!! Reference: Ginoux et al. [2001]
+module DustScheme_GINOUX_Mod
 
-!!
-!! \author Barry baker
-!! \date 05/2024
-!! \ingroup catchem_dust_process
-module DustScheme_Ginoux_Mod
-   use precision_mod, only: fp, ZERO
-   use constants, only: g0
-   use DustCommon_Mod
+   use iso_fortran_env, only: fp => real64
+
    implicit none
    private
 
-   public :: run_ginoux_scheme
+   ! Public interface - pure science only
+   public :: compute_ginoux
+   public :: ginoux_params_t
+
+   ! Physical constants (modify as needed for your scheme)
+   real(fp), parameter :: R_GAS = 8.314_fp           ! Universal gas constant [J/mol/K]
+   real(fp), parameter :: T_STANDARD = 303.15_fp    ! Standard reference temperature [K]
+   real(fp), parameter :: DEFAULT_SCALING = 1.0e-9_fp ! Default emission scaling factor
+
+
+   !> Science parameters for ginoux scheme
+   !! Host model is responsible for initializing and validating these
+   type :: ginoux_params_t
+      real(fp) :: Ch_DU  ! Dust tuning coefficient per species 
+   end type ginoux_params_t
+
 
 contains
 
-   !> \brief Execute Ginoux dust emission scheme (single-column)
+   !> Pure science computation for ginoux scheme
    !!
-   !! This is a placeholder implementation for the Ginoux dust emission scheme
-   !! for a single column. Currently returns zero emissions.
+   !! This is a pure computational kernel implementing Ginoux dust emission scheme.
+   !! NO error checking, validation, or infrastructure concerns.
+   !! Host model must ensure all inputs are valid before calling.
    !!
-   subroutine run_ginoux_scheme(n_dust_species, &
-                                ! Meteorological inputs (scalars)
-                                wind_friction_velocity, &
-                                wind_speed_10m, &
-                                surface_temperature, &
-                                air_density, &
-                                soil_moisture_top, &
-                                surface_roughness, &
-                                ! Surface properties (scalars)
-                                clay_fraction, &
-                                sand_fraction, &
-                                soil_type, &
-                                ocean_fraction, &
-                                land_ice_fraction, &
-                                snow_fraction, &
-                                sediment_supply_map, &
-                                roughness_drag, &
-                                ! Dust size distribution (1D arrays)
-                                effective_radius, &
-                                lower_radius, &
-                                upper_radius, &
-                                ! Configuration parameters
-                                alpha_scale, &
-                                beta_scale, &
-                                moist_opt, &
-                                drag_opt, &
-                                horiz_flux_opt, &
-                                ! Outputs (1D array for size bins)
-                                total_emission, &
-                                emission_per_species, &
-                                rc)
-      implicit none
+   !! @param[in]  num_layers     Number of vertical layers
+   !! @param[in]  num_species    Number of chemical species
+   !! @param[in]  params         Scheme parameters (pre-validated by host)
+   !! @param[in]  FRLAKE    FRLAKE field [appropriate units]
+   !! @param[in]  GWETTOP    GWETTOP field [appropriate units]
+   !! @param[in]  U10M    U10M field [appropriate units]
+   !! @param[in]  V10M    V10M field [appropriate units]
+   !! @param[in]  SSM    SSM field [appropriate units]
+   !! @param[in]  species_conc   Species concentrations [mol/mol] (num_layers, num_species)
+   !! @param[out] emission_flux  Emission fluxes [kg/m²/s] (num_layers, num_species)
+   pure subroutine compute_ginoux( &
+      num_layers, &
+      num_species, &
+      params, &
+      FRLAKE, &      GWETTOP, &      U10M, &      V10M, &      SSM, &
+      species_conc, &
+      emission_flux &
+   )
 
-      ! Inputs
-      integer, intent(in) :: n_dust_species
+      ! Arguments
+      integer, intent(in) :: num_layers
+      integer, intent(in) :: num_species
+      type(ginoux_params_t), intent(in) :: params
+      real(fp), intent(in) :: FRLAKE(num_layers)
+      real(fp), intent(in) :: GWETTOP(num_layers)
+      real(fp), intent(in) :: U10M(num_layers)
+      real(fp), intent(in) :: V10M(num_layers)
+      real(fp), intent(in) :: SSM(num_layers)
+      real(fp), intent(in) :: species_conc(num_layers, num_species)
+      real(fp), intent(out) :: emission_flux(num_layers, num_species)
 
-      ! Meteorological fields (scalars - single column)
-      real(fp), intent(in) :: wind_friction_velocity   ! [m/s]
-      real(fp), intent(in) :: wind_speed_10m           ! [m/s]
-      real(fp), intent(in) :: surface_temperature      ! [K]
-      real(fp), intent(in) :: air_density              ! [kg/m³]
-      real(fp), intent(in) :: soil_moisture_top        ! [m³/m³]
-      real(fp), intent(in) :: surface_roughness        ! [m]
+      ! Local variables
+      integer :: k, species_idx
+      real(fp) :: base_emission_factor
+      real(fp) :: temperature_factor
+      real(fp) :: light_factor
+      real(fp) :: combined_factor
 
-      ! Surface property fields (scalars - single column)
-      real(fp), intent(in) :: clay_fraction            ! [0-1]
-      real(fp), intent(in) :: sand_fraction            ! [0-1]
-      integer, intent(in)  :: soil_type                ! [1-19]
-      real(fp), intent(in) :: ocean_fraction           ! [0-1]
-      real(fp), intent(in) :: land_ice_fraction        ! [0-1]
-      real(fp), intent(in) :: snow_fraction            ! [0-1]
-      real(fp), intent(in) :: sediment_supply_map      ! [0-1]
-      real(fp), intent(in) :: roughness_drag           ! [0-1]
+      ! Initialize output (pure subroutines must initialize all outputs)
+      emission_flux = 0.0_fp
 
-      ! Size distribution [n_dust_species]
-      real(fp), intent(in) :: effective_radius(:)      ! [m]
-      real(fp), intent(in) :: lower_radius(:)          ! [m]
-      real(fp), intent(in) :: upper_radius(:)          ! [m]
+      ! Main computation loop - CUSTOMIZE THIS SECTION FOR YOUR SCHEME
+      do k = 1, num_layers
 
-      ! Configuration parameters
-      real(fp), intent(in) :: alpha_scale, beta_scale
-      integer, intent(in)  :: moist_opt, drag_opt, horiz_flux_opt
+         ! TODO: Replace this generic implementation with your scheme's algorithm
+         ! This is a placeholder that demonstrates the expected structure
 
-      ! Outputs (scalars and 1D array for size bins)
-      real(fp), intent(out) :: total_emission              ! [μg/m²/s]
-      real(fp), intent(out) :: emission_per_species(:)     ! [μg/m²/s] [n_dust_species]
-      integer, intent(out)  :: rc
+         ! Initialize environmental factors
+         temperature_factor = 1.0_fp
+         light_factor = 1.0_fp
 
-      ! Local variables for Ginoux scheme computation
-      integer :: n
-      logical :: do_dust
-      real(fp) :: u_threshold, topographic_factor, bare_soil_factor
-      real(fp) :: erodibility_factor, wind_factor, emission_strength
-      real(fp) :: distribution(n_dust_species)
+         ! Apply scheme-specific environmental responses
+         ! Generic field usage (customize for your scheme)
+         ! Consider how FRLAKE affects your emissions
+         ! Generic field usage (customize for your scheme)
+         ! Consider how GWETTOP affects your emissions
+         ! Generic field usage (customize for your scheme)
+         ! Consider how U10M affects your emissions
+         ! Generic field usage (customize for your scheme)
+         ! Consider how V10M affects your emissions
+         ! Generic field usage (customize for your scheme)
+         ! Consider how SSM affects your emissions
 
-      ! Ginoux scheme constants
-      real(fp), parameter :: wind_threshold = 6.5_fp    ! Threshold wind speed [m/s]
-      real(fp), parameter :: clay_limit = 0.2_fp        ! Clay fraction limit
-      real(fp), parameter :: sand_optimal = 0.3_fp      ! Optimal sand fraction
+         ! Combine environmental factors
+         combined_factor = temperature_factor * light_factor
 
-      ! Initialize
-      rc = 0
-      total_emission = ZERO
-      emission_per_species = ZERO
+         ! Apply to each species
+         do species_idx = 1, num_species
+            ! Base emission factor (customize this for species-specific emissions)
+            base_emission_factor = DEFAULT_SCALING
 
-      ! Check if dust emission should occur
-      do_dust = .true.
+            ! Compute emission flux using your scheme's formula
+            ! This is a simple example - replace with your actual algorithm
+            emission_flux(k, species_idx) = base_emission_factor * combined_factor * &
+                                          species_conc(k, species_idx)
 
-      ! Don't do dust over water, ice, or snow
-      if (ocean_fraction > 0.1_fp .or. land_ice_fraction > 0.1_fp .or. snow_fraction > 0.1_fp) then
-         do_dust = .false.
-      endif
+            ! Ensure non-negative emissions
+            emission_flux(k, species_idx) = max(0.0_fp, emission_flux(k, species_idx))
+         end do
 
-      ! Don't do dust over frozen soil
-      if (surface_temperature <= 273.15_fp) do_dust = .false.
+      end do
 
-      ! Don't do dust over inappropriate soil types
-      if (soil_type == 15 .or. soil_type == 16 .or. soil_type == 18) then
-         do_dust = .false.
-      endif
+   end subroutine compute_ginoux
 
-      if (.not. do_dust) return
+   ! =======================================================================
+   ! SCHEME-SPECIFIC HELPER SUBROUTINES
+   ! =======================================================================
+   ! Add your custom scientific algorithms here as pure functions/subroutines
+   ! Examples: environmental response functions, species-specific calculations, etc.
 
-      ! Ginoux scheme: Compute topographic source function
-      ! Based on sediment supply map and surface characteristics
-      topographic_factor = sediment_supply_map * alpha_scale
+   ! Example helper subroutine template:
+   !
+   ! !> Compute custom environmental response for ginoux scheme
+   ! pure function compute_temperature_response_ginoux(temperature, params) result(factor)
+   !    real(fp), intent(in) :: temperature     ! Temperature [K]
+   !    type(ginoux_params_t), intent(in) :: params
+   !    real(fp) :: factor
+   !
+   !    ! Add your temperature response algorithm here
+   !    factor = exp(params%temperature_dependency * (temperature - T_STANDARD) / T_STANDARD)
+   ! end function compute_temperature_response_ginoux
 
-      ! Compute bare soil factor (inverse of clay content up to a limit)
-      if (clay_fraction < clay_limit) then
-         bare_soil_factor = (1.0_fp - clay_fraction / clay_limit)
-      else
-         bare_soil_factor = 0.0_fp  ! Too much clay inhibits emission
-      endif
-
-      ! Compute erodibility factor based on sand content
-      ! Ginoux scheme favors moderate sand content
-      if (sand_fraction < sand_optimal) then
-         erodibility_factor = sand_fraction / sand_optimal
-      else
-         erodibility_factor = (1.0_fp - sand_fraction) / (1.0_fp - sand_optimal)
-      endif
-
-      ! Compute wind factor (Ginoux uses a different formulation than Fengsha)
-      if (wind_speed_10m > wind_threshold) then
-         wind_factor = (wind_speed_10m - wind_threshold)**2 * wind_speed_10m
-      else
-         wind_factor = 0.0_fp
-      endif
-
-      ! Apply soil moisture reduction (simple exponential)
-      if (soil_moisture_top > 0.0_fp) then
-         wind_factor = wind_factor * exp(-beta_scale * soil_moisture_top)
-      endif
-
-      ! Compute emission strength [μg/m²/s]
-      emission_strength = topographic_factor * bare_soil_factor * erodibility_factor * &
-                         wind_factor * air_density * 1.0e6_fp  ! Convert to μg
-
-      ! Get size distribution for dust bins
-      call KokDistribution(effective_radius, lower_radius, upper_radius, distribution)
-
-      ! Total emission
-      total_emission = emission_strength
-
-      ! Distribute among size bins
-      do n = 1, n_dust_species
-         emission_per_species(n) = distribution(n) * total_emission
-      enddo
-
-   end subroutine run_ginoux_scheme
-
-end module DustScheme_Ginoux_Mod
-
-
-
+end module DustScheme_GINOUX_Mod

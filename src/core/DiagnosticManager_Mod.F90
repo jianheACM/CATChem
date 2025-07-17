@@ -43,6 +43,7 @@ module DiagnosticManager_Mod
                         ERROR_INVALID_INPUT, ERROR_NOT_FOUND, ERROR_MEMORY_ALLOCATION
    use DiagnosticInterface_Mod, only: DiagnosticRegistryType, DiagnosticFieldType, &
                                       DiagnosticDataType
+   use StateManager_Mod, only: StateManagerType
 
    implicit none
    private
@@ -109,12 +110,11 @@ contains
    !> \brief Initialize diagnostic manager
    !!
    !! \param[inout] this DiagnosticManagerType instance
-   !! \param[inout] container StateContainer for integration
+   !! \param[inout] container StateManager for integration
    !! \param[out] rc Return code
    subroutine diagnostic_manager_init(this, container, rc)
-      use state_mod, only: StateContainerType
       class(DiagnosticManagerType), intent(inout) :: this
-      type(StateContainerType), intent(inout) :: container
+      type(StateManagerType), intent(inout) :: container
       integer, intent(out) :: rc
 
       type(ErrorManagerType), pointer :: error_mgr
@@ -218,13 +218,12 @@ contains
    !!
    !! \param[inout] this DiagnosticManagerType instance
    !! \param[in] process_name Name of the process to register
-   !! \param[inout] container StateContainer for error reporting
+   !! \param[inout] container StateManager for error reporting
    !! \param[out] rc Return code
    subroutine diagnostic_manager_register_process(this, process_name, container, rc)
-      use state_mod, only: StateContainerType
       class(DiagnosticManagerType), intent(inout) :: this
       character(len=*), intent(in) :: process_name
-      type(StateContainerType), intent(inout) :: container
+      type(StateManagerType), intent(inout) :: container
       integer, intent(out) :: rc
 
       type(ErrorManagerType), pointer :: error_mgr
@@ -259,14 +258,14 @@ contains
 
    end subroutine diagnostic_manager_register_process
 
-   !> \brief Get diagnostic registry for a specific process
+   !> \brief Get diagnostic registry for a specific process (returns pointer to internal registry)
    !!
-   !! \param[in] this DiagnosticManagerType instance
+   !! \param[inout] this DiagnosticManagerType instance
    !! \param[in] process_name Name of the process
    !! \param[out] registry Pointer to the diagnostic registry
    !! \param[out] rc Return code
    subroutine diagnostic_manager_get_process_registry(this, process_name, registry, rc)
-      class(DiagnosticManagerType), intent(in) :: this
+      class(DiagnosticManagerType), intent(inout), target :: this
       character(len=*), intent(in) :: process_name
       type(DiagnosticRegistryType), pointer, intent(out) :: registry
       integer, intent(out) :: rc
@@ -428,12 +427,11 @@ contains
    !> \brief Collect diagnostics from all processes
    !!
    !! \param[inout] this DiagnosticManagerType instance
-   !! \param[inout] container StateContainer for state access
+   !! \param[inout] container StateManager for state access
    !! \param[out] rc Return code
    subroutine diagnostic_manager_collect_all(this, container, rc)
-      use state_mod, only: StateContainerType
       class(DiagnosticManagerType), intent(inout) :: this
-      type(StateContainerType), intent(inout) :: container
+      type(StateManagerType), intent(inout) :: container
       integer, intent(out) :: rc
 
       type(ErrorManagerType), pointer :: error_mgr
@@ -466,13 +464,12 @@ contains
    !!
    !! \param[inout] this DiagnosticManagerType instance
    !! \param[in] process_name Name of the process
-   !! \param[inout] container StateContainer for state access
+   !! \param[inout] container StateManager for state access
    !! \param[out] rc Return code
    subroutine diagnostic_manager_collect_process(this, process_name, container, rc)
-      use state_mod, only: StateContainerType
       class(DiagnosticManagerType), intent(inout) :: this
       character(len=*), intent(in) :: process_name
-      type(StateContainerType), intent(inout) :: container
+      type(StateManagerType), intent(inout) :: container
       integer, intent(out) :: rc
 
       type(DiagnosticRegistryType), pointer :: registry
@@ -491,12 +488,11 @@ contains
    !> \brief Write diagnostic output
    !!
    !! \param[inout] this DiagnosticManagerType instance
-   !! \param[inout] container StateContainer for state access
+   !! \param[inout] container StateManager for state access
    !! \param[out] rc Return code
    subroutine diagnostic_manager_write_output(this, container, rc)
-      use state_mod, only: StateContainerType
       class(DiagnosticManagerType), intent(inout) :: this
-      type(StateContainerType), intent(inout) :: container
+      type(StateManagerType), intent(inout) :: container
       integer, intent(out) :: rc
 
       type(ErrorManagerType), pointer :: error_mgr
@@ -580,12 +576,11 @@ contains
    !> \brief Validate diagnostic manager state
    !!
    !! \param[in] this DiagnosticManagerType instance
-   !! \param[inout] container StateContainer for error reporting
+   !! \param[inout] container StateManager for error reporting
    !! \param[out] rc Return code
    subroutine diagnostic_manager_validate_state(this, container, rc)
-      use state_mod, only: StateContainerType
       class(DiagnosticManagerType), intent(in) :: this
-      type(StateContainerType), intent(inout) :: container
+      type(StateManagerType), intent(inout) :: container
       integer, intent(out) :: rc
 
       type(ErrorManagerType), pointer :: error_mgr

@@ -416,12 +416,10 @@ The `StateContainer` is documented in the [API reference](../api/CATChem/state_m
 ```
 
 **Mermaid Diagrams:**
-```markdown
 ```mermaid
 flowchart TB
     A[Input] --> B[Process]
     B --> C[Output]
-```
 ```
 
 ## 🚀 Advanced Features

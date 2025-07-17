@@ -35,24 +35,33 @@ graph TB
 ### Diagnostic Interface
 
 ```fortran
-module DiagnosticInterface_Mod
-  use precision_mod
-  use error_mod
+module DiagnosticManager_Mod
+  use StateManager_Mod, only: StateManagerType
+  use DiagnosticInterface_Mod
+  use Error_Mod
 
   implicit none
 
-  type :: DiagnosticInterface_t
-    type(DiagnosticManager_t) :: manager
-    type(FieldRegistry_t) :: registry
-    type(OutputManager_t) :: output
-    type(PerformanceMonitor_t) :: performance
+  type :: DiagnosticManagerType
+    type(DiagnosticRegistryType) :: registry
+    type(ErrorManagerType), pointer :: error_manager
+    logical :: is_initialized = .false.
   contains
-    procedure :: initialize => di_initialize
-    procedure :: register_field => di_register_field
-    procedure :: update_field => di_update_field
-    procedure :: output_diagnostics => di_output_diagnostics
-    procedure :: finalize => di_finalize
-  end type DiagnosticInterface_t
+    procedure :: init => diagnostic_manager_init
+    procedure :: register_process_diagnostics => dm_register_process_diagnostics
+    procedure :: collect_all_diagnostics => dm_collect_all_diagnostics
+    procedure :: write_output => dm_write_output
+    procedure :: finalize => diagnostic_manager_finalize
+  end type DiagnosticManagerType
+
+  type :: DiagnosticRegistryType
+    type(DiagnosticFieldType), allocatable :: fields(:)
+    integer :: num_fields = 0
+  contains
+    procedure :: register_field => dr_register_field
+    procedure :: get_field => dr_get_field
+    procedure :: update_field => dr_update_field
+  end type DiagnosticRegistryType
 ```
 
 ## Field Registration

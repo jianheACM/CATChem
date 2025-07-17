@@ -12,9 +12,9 @@
 module EmissionConfigValidator_Mod
    use Precision_Mod
    use Error_Mod
-   use State_Mod, only : StateContainerType
+   use StateManager_Mod, only : StateManagerType
    use ChemState_Mod, only : ChemStateType
-   use logging_mod, only : log_message, LOG_INFO
+   ! use logging_mod, only : log_message, LOG_INFO
 
    implicit none
    private
@@ -88,7 +88,7 @@ contains
    subroutine validate_emission_config(this, config_file, container, results, rc)
       class(EmissionConfigValidatorType), intent(inout) :: this
       character(len=*), intent(in) :: config_file
-      type(StateContainerType), intent(in) :: container
+      type(StateManagerType), intent(inout) :: container
       type(ValidationResultType), allocatable, intent(out) :: results(:)
       integer, intent(out) :: rc
 
@@ -107,7 +107,7 @@ contains
       allocate(results(max_results))
 
       write(message, '(A,A)') 'Starting validation of emission config: ', trim(config_file)
-      call log_message(LOG_INFO, message)
+      print *, trim(message)
 
       ! TODO: Parse YAML configuration file
       ! For now, we'll validate the example configuration
@@ -134,14 +134,14 @@ contains
 
       ! Report validation summary
       call this%get_validation_summary(message)
-      call log_message(LOG_INFO, message)
+      print *, trim(message)
 
    end subroutine validate_emission_config
 
    !> Validate species mapping configuration
    subroutine validate_species_mapping(this, container, results, n_results, rc)
       class(EmissionConfigValidatorType), intent(inout) :: this
-      type(StateContainerType), intent(in) :: container
+      type(StateManagerType), intent(inout) :: container
       type(ValidationResultType), intent(inout) :: results(:)
       integer, intent(inout) :: n_results
       integer, intent(out) :: rc
@@ -166,7 +166,7 @@ contains
                                      results, n_results, rc)
       class(EmissionConfigValidatorType), intent(inout) :: this
       character(len=*), intent(in) :: species_name
-      type(StateContainerType), intent(in) :: container
+      type(StateManagerType), intent(inout) :: container
       type(ValidationResultType), intent(inout) :: results(:)
       integer, intent(inout) :: n_results
       integer, intent(out) :: rc
@@ -210,7 +210,7 @@ contains
                                        species_exists, rc)
       class(EmissionConfigValidatorType), intent(in) :: this
       character(len=*), intent(in) :: species_name
-      type(StateContainerType), intent(in) :: container
+      type(StateManagerType), intent(inout) :: container
       logical, intent(out) :: species_exists
       integer, intent(out) :: rc
 
@@ -227,8 +227,8 @@ contains
 
       chem_state => container%get_chem_state_ptr()
 
-      call chem_state%find_species(species_name, species_idx, rc)
-      species_exists = (rc == CC_SUCCESS)
+      species_idx = chem_state%find_species(species_name)
+      species_exists = (species_idx > 0)
 
       ! Reset rc since this is just a check
       rc = CC_SUCCESS

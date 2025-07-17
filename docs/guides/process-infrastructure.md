@@ -47,25 +47,38 @@ graph TB
 
 ```fortran
 module ProcessInterface_Mod
-  use StateInterface_Mod
+  use StateManager_Mod, only: StateManagerType
+  use ColumnInterface_Mod, only: VirtualColumnType
   use DiagnosticInterface_Mod
-  use ErrorHandling_Mod
+  use Error_Mod
 
   implicit none
 
-  type, abstract :: ProcessInterface_t
-    character(len=:), allocatable :: name
-    character(len=:), allocatable :: category
+  type, abstract :: ProcessInterface
+    private
+    character(len=64) :: name = ''
+    character(len=64) :: version = ''
+    character(len=256) :: description = ''
     logical :: is_initialized = .false.
-    logical :: is_active = .true.
+    logical :: is_active = .false.
+    real(fp) :: dt = 0.0_fp
   contains
-    procedure(initialize_interface), deferred :: initialize
+    procedure(init_interface), deferred :: init
     procedure(run_interface), deferred :: run
     procedure(finalize_interface), deferred :: finalize
+    procedure :: get_required_met_fields
+    procedure :: get_required_diagnostic_fields
     procedure :: get_name
-    procedure :: get_category
-    procedure :: is_ready
-  end type ProcessInterface_t
+    procedure :: get_version
+    procedure :: is_process_initialized
+  end type ProcessInterface
+
+  !> Column-based process interface for efficient 1D processing
+  type, abstract, extends(ProcessInterface) :: ColumnProcessInterface
+  contains
+    procedure(run_column_interface), deferred :: run_column
+    procedure :: supports_column_processing
+  end type ColumnProcessInterface
 ```
 
 ### Required Methods
@@ -73,86 +86,50 @@ module ProcessInterface_Mod
 #### Initialize Method
 ```fortran
 abstract interface
-  subroutine initialize_interface(this, config, state, diagnostics, rc)
-    import :: ProcessInterface_t, StateInterface_t, &
-              DiagnosticInterface_t, ErrorCode_t
-    class(ProcessInterface_t), intent(inout) :: this
-    type(Configuration_t), intent(in) :: config
-    type(StateInterface_t), intent(inout) :: state
-    type(DiagnosticInterface_t), intent(inout) :: diagnostics
-    type(ErrorCode_t), intent(out) :: rc
-  end subroutine initialize_interface
+  subroutine init_interface(this, state_manager, rc)
+    import :: ProcessInterface, StateManagerType
+    class(ProcessInterface), intent(inout) :: this
+    type(StateManagerType), intent(inout) :: state_manager
+    integer, intent(out) :: rc
+  end subroutine init_interface
 end interface
 ```
 
 #### Run Method
 ```fortran
 abstract interface
-  subroutine run_interface(this, time_step, state, diagnostics, rc)
-    import :: ProcessInterface_t, StateInterface_t, &
-              DiagnosticInterface_t, ErrorCode_t
-    class(ProcessInterface_t), intent(inout) :: this
-    real(kind=r8), intent(in) :: time_step
-    type(StateInterface_t), intent(inout) :: state
-    type(DiagnosticInterface_t), intent(inout) :: diagnostics
-    type(ErrorCode_t), intent(out) :: rc
+  subroutine run_interface(this, time_step, state_manager, rc)
+    import :: ProcessInterface, StateManagerType, fp
+    class(ProcessInterface), intent(inout) :: this
+    real(fp), intent(in) :: time_step
+    type(StateManagerType), intent(inout) :: state_manager
+    integer, intent(out) :: rc
   end subroutine run_interface
 end interface
 ```
 
-## Process Categories
-
-### Chemistry Processes
-
-Handle chemical transformations:
-
-```yaml
-category: "chemistry"
-types:
-  - "gas_phase"          # Gas-phase chemical reactions
-  - "aerosol_chemistry"  # Aerosol chemical processes
-  - "aqueous_chemistry"  # Cloud/fog chemistry
-  - "heterogeneous"      # Gas-aerosol interactions
+#### Finalize Method
+```fortran
+abstract interface
+  subroutine finalize_interface(this, rc)
+    import :: ProcessInterface
+    class(ProcessInterface), intent(inout) :: this
+    integer, intent(out) :: rc
+  end subroutine finalize_interface
+end interface
 ```
 
-### Transport Processes
-
-Manage atmospheric transport:
-
-```yaml
-category: "transport"
-types:
-  - "advection"          # Horizontal/vertical advection
-  - "diffusion"          # Turbulent mixing
-  - "convection"         # Convective transport
-  - "settling"           # Gravitational settling
-```
-
-### Emission Processes
-
-Source atmospheric constituents:
-
-```yaml
-category: "emission"
-types:
-  - "anthropogenic"      # Human activities
-  - "biogenic"           # Biological sources
-  - "wildfire"           # Fire emissions
-  - "lightning"          # Lightning NOx
-  - "dust"               # Mineral dust
-  - "seasalt"            # Marine aerosols
-```
-
-### Loss Processes
-
-Remove atmospheric constituents:
-
-```yaml
-category: "loss"
-types:
-  - "dry_deposition"     # Surface uptake
-  - "wet_deposition"     # Precipitation removal
-  - "photolysis"         # Photochemical destruction
+#### Column Run Method (for ColumnProcessInterface)
+```fortran
+abstract interface
+  subroutine run_column_interface(this, column, time_step, rc)
+    import :: ColumnProcessInterface, VirtualColumnType, fp
+    class(ColumnProcessInterface), intent(inout) :: this
+    type(VirtualColumnType), intent(inout) :: column
+    real(fp), intent(in) :: time_step
+    integer, intent(out) :: rc
+  end subroutine run_column_interface
+end interface
 ```
 
 ## Process Manager

@@ -94,6 +94,8 @@ MODULE Error_Mod
    INTEGER, PUBLIC, PARAMETER :: ERROR_PROCESS_INITIALIZATION = 1014
    INTEGER, PUBLIC, PARAMETER :: ERROR_STATE_INCONSISTENCY = 1015
    INTEGER, PUBLIC, PARAMETER :: ERROR_UNSUPPORTED_OPERATION = 1016
+   INTEGER, PUBLIC, PARAMETER :: ERROR_DUPLICATE_ENTRY = 1017
+   INTEGER, PUBLIC, PARAMETER :: ERROR_NOT_FOUND = 1018
    ! \}
 
    ! \name Error Severity Levels
@@ -194,10 +196,6 @@ CONTAINS
    !! \endcode
    SUBROUTINE CC_Error( ErrMsg, RC, ThisLoc, Instr )
       !
-      ! !USES:
-      !
-      USE Charpak_Mod,    ONLY : WordWrapPrint
-      !
       ! !INPUT PARAMETERS:
       !
       CHARACTER(LEN=*), INTENT(IN)            :: ErrMsg  ! Message to display
@@ -220,7 +218,7 @@ CONTAINS
 
       ! Print error message to log
       Message =  'CATChem ERROR: ' // TRIM( ErrMsg )
-      CALL WordWrapPrint( Message, 78 )
+      WRITE(*,'(a)') TRIM(Message)
 
       ! Print error location to log
       IF ( PRESENT( ThisLoc ) ) THEN
@@ -231,7 +229,7 @@ CONTAINS
       ! Print additional instructions to log
       IF ( PRESENT( Instr ) ) THEN
          WRITE( 6, '(a)' )
-         CALL WordWrapPrint( Instr, 78 )
+         WRITE(*,'(a)') TRIM(Instr)
       ENDIF
 
       ! Separators
@@ -263,10 +261,6 @@ CONTAINS
    !!!>
    SUBROUTINE CC_Warning( WarnMsg, RC, ThisLoc, Instr )
       !
-      ! !USES:
-      !
-      USE Charpak_Mod, ONLY : WordWrapPrint
-      !!
       ! !INPUT PARAMETERS:
       !
       CHARACTER(LEN=*), INTENT(IN   )            :: WarnMsg
@@ -288,7 +282,7 @@ CONTAINS
 
       ! Print error message to log
       Message =  'CATChem WARNING: ' // TRIM( WarnMsg )
-      CALL WordWrapPrint( Message, 78 )
+      WRITE(*,'(a)') TRIM(Message)
 
       ! Print error location to log
       IF ( PRESENT( ThisLoc ) ) THEN
@@ -299,7 +293,7 @@ CONTAINS
       ! Print additional instructions to log
       IF ( PRESENT( Instr ) ) THEN
          WRITE( 6, '(a)' )
-         CALL WordWrapPrint( Instr, 78 )
+         WRITE(*,'(a)') TRIM(Instr)
       ENDIF
 
       ! Separators

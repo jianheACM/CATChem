@@ -1,217 +1,185 @@
-!> \file DustScheme_Fengsha_Mod.F90
-!! \brief Modern Fengsha dust emission scheme implementation - StateContainer independent
-!! \ingroup dust_schemes
+!> \file DustScheme_FENGSHA_Mod.F90
+!! \brief Fengsha Dust emission scheme developed at NOAA ARL for use at NOAA NWS
 !!
-!! \author CATChem Development Team
-!! \date 2025
-!! \version 2.0
+!! Pure science kernel for fengsha scheme in dust process.
+!! This module contains ONLY the computational algorithm with NO infrastructure dependencies.
+!! Uses only basic Fortran types for maximum portability and reusability.
 !!
-!! This module implements the FENGSHA dust emission scheme using modern
-!! architecture but independent of StateContainer to ease science developer burden.
-!! Based on the original ccpr_scheme_fengsha_mod.F90 but simplified for modern use.
+!! SCIENCE CUSTOMIZATION GUIDE:
+!! 1. Modify the algorithm in compute_fengsha (search for "TODO")
+!! 2. Add scheme-specific helper subroutines as needed
+!! 3. Update physical constants for your scheme
+!! 4. Customize the environmental response functions
 !!
-!! \module DustScheme_Fengsha_Mod
-!!!>
-module DustScheme_Fengsha_Mod
-   use precision_mod, only: fp, ZERO
+!! INFRASTRUCTURE RESPONSIBILITIES (handled by host model):
+!! - Parameter initialization and validation
+!! - Input array validation and error handling
+!! - Memory management and array allocation
+!! - Integration with host model time stepping
+!!
+!! Generated on: 2025-07-09T12:43:17.999787
+!! Author: Barry Baker
+!! Reference: Zhang et al. 2022
+module DustScheme_FENGSHA_Mod
+
+   use iso_fortran_env, only: fp => real64
    use constants, only: g0
-   use DustCommon_Mod
+
    implicit none
    private
 
-   public :: run_fengsha_scheme
+   ! Public interface - pure science only
+   public :: compute_fengsha
+   public :: fengsha_params_t
+
+
+   !> Science parameters for fengsha scheme
+   !! Host model is responsible for initializing and validating these
+   type :: fengsha_params_t
+      real(fp) :: alpha  ! linear scaling factor
+      real(fp) :: beta  ! Exponential scaling factor on source parameter
+      real(fp) :: drylimit_factor  ! Dry Limit factor modifying the Fecan dry limit following Zender 2003
+      real(fp) :: drag_option  ! Drag Partition Option: 1 - use input drag, 2 - Darmenova, 3 - Leung 2022, 4 - MB95
+      real(fp) :: moist_option  ! Moisture parameterization: 1 - Fecan, 2 - shao, 3 - modified shao
+      real(fp) :: distribution_option  ! Dust Distribution option: 1 - Kok 2011, 2 - Meng 2022
+   end type fengsha_params_t
+
 
 contains
 
-   !> \brief Execute Fengsha dust emission scheme (single-column)
+   !> Pure science computation for fengsha scheme
    !!
-   !! This is the main interface for the FENGSHA dust emission scheme for a single column.
-   !! Science developers can call this directly with scalar/1D variables without
-   !! worrying about StateContainer complexity.
+   !! This is a pure computational kernel implementing Fengsha Dust emission scheme developed at NOAA ARL for use at NOAA NWS.
+   !! NO error checking, validation, or infrastructure concerns.
+   !! Host model must ensure all inputs are valid before calling.
    !!
-   !! Based on: Zhang, L., Montuoro, R., McKeen, S. A., Baker, B., et al. (2022):
-   !! Development and evaluation of the Aerosol Forecast Member in NCEP's GEFS-Aerosols v1,
-   !! Geosci. Model Dev., 15, 5337–5369, https://doi.org/10.5194/gmd-15-5337-2022
-   !!
-   subroutine run_fengsha_scheme(n_dust_species, &
-                                 ! Meteorological inputs (scalars)
-                                 wind_friction_velocity, &
-                                 wind_speed_10m, &
-                                 surface_temperature, &
-                                 air_density, &
-                                 soil_moisture_top, &
-                                 surface_roughness, &
-                                 ! Surface properties (scalars)
-                                 clay_fraction, &
-                                 sand_fraction, &
-                                 soil_type, &
-                                 ocean_fraction, &
-                                 land_ice_fraction, &
-                                 snow_fraction, &
-                                 sediment_supply_map, &
-                                 roughness_drag, &
-                                 ! Dust size distribution (1D arrays)
-                                 effective_radius, &
-                                 lower_radius, &
-                                 upper_radius, &
-                                 ! Configuration parameters
-                                 alpha_scale, &
-                                 beta_scale, &
-                                 moist_opt, &
-                                 drag_opt, &
-                                 horiz_flux_opt, &
-                                 ! Outputs (1D array for size bins)
-                                 total_emission, &
-                                 emission_per_species, &
-                                 rc)
-      implicit none
+   !! @param[in]  num_layers     Number of vertical layers
+   !! @param[in]  num_species    Number of chemical species
+   !! @param[in]  params         Scheme parameters (pre-validated by host)
+   !! @param[in]  IsLand    IsLand field [appropriate units]
+   !! @param[in]  USTAR    USTAR field [appropriate units]
+   !! @param[in]  LWI    LWI field [appropriate units]
+   !! @param[in]  GVF    GVF field [appropriate units]
+   !! @param[in]  LAI    LAI field [appropriate units]
+   !! @param[in]  FROCEAN    FROCEAN field [appropriate units]
+   !! @param[in]  CLAYFRAC    CLAYFRAC field [appropriate units]
+   !! @param[in]  SANDFRAC    SANDFRAC field [appropriate units]
+   !! @param[in]  FRSNO    FRSNO field [appropriate units]
+   !! @param[in]  RDRAG    RDRAG field [appropriate units]
+   !! @param[in]  SSM    SSM field [appropriate units]
+   !! @param[in]  USTAR_THRESHOLD    USTAR_THRESHOLD field [appropriate units]
+   !! @param[in]  species_conc   Species concentrations [mol/mol] (num_layers, num_species)
+   !! @param[out] emission_flux  Emission fluxes [kg/m²/s] (num_layers, num_species)
+   pure subroutine compute_fengsha(num_layers, num_species, params, IsLand, USTAR, &
+      LWI, GVF, LAI, FROCEAN, CLAYFRAC, SANDFRAC, FRSNO, RDRAG, SSM, USTAR_THRESHOLD, &
+      species_conc, emission_flux, horizontal_flux, vertical_flux, effective_threshold)
+   )
 
-      ! Inputs
-      integer, intent(in) :: n_dust_species
+      ! Arguments
+      integer, intent(in) :: num_layers
+      integer, intent(in) :: num_species
+      type(fengsha_params_t), intent(in) :: params
+      real(fp), intent(in) :: IsLand(num_layers)
+      real(fp), intent(in) :: USTAR(num_layers)
+      real(fp), intent(in) :: LWI(num_layers)
+      real(fp), intent(in) :: GVF(num_layers)
+      real(fp), intent(in) :: LAI(num_layers)
+      real(fp), intent(in) :: FROCEAN(num_layers)
+      real(fp), intent(in) :: CLAYFRAC(num_layers)
+      real(fp), intent(in) :: SANDFRAC(num_layers)
+      real(fp), intent(in) :: FRSNO(num_layers)
+      real(fp), intent(in) :: RDRAG(num_layers)
+      real(fp), intent(in) :: SSM(num_layers)
+      real(fp), intent(in) :: USTAR_THRESHOLD(num_layers)
+      real(fp), intent(in) :: species_conc(num_layers, num_species)
+      real(fp), intent(out) :: emission_flux(num_layers, num_species)
+      real(fp), intent(out) :: horizontal_flux(num_layers, num_species)
+      real(fp), intent(out) :: vertical_flux(num_layers, num_species)
+      real(fp), intent(out) :: effective_threshold(num_layers, num_species)
 
-      ! Meteorological fields (scalars - single column)
-      real(fp), intent(in) :: wind_friction_velocity   ! [m/s]
-      real(fp), intent(in) :: wind_speed_10m           ! [m/s]
-      real(fp), intent(in) :: surface_temperature      ! [K]
-      real(fp), intent(in) :: air_density              ! [kg/m³]
-      real(fp), intent(in) :: soil_moisture_top        ! [m³/m³]
-      real(fp), intent(in) :: surface_roughness        ! [m]
+      ! Local variables
+      integer :: k, species_idx
+      real(fp) :: base_emission_factor
+      real(fp) :: temperature_factor
+      real(fp) :: light_factor
+      real(fp) :: combined_factor
 
-      ! Surface property fields (scalars - single column)
-      real(fp), intent(in) :: clay_fraction            ! [0-1]
-      real(fp), intent(in) :: sand_fraction            ! [0-1]
-      integer, intent(in)  :: soil_type                ! [1-19]
-      real(fp), intent(in) :: ocean_fraction           ! [0-1]
-      real(fp), intent(in) :: land_ice_fraction        ! [0-1]
-      real(fp), intent(in) :: snow_fraction            ! [0-1]
-      real(fp), intent(in) :: sediment_supply_map      ! [0-1]
-      real(fp), intent(in) :: roughness_drag           ! [0-1]
+      ! Initialize output (pure subroutines must initialize all outputs)
+      emission_flux = 0.0_fp
 
-      ! Size distribution [n_dust_species]
-      real(fp), intent(in) :: effective_radius(:)      ! [m]
-      real(fp), intent(in) :: lower_radius(:)          ! [m]
-      real(fp), intent(in) :: upper_radius(:)          ! [m]
+      ! Main computation loop - CUSTOMIZE THIS SECTION FOR YOUR SCHEME
+      do k = 1, num_layers
 
-      ! Configuration parameters
-      real(fp), intent(in) :: alpha_scale, beta_scale
-      integer, intent(in)  :: moist_opt, drag_opt, horiz_flux_opt
+         ! TODO: Replace this generic implementation with your scheme's algorithm
+         ! This is a placeholder that demonstrates the expected structure
 
-      ! Outputs (scalars and 1D array for size bins)
-      real(fp), intent(out) :: total_emission              ! [μg/m²/s]
-      real(fp), intent(out) :: emission_per_species(:)     ! [μg/m²/s] [n_dust_species]
-      integer, intent(out)  :: rc
+         ! Initialize environmental factors
+         temperature_factor = 1.0_fp
+         light_factor = 1.0_fp
 
-      ! Local variables for computation (all scalars for single column)
-      integer :: n
-      logical :: do_dust
-      real(fp) :: u_friction, u_threshold, skin_temp, soil_moisture
-      real(fp) :: clay_frac, sand_frac, air_dens, ssm, rdrag
-      real(fp) :: frac_ocean, frac_ice, frac_snow, z0
-      real(fp) :: H, R, SEP, horiz_flux, h_to_v_ratio
-      real(fp) :: fengsha_scaling, alpha_grav
-      real(fp) :: distribution(n_dust_species)
+         ! Apply scheme-specific environmental responses
+         ! Generic field usage (customize for your scheme)
+         ! Consider how IsLand affects your emissions
+         ! Generic field usage (customize for your scheme)
+         ! Consider how USTAR affects your emissions
+         ! Generic field usage (customize for your scheme)
+         ! Consider how LWI affects your emissions
+         ! Generic field usage (customize for your scheme)
+         ! Consider how GVF affects your emissions
+         ! Generic field usage (customize for your scheme)
+         ! Consider how LAI affects your emissions
+         ! Generic field usage (customize for your scheme)
+         ! Consider how FROCEAN affects your emissions
+         ! Generic field usage (customize for your scheme)
+         ! Consider how CLAYFRAC affects your emissions
+         ! Generic field usage (customize for your scheme)
+         ! Consider how SANDFRAC affects your emissions
+         ! Generic field usage (customize for your scheme)
+         ! Consider how FRSNO affects your emissions
+         ! Generic field usage (customize for your scheme)
+         ! Consider how RDRAG affects your emissions
+         ! Generic field usage (customize for your scheme)
+         ! Consider how SSM affects your emissions
+         ! Generic field usage (customize for your scheme)
+         ! Consider how USTAR_THRESHOLD affects your emissions
 
-      ! Constants
-      real(fp), parameter :: clay_threshold = 0.2_fp
-      real(fp), parameter :: kvhmax = 2.0e-4_fp      ! Max vertical-to-horizontal flux ratio
-      real(fp), parameter :: z0s = 0.00003_fp        ! Smooth roughness length [m]
+         ! Combine environmental factors
+         combined_factor = temperature_factor * light_factor
 
-      ! Initialize
-      rc = 0
-      total_emission = ZERO
-      emission_per_species = ZERO
-      alpha_grav = alpha_scale / g0
+         ! Apply to each species
+         do species_idx = 1, num_species
+            ! Base emission factor (customize this for species-specific emissions)
+            base_emission_factor = DEFAULT_SCALING
 
-      ! Extract single-column values
-      u_friction = wind_friction_velocity
-      skin_temp = surface_temperature
-      soil_moisture = soil_moisture_top
-      clay_frac = clay_fraction
-      sand_frac = sand_fraction
-      air_dens = air_density
-      ssm = sediment_supply_map
-      rdrag = roughness_drag
-      frac_ocean = ocean_fraction
-      frac_ice = land_ice_fraction
-      frac_snow = snow_fraction
-      z0 = surface_roughness
+            ! Compute emission flux using your scheme's formula
+            ! This is a simple example - replace with your actual algorithm
+            emission_flux(k, species_idx) = base_emission_factor * combined_factor * &
+                                          species_conc(k, species_idx)
 
-      ! Check if dust emission should occur
-      do_dust = .true.
+            ! Ensure non-negative emissions
+            emission_flux(k, species_idx) = max(0.0_fp, emission_flux(k, species_idx))
+         end do
 
-      ! Don't do dust over bedrock, lava, or permanent ice
-      if (soil_type == 15 .or. soil_type == 16 .or. soil_type == 18) then
-         do_dust = .false.
-      endif
+      end do
 
-      ! Check for valid sediment supply and drag partition
-      if (ssm < 0.15_fp .or. ssm > 1.0_fp) do_dust = .false.
-      if (rdrag < 0.15_fp .or. rdrag > 1.0_fp) do_dust = .false.
+   end subroutine compute_fengsha
 
-      ! Don't do dust over frozen soil
-      if (skin_temp <= 273.15_fp) do_dust = .false.
+   ! =======================================================================
+   ! SCHEME-SPECIFIC HELPER SUBROUTINES
+   ! =======================================================================
+   ! Add your custom scientific algorithms here as pure functions/subroutines
+   ! Examples: environmental response functions, species-specific calculations, etc.
 
-      if (.not. do_dust) return
+   ! Example helper subroutine template:
+   !
+   ! !> Compute custom environmental response for fengsha scheme
+   ! pure function compute_temperature_response_fengsha(temperature, params) result(factor)
+   !    real(fp), intent(in) :: temperature     ! Temperature [K]
+   !    type(fengsha_params_t), intent(in) :: params
+   !    real(fp) :: factor
+   !
+   !    ! Add your temperature response algorithm here
+   !    factor = exp(params%temperature_dependency * (temperature - T_STANDARD) / T_STANDARD)
+   ! end function compute_temperature_response_fengsha
 
-      ! Compute soil moisture attenuation factor
-      select case (moist_opt)
-      case (1)
-         call Fecan_SoilMoisture(clay_frac, sand_frac, soil_moisture, H)
-      case (2)
-         call Shao_SoilMoisture(soil_moisture, H)
-      case default
-         H = 1.0_fp
-      end select
-
-      ! Get size distribution for dust bins
-      call KokDistribution(effective_radius, lower_radius, upper_radius, distribution)
-
-      ! Compute vertical-to-horizontal mass flux ratio
-      if (clay_frac > clay_threshold) then
-         h_to_v_ratio = kvhmax
-      else
-         h_to_v_ratio = 10.0_fp**(13.4_fp * clay_frac - 6.0_fp)
-      endif
-
-      ! Compute soil erosion potential (simple version)
-      call Soil_Erosion_Potential(clay_frac, sand_frac, (1.0_fp - clay_frac - sand_frac), SEP)
-
-      ! Compute drag partition factor
-      select case (drag_opt)
-      case (1)
-         R = rdrag  ! Use input drag partition
-      case (2)
-         call MB95_DragPartition(z0, z0s, R)
-      case default
-         R = 1.0_fp
-      end select
-
-      ! Compute threshold friction velocity (simplified)
-      u_threshold = 0.2_fp  ! Simplified - could use MB97_threshold_velocity
-
-      ! Compute horizontal mass flux
-      select case (horiz_flux_opt)
-      case (1)
-         call Kawamura_HorizFlux(u_friction, u_threshold, R, H, horiz_flux)
-      case (2)
-         call Draxler_HorizFlux(u_friction, u_threshold, R, H, horiz_flux)
-      case default
-         horiz_flux = 0.0_fp
-      end select
-
-      ! Compute Fengsha scaling factor
-      fengsha_scaling = (1.0_fp - frac_ice) * (1.0_fp - frac_snow) * &
-                        (1.0_fp - frac_ocean) * alpha_grav * &
-                        (ssm ** beta_scale) * air_dens * 1.0e9_fp
-
-      ! Compute total emission [μg/m²/s]
-      total_emission = fengsha_scaling * horiz_flux * h_to_v_ratio
-
-      ! Distribute among size bins
-      do n = 1, n_dust_species
-         emission_per_species(n) = distribution(n) * total_emission
-      enddo
-
-   end subroutine run_fengsha_scheme
-
-end module DustScheme_Fengsha_Mod
+end module DustScheme_FENGSHA_Mod

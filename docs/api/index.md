@@ -2,51 +2,56 @@
 
 Welcome to the CATChem API documentation. This section provides comprehensive reference documentation for all CATChem modules, types, and procedures.
 
-!!! note "Auto-Generated Documentation"
-    This API documentation is automatically generated from the source code using [MkDoxy](https://mkdoxy.kubaandrysek.cz/). The documentation is updated with each code change to ensure accuracy.
+!!! note "Documentation Structure"
+    Our API documentation combines hand-written guides with auto-generated reference material from the source code using [MkDoxy](https://mkdoxy.kubaandrysek.cz/). This ensures both comprehensive coverage and up-to-date accuracy.
 
-## 🔗 Browse Complete API Documentation
+## � API Organization
 
-**[→ Full Auto-Generated API Documentation](../CATChem/)**
+### Core Modules
+High-level APIs for the main CATChem systems:
 
-The complete API documentation includes all modules, with cross-references, source code links, and detailed documentation for every procedure and type.
+- **[State Management](state-management.md)** - StateContainer, ChemState, MetState data handling
+- **[Process Interface](process-interface.md)** - Process development and integration APIs
+- **[Column Interface](column-interface.md)** - Column virtualization and 1D processing
+- **[Configuration Manager](configuration.md)** - YAML configuration system
+- **[Error Handling](error-handling.md)** - Comprehensive error management
 
-## 🎯 Key Modules Quick Access
+### Process Modules
+APIs for specific atmospheric process implementations:
 
-### Core System
-- **[State Management](../CATChem/state__mod_8_f90/)** - Central state container and data management
-- **[Column Interface](../CATChem/_column_interface___mod_8_f90/)** - Column virtualization system
-- **[Process Manager](../CATChem/_process_manager___mod_8_f90/)** - Process orchestration and lifecycle
-- **[Process Interface](../CATChem/_process_interface___mod_8_f90/)** - Base interface for all processes
+- **[Emission Processes](emission-processes.md)** - External emissions, dust, sea salt
+- **[Transport Processes](transport-processes.md)** - Settling, vertical mixing, diffusion
+- **[Chemistry Processes](chemistry-processes.md)** - Gas-phase and aerosol chemistry
+- **[Deposition Processes](deposition-processes.md)** - Dry and wet deposition
 
-### Configuration System
-- **[Config Manager](../CATChem/_config_manager___mod_8_f90/)** - Configuration file parsing and management
-- **[Field Mapping](../CATChem/_field_mapping___mod_8_f90/)** - Input/output field mapping utilities
+### Utility Modules
+Supporting APIs and utilities:
 
-### Process Implementations
+- **[Constants](constants.md)** - Physical and mathematical constants
+- **[Utilities](utilities.md)** - Common utility functions and tools
+- **[Diagnostics](diagnostics.md)** - Diagnostic output and monitoring
 
-#### Transport Processes
-- **[Settling Process](../CATChem/settling_process___mod_8_f90/)** - Gravitational settling with slip correction
-- **[Stokes Scheme](../CATChem/_stokesscheme_scheme___mod_8_f90/)** - Modern Stokes settling implementation
-- **[YSU Vertical Dispersion](../CATChem/_y_s_u_vertical_dispersion_process___mod_8_f90/)** - Boundary layer mixing
+## 🔗 Auto-Generated Documentation
 
-#### Emission Processes
-- **[External Emissions](../CATChem/_external_emission_process___mod_8_f90/)** - Anthropogenic and biogenic emissions
-- **[Dust Process](../CATChem/_dust_process___mod_8_f90/)** - Mineral dust emission and transport
-- **[Sea Salt Process](../CATChem/_sea_salt_process___mod_8_f90/)** - Marine aerosol processes
+**[→ Complete Auto-Generated API Reference](../CATChem/)**
 
-#### Loss Processes
-- **[Dry Deposition](../CATChem/_dry_dep_process___mod_8_f90/)** - Surface deposition processes
-- **[Wesely Scheme](../CATChem/_wesely_scheme___mod_8_f90/)** - Dry deposition parametrization
+The complete API documentation includes:
+- **[Modules Index](../CATChem/modules.md)** - All Fortran modules
+- **[Namespaces Index](../CATChem/namespaces.md)** - Module namespaces
+- **[Files Index](../CATChem/files.md)** - Source file documentation
 
-### Diagnostic System
-- **[Diagnostic Manager](../CATChem/_diagnostic_manager___mod_8_f90/)** - Diagnostic output management
-- **[Diagnostic Interface](../CATChem/_diagnostic_interface___mod_8_f90/)** - Diagnostic data interfaces
+### Key Auto-Generated Sections
 
-### Utilities
-- **[Constants](../CATChem/constants_8_f90/)** - Physical and mathematical constants
-- **[Utilities](../CATChem/utilities__mod_8_f90/)** - Common utility functions
-- **[Error Handling](../CATChem/error__mod_8_f90/)** - Error management system
+**Core System Modules:**
+- **[State Module](../CATChem/namespacestate__mod.md)** - StateContainer implementation
+- **[Process Manager](../CATChem/namespaceprocess__manager__mod.md)** - Process orchestration
+- **[Column Interface](../CATChem/namespacecolumn__interface__mod.md)** - Column virtualization
+- **[Config Manager](../CATChem/namespaceconfig__manager__mod.md)** - Configuration system
+
+**Process Implementation Modules:**
+- **[Emission Processes](../CATChem/namespaceemission__process__mod.md)** - Emission process implementations
+- **[Transport Processes](../CATChem/namespacetransport__process__mod.md)** - Transport physics
+- **[Chemistry Processes](../CATChem/namespacechemistry__process__mod.md)** - Chemical mechanisms
 
 ## Quick Reference
 

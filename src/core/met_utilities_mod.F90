@@ -25,7 +25,7 @@
 !! \code{.f90}
 !! use met_utilities_mod
 !! real(fp) :: T, p, theta, Tv, rh, Td, es
-!! theta = potential_temperature(T, p)
+!! theta = potential_temperature(T, p, p0)
 !! Tv = virtual_temperature(T, qv)
 !! Td = dew_point(T, rh)
 !! es = saturation_vapor_pressure(T)
@@ -72,12 +72,12 @@ contains
    !> \brief Calculate potential temperature (theta)
    !! \param[in] T Temperature [K]
    !! \param[in] p Pressure [Pa]
+   !! \param[in] p0 Surface pressure [Pa]
    !! \return Potential temperature [K]
    !! \cite WallaceHobbs2006
-   function potential_temperature(T, p) result(theta)
-      real(fp), intent(in) :: T, p
+   function potential_temperature(T, p, p0) result(theta)
+      real(fp), intent(in) :: T, p, p0
       real(fp) :: theta
-      real(fp), parameter :: p0 = 100000.0_fp  ! Reference pressure [Pa]
       theta = T * (p0 / p) ** (Rd / Cp)
    end function potential_temperature
 
@@ -381,7 +381,11 @@ contains
    function cunningham_correction_factor(dp, lambda) result(Cc)
       real(fp), intent(in) :: dp, lambda
       real(fp) :: Cc
-      Cc = 1.0_fp + 2.52_fp * lambda / dp
+      if (dp > 0.0_fp .and. lambda > 0.0_fp) then
+         Cc = 1.0_fp + 2.0_fp * lambda / dp * (1.257_fp + 0.4_fp * exp(-1.1_fp * dp / lambda))
+      else
+         Cc = 1.0_fp
+      endif
    end function cunningham_correction_factor
 
    !> \brief Calculate nuclear decay (first-order)
@@ -395,15 +399,19 @@ contains
       N = N0 * exp(-lambda * t)
    end function nuclear_decay
 
-   !> \brief Calculate Stokes number
-   !! \param[in] tau_p Particle relaxation time [s]
-   !! \param[in] tau_f Characteristic flow time [s]
+
+   !> \brief Calculate Stokes number from base state variables
+   !! \param[in] rho_p Particle density [kg/m^3]
+   !! \param[in] d_p Particle diameter [m]
+   !! \param[in] U Characteristic velocity [m/s]
+   !! \param[in] mu Dynamic viscosity [kg/m/s]
+   !! \param[in] L Characteristic length scale [m]
    !! \return Stokes number (dimensionless)
-   function stokes_number(tau_p, tau_f) result(Stk)
-      real(fp), intent(in) :: tau_p, tau_f
+   function stokes_number(rho_p, d_p, U, mu, L) result(Stk)
+      real(fp), intent(in) :: rho_p, d_p, U, mu, L
       real(fp) :: Stk
-      if (tau_f > 0.0_fp) then
-         Stk = tau_p / tau_f
+      if (mu > 0.0_fp .and. L > 0.0_fp) then
+         Stk = (rho_p * d_p**2 * U) / (18.0_fp * mu * L)
       else
          Stk = 0.0_fp
       endif

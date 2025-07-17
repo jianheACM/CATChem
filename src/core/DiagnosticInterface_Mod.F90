@@ -37,8 +37,10 @@ module DiagnosticInterface_Mod
    implicit none
    private
 
+   integer, parameter :: max_fields = 100      !< Maximum fields per process
+
    public :: DiagnosticFieldType, DiagnosticRegistryType
-   public :: DiagnosticDataType, DiagnosticFrequency
+   public :: DiagnosticDataType
    public :: DIAG_REAL_SCALAR, DIAG_REAL_1D, DIAG_REAL_2D, DIAG_REAL_3D
    public :: DIAG_INTEGER_SCALAR, DIAG_INTEGER_1D, DIAG_INTEGER_2D, DIAG_INTEGER_3D
    public :: DIAG_LOGICAL_SCALAR, DIAG_LOGICAL_1D, DIAG_LOGICAL_2D, DIAG_LOGICAL_3D
@@ -136,7 +138,7 @@ module DiagnosticInterface_Mod
       procedure :: get_data_type => diag_field_get_data_type
       procedure :: get_data_ptr => diag_field_get_data_ptr
       procedure :: set_enabled => diag_field_set_enabled
-      procedure :: is_enabled => diag_field_is_enabled
+      procedure :: get_is_enabled => diag_field_is_enabled
       procedure :: should_output => diag_field_should_output
       procedure :: update_data => diag_field_update_data
       procedure :: reset_data => diag_field_reset_data
@@ -151,13 +153,13 @@ module DiagnosticInterface_Mod
       private
       character(len=64) :: process_name = ''       !< Process name
       integer :: n_fields = 0                     !< Number of registered fields
-      integer, parameter :: max_fields = 100      !< Maximum fields per process
-      type(DiagnosticFieldType) :: fields(100)    !< Diagnostic fields array
+      type(DiagnosticFieldType) :: fields(max_fields)    !< Diagnostic fields array
       logical :: is_initialized = .false.         !< Initialization status
 
    contains
       procedure :: init => diag_registry_init
       procedure :: cleanup => diag_registry_cleanup
+      procedure :: finalize => diag_registry_finalize
       procedure :: register_field => diag_registry_register
       procedure :: get_field => diag_registry_get_field
       procedure :: get_field_ptr => diag_registry_get_field_ptr
@@ -170,7 +172,6 @@ module DiagnosticInterface_Mod
       procedure :: set_output_frequency => diag_registry_set_frequency
       procedure :: reset => diag_registry_reset
       procedure :: validate => diag_registry_validate
-      final :: diag_registry_finalize
    end type DiagnosticRegistryType
 
 contains
@@ -645,3 +646,195 @@ contains
       endif
 
    end subroutine diag_field_validate_field
+
+   !-------------------
+   ! DiagnosticRegistryType procedure implementations
+   !-------------------
+
+   subroutine diag_registry_init(this, process_name, error_mgr, rc)
+      class(DiagnosticRegistryType), intent(inout) :: this
+      character(len=*), intent(in), optional :: process_name
+      type(ErrorManagerType), pointer, intent(inout), optional :: error_mgr
+      integer, intent(out), optional :: rc
+
+      if (present(rc)) rc = 0
+      this%process_name = ''
+      if (present(process_name)) this%process_name = trim(process_name)
+      this%n_fields = 0
+      this%is_initialized = .true.
+      call this%cleanup()  ! Clean up any previous state
+   end subroutine diag_registry_init
+
+   subroutine diag_registry_cleanup(this)
+      class(DiagnosticRegistryType), intent(inout) :: this
+      integer :: i
+      do i = 1, this%n_fields
+         call this%fields(i)%cleanup()
+      end do
+      this%n_fields = 0
+      this%is_initialized = .false.
+   end subroutine diag_registry_cleanup
+
+   !> \brief Finalize diagnostic registry (alias for cleanup)
+   subroutine diag_registry_finalize(this, rc)
+      class(DiagnosticRegistryType), intent(inout) :: this
+      integer, intent(out) :: rc
+      rc = 0
+      call this%cleanup()
+   end subroutine diag_registry_finalize
+
+   subroutine diag_registry_register(this, field, rc)
+      class(DiagnosticRegistryType), intent(inout) :: this
+      type(DiagnosticFieldType), intent(in) :: field
+      integer, intent(out) :: rc
+      integer :: i
+      rc = CC_SUCCESS
+      if (.not. this%is_initialized) then
+         rc = ERROR_INVALID_INPUT
+         return
+      end if
+      ! Check for duplicate
+      do i = 1, this%n_fields
+         if (trim(this%fields(i)%field_name) == trim(field%field_name)) then
+            rc = ERROR_DUPLICATE_ENTRY
+            return
+         end if
+      end do
+      if (this%n_fields >= max_fields) then
+         rc = ERROR_MEMORY_ALLOCATION
+         return
+      end if
+      this%n_fields = this%n_fields + 1
+      this%fields(this%n_fields) = field
+   end subroutine diag_registry_register
+
+   function diag_registry_get_field(this, name) result(field)
+      class(DiagnosticRegistryType), intent(in) :: this
+      character(len=*), intent(in) :: name
+      type(DiagnosticFieldType) :: field
+      integer :: i
+      field = DiagnosticFieldType()
+      do i = 1, this%n_fields
+         if (trim(this%fields(i)%field_name) == trim(name)) then
+            field = this%fields(i)
+            return
+         end if
+      end do
+   end function diag_registry_get_field
+
+   function diag_registry_get_field_ptr(this, name) result(field_ptr)
+      class(DiagnosticRegistryType), intent(in), target :: this
+      character(len=*), intent(in) :: name
+      type(DiagnosticFieldType), pointer :: field_ptr
+      integer :: i
+      nullify(field_ptr)
+      do i = 1, this%n_fields
+         if (trim(this%fields(i)%field_name) == trim(name)) then
+            field_ptr => this%fields(i)
+            return
+         end if
+      end do
+   end function diag_registry_get_field_ptr
+
+   subroutine diag_registry_list_fields(this, names, n)
+      class(DiagnosticRegistryType), intent(in) :: this
+      character(len=*), intent(out) :: names(:)
+      integer, intent(out) :: n
+      integer :: i
+      n = this%n_fields
+      do i = 1, this%n_fields
+         names(i) = this%fields(i)%field_name
+      end do
+   end subroutine diag_registry_list_fields
+
+   function diag_registry_get_count(this) result(count)
+      class(DiagnosticRegistryType), intent(in) :: this
+      integer :: count
+      count = this%n_fields
+   end function diag_registry_get_count
+
+   function diag_registry_get_num_diagnostics(this) result(num)
+      class(DiagnosticRegistryType), intent(in) :: this
+      integer :: num
+      num = this%n_fields
+   end function diag_registry_get_num_diagnostics
+
+   function diag_registry_field_exists(this, name) result(exists)
+      class(DiagnosticRegistryType), intent(in) :: this
+      character(len=*), intent(in) :: name
+      logical :: exists
+      integer :: i
+      exists = .false.
+      do i = 1, this%n_fields
+         if (trim(this%fields(i)%field_name) == trim(name)) then
+            exists = .true.
+            return
+         end if
+      end do
+   end function diag_registry_field_exists
+
+   subroutine diag_registry_enable_field(this, name)
+      class(DiagnosticRegistryType), intent(inout) :: this
+      character(len=*), intent(in) :: name
+      integer :: i
+      do i = 1, this%n_fields
+         if (trim(this%fields(i)%field_name) == trim(name)) then
+            call this%fields(i)%set_enabled(.true.)
+            return
+         end if
+      end do
+   end subroutine diag_registry_enable_field
+
+   subroutine diag_registry_disable_field(this, name)
+      class(DiagnosticRegistryType), intent(inout) :: this
+      character(len=*), intent(in) :: name
+      integer :: i
+      do i = 1, this%n_fields
+         if (trim(this%fields(i)%field_name) == trim(name)) then
+            call this%fields(i)%set_enabled(.false.)
+            return
+         end if
+      end do
+   end subroutine diag_registry_disable_field
+
+   subroutine diag_registry_set_frequency(this, name, freq)
+      class(DiagnosticRegistryType), intent(inout) :: this
+      character(len=*), intent(in) :: name
+      integer, intent(in) :: freq
+      integer :: i
+      do i = 1, this%n_fields
+         if (trim(this%fields(i)%field_name) == trim(name)) then
+            this%fields(i)%output_frequency = freq
+            return
+         end if
+      end do
+   end subroutine diag_registry_set_frequency
+
+   subroutine diag_registry_reset(this, rc)
+      class(DiagnosticRegistryType), intent(inout) :: this
+      integer, intent(out), optional :: rc
+      integer :: i, local_rc
+      if (present(rc)) rc = 0
+      do i = 1, this%n_fields
+         call this%fields(i)%reset_data(local_rc)
+         if (present(rc) .and. local_rc /= 0) rc = local_rc
+      end do
+   end subroutine diag_registry_reset
+
+   subroutine diag_registry_validate(this, error_mgr, rc)
+      class(DiagnosticRegistryType), intent(in) :: this
+      type(ErrorManagerType), pointer, intent(inout) :: error_mgr
+      integer, intent(out) :: rc
+      integer :: i
+      rc = CC_SUCCESS
+      do i = 1, this%n_fields
+         call this%fields(i)%validate_field(error_mgr, rc)
+         if (rc /= CC_SUCCESS) return
+      end do
+   end subroutine diag_registry_validate
+
+   !-------------------
+   ! End DiagnosticRegistryType implementations
+   !-------------------
+
+end module DiagnosticInterface_Mod

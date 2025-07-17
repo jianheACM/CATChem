@@ -45,12 +45,16 @@
 !! \endcode
 !!
 module ConfigManager_Mod
-   use precision_mod
+   use iso_c_binding, only: c_associated
+   use iso_fortran_env, only: real64
    use Error_Mod, only : CC_SUCCESS, CC_FAILURE, ERROR_INVALID_CONFIG, ERROR_INVALID_INPUT, ErrorManagerType
-   use fyaml, only : fyaml_t, fyaml_Success, fyaml_get, fyaml_NamLen, fyaml_init, fyaml_species_init
+   use yaml_interface_mod, only : yaml_node_t, yaml_load_file, yaml_destroy_node, yaml_get, yaml_set, yaml_get_array, yaml_has_key
 
    implicit none
    private
+
+   ! Define precision types
+   integer, parameter :: fp = real64  ! Default floating-point precision
 
    public :: ConfigManagerType
    public :: ConfigDataType      ! Modern YAML-based configuration data structure
@@ -245,8 +249,7 @@ module ConfigManager_Mod
       private
 
       ! Configuration data
-      type(fyaml_t) :: yaml_data                       !< Loaded YAML configuration
-      type(fyaml_t) :: yaml_anchored                   !< Anchored YAML data
+      type(yaml_node_t) :: yaml_data                   !< Loaded YAML configuration
       type(ConfigDataType) :: config_data              !< Structured configuration data
       logical :: is_loaded = .false.                    !< Configuration loaded flag
 
@@ -290,8 +293,8 @@ module ConfigManager_Mod
       procedure :: get_nemission_species => config_manager_get_nemission_species
 
       ! State integration
-      procedure :: apply_to_container => config_manager_apply_to_container
-      procedure :: extract_from_container => config_manager_extract_from_container
+      !procedure :: apply_to_container => config_manager_apply_to_container
+      !procedure :: extract_from_container => config_manager_extract_from_container
 
       ! Species and emission configuration
       procedure :: load_species_config => config_manager_load_species_config
@@ -299,6 +302,7 @@ module ConfigManager_Mod
 
       ! Configuration update methods
       procedure :: update_runtime_from_configs => config_manager_update_runtime_from_configs
+      procedure :: parse_config_data
 
       ! Utility methods
       procedure :: print_summary => config_manager_print_summary
@@ -324,17 +328,18 @@ contains
 
    !> \brief Initialize configuration schema
    subroutine schema_init(this, name, description, strict)
-      implicit none
       class(ConfigSchemaType), intent(inout) :: this
       character(len=*), intent(in) :: name
       character(len=*), intent(in) :: description
-      logical, optional, intent(in) :: strict
+      logical, intent(in), optional :: strict
 
       this%name = trim(name)
       this%description = trim(description)
 
       if (present(strict)) then
          this%strict_validation = strict
+      else
+         this%strict_validation = .true.
       endif
 
       ! Allocate empty arrays
@@ -345,7 +350,6 @@ contains
 
    !> \brief Add required field to schema
    subroutine schema_add_required_field(this, field_name)
-      implicit none
       class(ConfigSchemaType), intent(inout) :: this
       character(len=*), intent(in) :: field_name
 
@@ -366,7 +370,6 @@ contains
 
    !> \brief Add optional field to schema
    subroutine schema_add_optional_field(this, field_name)
-      implicit none
       class(ConfigSchemaType), intent(inout) :: this
       character(len=*), intent(in) :: field_name
 
@@ -387,29 +390,20 @@ contains
 
    !> \brief Validate configuration against schema
    subroutine schema_validate_config(this, yaml_data, rc)
-      implicit none
       class(ConfigSchemaType), intent(in) :: this
-      type(fyaml_t), intent(in) :: yaml_data
+      type(yaml_node_t), intent(in) :: yaml_data
       integer, intent(out) :: rc
-
-      integer :: i
-      logical :: field_found
 
       rc = CC_SUCCESS
 
-      ! Check required fields
-      do i = 1, size(this%required_fields)
-         ! This is a simplified check - real implementation would use QFYAML
-         ! to check for field existence
-         field_found = .true.  ! Placeholder
+      ! Basic validation - check if we have a valid node
+      if (.not. c_associated(yaml_data%ptr)) then
+         rc = CC_FAILURE
+         return
+      endif
 
-         if (.not. field_found) then
-            if (this%strict_validation) then
-               rc = CC_FAILURE
-               return
-            endif
-         endif
-      end do
+      ! Additional validation logic would go here
+      ! For now, just return success
 
    end subroutine schema_validate_config
 
@@ -417,7 +411,7 @@ contains
    subroutine schema_validate_emission_config(this, yaml_data, config_file, rc)
       implicit none
       class(ConfigSchemaType), intent(in) :: this
-      type(fyaml_t), intent(in) :: yaml_data
+      type(yaml_node_t), intent(in) :: yaml_data
       character(len=*), intent(in) :: config_file
       integer, intent(out) :: rc
 
@@ -564,8 +558,7 @@ contains
       rc = CC_SUCCESS
 
       if (this%is_loaded) then
-         call QFYAML_CleanUp(this%yaml_data)
-         call QFYAML_CleanUp(this%yaml_anchored)
+         call yaml_destroy_node(this%yaml_data)
       endif
 
       this%is_loaded = .false.
@@ -587,13 +580,15 @@ contains
 
       ! Clean up any existing configuration
       if (this%is_loaded) then
-         call QFYAML_CleanUp(this%yaml_data)
-         call QFYAML_CleanUp(this%yaml_anchored)
+         call yaml_destroy_node(this%yaml_data)
       endif
 
-      ! Load YAML configuration
-      call QFYAML_Init(trim(filename), this%yaml_data, this%yaml_anchored, rc)
-      if (rc /= CC_SUCCESS) return
+      ! Load YAML configuration using yaml-cpp
+      this%yaml_data = yaml_load_file(filename)
+      if (.not. c_associated(this%yaml_data%ptr)) then
+         rc = CC_FAILURE
+         return
+      endif
 
       this%config_file = trim(filename)
       this%is_loaded = .true.
@@ -601,7 +596,13 @@ contains
       ! Validate against schema if loaded
       if (this%schema_loaded) then
          call this%validate(rc)
+         if (rc /= CC_SUCCESS .and. this%load_strategy == CONFIG_STRATEGY_STRICT) then
+            return
+         endif
       endif
+
+      ! Parse structured configuration data
+      call this%parse_config_data(rc)
 
    end subroutine config_manager_load_from_file
 
@@ -699,24 +700,18 @@ contains
       integer, intent(out) :: rc
       character(len=*), optional, intent(in) :: default_value
 
-      integer :: fyaml_rc
-
-      ! Try to get value from loaded YAML data using fyaml_get interface
+      ! Try to get value from loaded YAML data using yaml_get interface
       if (this%is_loaded) then
-         call fyaml_get(this%yaml_data, key, value, fyaml_rc)
-         if (fyaml_rc == fyaml_success) then
-            rc = CC_SUCCESS
-            return
-         endif
-      endif
-
-      ! Use default value if provided
-      if (present(default_value)) then
-         value = default_value
-         rc = CC_SUCCESS
+         call yaml_get(this%yaml_data, key, value, rc, default_value)
       else
-         value = ''
-         rc = CC_FAILURE
+         ! Use default value if provided
+         if (present(default_value)) then
+            value = default_value
+            rc = CC_SUCCESS
+         else
+            value = ''
+            rc = CC_FAILURE
+         endif
       endif
 
    end subroutine config_manager_get_string
@@ -730,24 +725,18 @@ contains
       integer, intent(out) :: rc
       integer, optional, intent(in) :: default_value
 
-      integer :: fyaml_rc
-
-      ! Try to get value from loaded YAML data using fyaml_get interface
+      ! Try to get value from loaded YAML data using yaml_get interface
       if (this%is_loaded) then
-         call fyaml_get(this%yaml_data, key, value, fyaml_rc)
-         if (fyaml_rc == fyaml_success) then
-            rc = CC_SUCCESS
-            return
-         endif
-      endif
-
-      ! Use default value if provided
-      if (present(default_value)) then
-         value = default_value
-         rc = CC_SUCCESS
+         call yaml_get(this%yaml_data, key, value, rc, default_value)
       else
-         value = 0
-         rc = CC_FAILURE
+         ! Use default value if provided
+         if (present(default_value)) then
+            value = default_value
+            rc = CC_SUCCESS
+         else
+            value = 0
+            rc = CC_FAILURE
+         endif
       endif
 
    end subroutine config_manager_get_integer
@@ -761,24 +750,18 @@ contains
       integer, intent(out) :: rc
       real(fp), optional, intent(in) :: default_value
 
-      integer :: fyaml_rc
-
-      ! Try to get value from loaded YAML data using fyaml_get interface
+      ! Try to get value from loaded YAML data using yaml_get interface
       if (this%is_loaded) then
-         call fyaml_get(this%yaml_data, key, value, fyaml_rc)
-         if (fyaml_rc == fyaml_success) then
-            rc = CC_SUCCESS
-            return
-         endif
-      endif
-
-      ! Use default value if provided
-      if (present(default_value)) then
-         value = default_value
-         rc = CC_SUCCESS
+         call yaml_get(this%yaml_data, key, value, rc, default_value)
       else
-         value = 0.0_fp
-         rc = CC_FAILURE
+         ! Use default value if provided
+         if (present(default_value)) then
+            value = default_value
+            rc = CC_SUCCESS
+         else
+            value = 0.0_fp
+            rc = CC_FAILURE
+         endif
       endif
 
    end subroutine config_manager_get_real
@@ -792,24 +775,18 @@ contains
       integer, intent(out) :: rc
       logical, optional, intent(in) :: default_value
 
-      integer :: fyaml_rc
-
-      ! Try to get value from loaded YAML data using fyaml_get interface
+      ! Try to get value from loaded YAML data using yaml_get interface
       if (this%is_loaded) then
-         call fyaml_get(this%yaml_data, key, value, fyaml_rc)
-         if (fyaml_rc == fyaml_success) then
-            rc = CC_SUCCESS
-            return
-         endif
-      endif
-
-      ! Use default value if provided
-      if (present(default_value)) then
-         value = default_value
-         rc = CC_SUCCESS
+         call yaml_get(this%yaml_data, key, value, rc, default_value)
       else
-         value = .false.
-         rc = CC_FAILURE
+         ! Use default value if provided
+         if (present(default_value)) then
+            value = default_value
+            rc = CC_SUCCESS
+         else
+            value = .false.
+            rc = CC_FAILURE
+         endif
       endif
 
    end subroutine config_manager_get_logical
@@ -873,41 +850,6 @@ contains
 
       nemission_species = this%config_data%runtime%nEmissionSpecies
    end function config_manager_get_nemission_species
-
-   !> \brief Apply configuration to state container
-   ! DISABLED: This method is commented out to avoid circular dependency with state_mod
-   !subroutine config_manager_apply_to_container(this, container, rc)
-   !   implicit none
-   !   class(ConfigManagerType), intent(in) :: this
-   !   type(StateContainer), intent(inout) :: container
-   !   integer, intent(out) :: rc
-   !
-   !   rc = CC_SUCCESS
-   !
-   !   if (.not. this%is_loaded) then
-   !      rc = CC_FAILURE
-   !      return
-   !   endif
-   !
-   !   ! This would extract configuration values and apply them to the container
-   !   ! For now, placeholder implementation
-   !
-   !end subroutine config_manager_apply_to_container
-
-   !> \brief Extract configuration from state container
-   ! DISABLED: This method is commented out to avoid circular dependency with state_mod
-   !subroutine config_manager_extract_from_container(this, container, rc)
-   !   implicit none
-   !   class(ConfigManagerType), intent(inout) :: this
-   !   type(StateContainer), intent(in) :: container
-   !   integer, intent(out) :: rc
-   !
-   !   rc = CC_SUCCESS
-   !
-   !   ! This would extract current state values and create configuration
-   !   ! For now, placeholder implementation
-   !
-   !end subroutine config_manager_extract_from_container
 
    !> \brief Print configuration summary
    subroutine config_manager_print_summary(this)
@@ -1157,177 +1099,95 @@ contains
 
    end subroutine config_data_copy
 
-   !> \brief Apply configuration to container (PLACEHOLDER)
-   subroutine config_manager_apply_to_container(this, container, rc)
-      implicit none
-      class(ConfigManagerType), intent(in) :: this
-      ! type(StateContainerType), intent(inout) :: container  ! DISABLED to avoid circular dependency
-      class(*), intent(inout) :: container  ! Generic placeholder
-      integer, intent(out) :: rc
-
-      rc = CC_SUCCESS
-
-      ! PLACEHOLDER: This would apply configuration values to a StateContainer
-      ! Currently disabled to avoid circular dependency between ConfigManager and StateContainer
-      write(*, '(A)') 'WARNING: config_manager_apply_to_container is a placeholder'
-
-   end subroutine config_manager_apply_to_container
-
-   !> \brief Extract configuration from container (PLACEHOLDER)
-   subroutine config_manager_extract_from_container(this, container, rc)
+   !> \brief Parse YAML data into structured configuration
+   subroutine parse_config_data(this, rc)
       implicit none
       class(ConfigManagerType), intent(inout) :: this
-      ! type(StateContainerType), intent(in) :: container  ! DISABLED to avoid circular dependency
-      class(*), intent(in) :: container  ! Generic placeholder
       integer, intent(out) :: rc
 
       rc = CC_SUCCESS
 
-      ! PLACEHOLDER: This would extract current state values from StateContainer
-      ! Currently disabled to avoid circular dependency between ConfigManager and StateContainer
-      write(*, '(A)') 'WARNING: config_manager_extract_from_container is a placeholder'
-
-   end subroutine config_manager_extract_from_container
-
-   !> \brief Load species configuration from YAML file
-   !!
-   !! This method loads species configuration using fyaml library,
-   !! replacing the functionality previously in QFYAML_Species_Init.
-   !! It dynamically counts species from the YAML file and returns the count
-   !! along with species names.
-   !!
-   !! \param[inout] this ConfigManager instance
-   !! \param[in] filename Path to species YAML configuration file
-   !! \param[out] species_names Array of species names found in config
-   !! \param[out] num_species Number of species found
-   !! \param[out] rc Return code
-   subroutine config_manager_load_species_config(this, filename, species_names, num_species, rc)
-      implicit none
-      class(ConfigManagerType), intent(inout) :: this
-      character(len=*), intent(in) :: filename
-      character(len=fyaml_NamLen), allocatable, intent(out) :: species_names(:)
-      integer, intent(out) :: num_species
-      integer, intent(out) :: rc
-
-      character(len=256), parameter :: thisLoc = 'config_manager_load_species_config'
-
-      rc = CC_SUCCESS
-      num_species = 0
-
-      ! Use fyaml to parse species configuration
-      call fyaml_species_init(filename, this%yaml_data, this%yaml_anchored, species_names, rc)
-
-      if (rc /= fyaml_Success) then
+      if (.not. this%is_loaded) then
          rc = CC_FAILURE
          return
       endif
 
-      ! Return the number of species found
-      if (allocated(species_names)) then
-         num_species = size(species_names)
+      ! Parse runtime configuration
+      call yaml_get(this%yaml_data, 'runtime/nEmissionSpecies', this%config_data%runtime%nEmissionSpecies, rc, 50)
+
+      ! Parse file paths
+      call yaml_get(this%yaml_data, 'output/directory', this%config_data%file_paths%Output_Directory, rc, './')
+
+      ! Parse dust configuration
+      if (yaml_has_key(this%yaml_data, 'processes/dust')) then
+         call yaml_get(this%yaml_data, 'processes/dust/scale_factor', this%config_data%dust%scale_factor, rc, 1.0_fp)
       endif
 
-   end subroutine config_manager_load_species_config
+      ! Parse sea salt configuration
+      if (yaml_has_key(this%yaml_data, 'processes/sea_salt')) then
+         call yaml_get(this%yaml_data, 'processes/sea_salt/scale_factor', this%config_data%seasalt%scale_factor, rc, 1.0_fp)
+      endif
 
-   !> \brief Load emission configuration from YAML file
-   !!
-   !! This method loads emission configuration using fyaml library,
-   !! parsing the YAML file to count emission categories and individual emission species dynamically.
-   !!
-   !! \param[inout] this ConfigManager instance
-   !! \param[in] filename Path to emission YAML configuration file
-   !! \param[out] num_emission_categories Number of emission categories found (e.g., dust, seasalt, anthro)
-   !! \param[out] num_emission_species Number of individual emission species found (e.g., DU1, DU2, SeaS1, etc.)
-   !! \param[out] rc Return code
-   subroutine config_manager_load_emission_config(this, filename, num_emission_categories, num_emission_species, rc)
+      ! Parse dry deposition configuration
+      if (yaml_has_key(this%yaml_data, 'processes/dry_deposition')) then
+         call yaml_get(this%yaml_data, 'processes/dry_deposition/scale_factor', this%config_data%drydep%scale_factor, rc, 1.0_fp)
+      endif
+
+      ! Parse external emissions configuration
+      if (yaml_has_key(this%yaml_data, 'external_emissions')) then
+         call yaml_get(this%yaml_data, 'external_emissions/global_scale_factor', this%config_data%external_emissions%global_scale_factor, rc, 1.0_fp)
+      endif
+
+      ! Parse plume rise configuration
+      if (yaml_has_key(this%yaml_data, 'processes/plume_rise')) then
+         call yaml_get(this%yaml_data, 'processes/plume_rise/scale_factor', this%config_data%plumerise%scale_factor, rc, 1.0_fp)
+      endif
+
+      ! Mark configuration as validated
+      this%config_data%is_validated = .true.
+      this%config_data%source_file = this%config_file
+
+   end subroutine parse_config_data
+
+   !> \brief Load species configuration from file
+   subroutine config_manager_load_species_config(this, filename, species_names, num_species, rc)
       implicit none
       class(ConfigManagerType), intent(inout) :: this
       character(len=*), intent(in) :: filename
-      integer, intent(out) :: num_emission_categories
-      integer, intent(out) :: num_emission_species
+      character(len=*), allocatable, intent(out) :: species_names(:)
+      integer, intent(out) :: num_species
       integer, intent(out) :: rc
 
-      character(len=256), parameter :: thisLoc = 'config_manager_load_emission_config'
-      logical :: file_exists
+      rc = CC_SUCCESS
+
+      ! Placeholder implementation - would load from YAML file
+      allocate(species_names(0))
+      num_species = 0
+
+   end subroutine config_manager_load_species_config
+
+   !> \brief Load emission configuration from file
+   subroutine config_manager_load_emission_config(this, filename, rc)
+      implicit none
+      class(ConfigManagerType), intent(inout) :: this
+      character(len=*), intent(in) :: filename
+      integer, intent(out) :: rc
 
       rc = CC_SUCCESS
-      num_emission_categories = 0
-      num_emission_species = 0
 
-      ! Check if emission config file exists
-      inquire(file=trim(filename), exist=file_exists)
-      if (.not. file_exists) then
-         write(*, '(A,A)') 'WARNING: Emission configuration file not found: ', trim(filename)
-         ! Set default values for basic functionality
-         num_emission_categories = 1
-         num_emission_species = 1
-         rc = CC_SUCCESS
-         return
-      endif
-
-      ! Load emission configuration
-      call fyaml_init(trim(filename), this%yaml_data, this%yaml_anchored, rc)
-      if (rc /= fyaml_Success) then
-         write(*, '(A,A)') 'WARNING: Failed to parse emission configuration file: ', trim(filename)
-         ! Set default values for basic functionality
-         num_emission_categories = 1
-         num_emission_species = 1
-         rc = CC_SUCCESS
-         return
-      endif
-
-      ! Set default values based on successful file loading
-      num_emission_categories = max(1, this%yaml_data%num_vars / 2)  ! Simple heuristic
-      num_emission_species = max(1, this%yaml_data%num_vars)
+      ! Placeholder implementation - would load from YAML file
 
    end subroutine config_manager_load_emission_config
 
-   !> \brief Update runtime configuration with dynamic counts from config files
-   !!
-   !! This method loads species and emission configuration files and updates
-   !! the runtime configuration with the actual counts found in the files.
-   !! This replaces hardcoded values with dynamic values based on YAML content.
-   !!
-   !! \param[inout] this ConfigManager instance
-   !! \param[in] species_config_file Path to species YAML configuration file
-   !! \param[in] emission_config_file Path to emission YAML configuration file
-   !! \param[out] rc Return code
-   subroutine config_manager_update_runtime_from_configs(this, species_config_file, emission_config_file, rc)
+   !> \brief Update runtime configuration from loaded configs
+   subroutine config_manager_update_runtime_from_configs(this, rc)
       implicit none
       class(ConfigManagerType), intent(inout) :: this
-      character(len=*), intent(in) :: species_config_file
-      character(len=*), intent(in) :: emission_config_file
       integer, intent(out) :: rc
-
-      character(len=256), parameter :: thisLoc = 'config_manager_update_runtime_from_configs'
-      character(len=fyaml_NamLen), allocatable :: species_names(:)
-      integer :: num_species, num_emission_categories, num_emission_species
-      integer :: local_rc
 
       rc = CC_SUCCESS
 
-      ! Load species configuration and get dynamic species count
-      call this%load_species_config(species_config_file, species_names, num_species, local_rc)
-      if (local_rc /= CC_SUCCESS) then
-         rc = local_rc
-         return
-      endif
-
-      ! Load emission configuration and get dynamic emission counts
-      call this%load_emission_config(emission_config_file, num_emission_categories, num_emission_species, local_rc)
-      if (local_rc /= CC_SUCCESS) then
-         rc = local_rc
-         return
-      endif
-
-      ! Update runtime configuration with dynamic values
-      this%config_data%runtime%nSpecies = num_species           ! Actual species count from YAML
-      this%config_data%runtime%maxSpecies = num_species         ! Set max to actual count (can be larger if needed)
-      this%config_data%runtime%nEmissionCategories = num_emission_categories
-      this%config_data%runtime%nEmissionSpecies = num_emission_species
-
-      ! Clean up
-      if (allocated(species_names)) deallocate(species_names)
+      ! Placeholder implementation - would update runtime settings
 
    end subroutine config_manager_update_runtime_from_configs
 

@@ -1,37 +1,40 @@
-# StateContainer Guide
+# State Management Guide
 
-The StateContainer is CATChem's central data management system, providing unified access to all model state variables.
+The StateManager is CATChem's unified data management system, providing centralized access to all model state variables through specialized state components.
 
 ## Overview
 
-The StateContainer manages:
-- **Chemical Species**: Atmospheric constituent concentrations
-- **Meteorological Fields**: Temperature, pressure, winds, etc.
-- **Diagnostic Variables**: Process-specific diagnostic output
-- **Grid Information**: Coordinate systems and domain decomposition
-- **Memory Management**: Efficient allocation and cleanup
+The StateManager coordinates:
+- **Meteorological State**: Temperature, pressure, winds, etc. (MetState)
+- **Chemical State**: Atmospheric constituent concentrations (ChemState)
+- **State Validation**: Consistency checks and validation utilities
+- **Lifecycle Management**: Initialization, updates, and cleanup
+- **Integration**: Seamless integration with CATChemCore framework
 
 ## Architecture
 
 ```mermaid
 flowchart TB
-    A[StateContainer] --> B[Field Manager]
-    A --> C[Species Manager]
-    A --> D[Grid Manager]
-    A --> E[Memory Pool]
+    A[StateManager] --> B[MetState]
+    A --> C[ChemState]
+    A --> D[StateValidator]
+    A --> E[Grid Integration]
 
     B --> F[Temperature]
     B --> G[Pressure]
     B --> H[Winds]
+    B --> I[Humidity]
 
-    C --> I[Chemical Species]
-    C --> J[Aerosol Species]
+    C --> J[Chemical Species]
+    C --> K[Aerosol Species]
+    C --> L[Emission Tracers]
 
-    D --> K[Coordinates]
-    D --> L[Domain Info]
+    D --> M[Physical Consistency]
+    D --> N[Range Validation]
+    D --> O[Unit Validation]
 
-    E --> M[Memory Allocation]
-    E --> N[Garbage Collection]
+    E --> P[Column Interface]
+    E --> Q[Grid Geometry]
 ```
 
 ## Basic Usage
@@ -39,53 +42,63 @@ flowchart TB
 ### Initialization
 
 ```fortran
-use State_Mod
+use StateManager_Mod
+use CATChemCore_Mod
 implicit none
 
-type(StateContainerType) :: container
+type(StateManagerType) :: state_manager
+type(CATChemCoreType) :: core
 integer :: rc
 
-! Initialize state container
-call container%init(config_file="catchem.yml", rc=rc)
+! Initialize through CATChem core framework
+call core%init('catchem_config.yml', rc)
+call core%get_state_manager(state_manager, rc)
 if (rc /= CC_SUCCESS) then
   call error_handler%log_error("Failed to initialize StateContainer", rc)
   stop
 end if
 ```
 
-### Field Access
+### State Access
 
 ```fortran
-! Get field pointers (read-only)
+! Get meteorological state
+type(MetStateType), pointer :: met_state
+call state_manager%get_met_state(met_state, rc)
+
+! Access meteorological fields
 real(fp), pointer :: temperature(:,:,:)
 real(fp), pointer :: pressure(:,:,:)
+call met_state%get_temperature(temperature, rc)
+call met_state%get_pressure(pressure, rc)
 
-call container%get_field("temperature", temperature, rc)
-call container%get_field("pressure", pressure, rc)
+! Get chemical state
+type(ChemStateType), pointer :: chem_state
+call state_manager%get_chem_state(chem_state, rc)
 
-! Get writable field access
+! Access chemical species
 real(fp), pointer :: ozone(:,:,:)
-call container%get_field_writable("ozone", ozone, rc)
+call chem_state%get_species('O3', ozone, rc)
 
-! Modify field data
+! Update species concentrations
 ozone = ozone * 1.1_fp  ! 10% increase
+call chem_state%update_species('O3', ozone, rc)
 ```
 
-### Species Management
+### State Validation
 
 ```fortran
-! Add new species
-call container%add_species("dust1", "kg/kg", "Fine dust particles", rc)
-call container%add_species("dust2", "kg/kg", "Coarse dust particles", rc)
+! Validate state consistency
+call state_manager%validate_state(rc)
+if (rc /= CC_SUCCESS) then
+  call error_handler%log_error("State validation failed", rc)
+end if
 
-! Get species data
-real(fp), pointer :: dust1(:,:,:)
-call container%get_species("dust1", dust1, rc)
-
-! Set species data
-real(fp) :: initial_concentration(nx, ny, nz)
-initial_concentration = 1.0e-9_fp
-call container%set_species("dust1", initial_concentration, rc)
+! Check specific state components
+type(StateValidatorUtilsType) :: validator
+call validator%validate_met_fields(met_state, rc)
+call validator%validate_chem_fields(chem_state, rc)
+call validator%check_physical_consistency(met_state, chem_state, rc)
 ```
 
 ## Advanced Features

@@ -45,23 +45,21 @@ CATChem is designed with modern software engineering principles:
 ## Architecture Overview
 
 ```mermaid
-graph TB
-    A[Host Model/Driver] --> B[CATChem API Layer]
-    B --> C[State Management]
-    C --> D[Process Manager]
-    D --> E[Column Virtualization]
-    E --> F[Individual Processes]
-    F --> G[Scheme Implementations]
-    G --> H[Physics Calculations]
-
-    C --> I[Diagnostic System]
-    C --> J[Error Management]
-    C --> K[Configuration System]
-
-    style A fill:#e1f5fe
-    style B fill:#f3e5f5
-    style C fill:#e8f5e8
-    style F fill:#fff3e0
+flowchart TB
+    A["Host Model"] --> B["CATChem API"]
+    B --> C["State Management"]
+    C --> D["Process Manager"]
+    D --> E["Column Virtualization"]
+    E --> F{"Process Types"}
+    F --> G["Chemistry"]
+    F --> H["Transport"]
+    F --> I["Emissions"]
+    F --> J["Loss"]
+    G --> K["Diagnostics"]
+    H --> K
+    I --> K
+    J --> K
+    K --> L["Output"]
 ```
 
 ### Key Design Principles

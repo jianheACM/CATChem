@@ -16,7 +16,7 @@ MODULE ExtEmisData_Mod
    ! Module uses
    !=========================================================================
    USE Error_Mod
-   USE logging_mod, only: log_message, LOG_ERROR, LOG_WARNING, LOG_INFO, LOG_DEBUG
+   ! USE logging_mod, only: log_message, LOG_ERROR, LOG_WARNING, LOG_INFO, LOG_DEBUG
    USE Precision_Mod
    USE species_mod, only: SpeciesType
    USE IEEE_ARITHMETIC
@@ -50,10 +50,10 @@ MODULE ExtEmisData_Mod
       INTEGER                       :: current_time_idx = 1 !< Current time index
       LOGICAL                       :: time_interpolate = .true. !< Enable time interpolation
       REAL(fp), ALLOCATABLE         :: emission_data(:,:,:,:) !< Emission flux [kg/m2/s] (nx,ny,nz,n_times)
-      REAL(fp), ALLOCATABLE         :: longitude(:)         !< Longitude coordinates [degrees]
-      REAL(fp), ALLOCATABLE         :: latitude(:)          !< Latitude coordinates [degrees]
-      REAL(fp), ALLOCATABLE         :: vertical(:)          !< Vertical coordinates (if applicable)
-      REAL(fp), ALLOCATABLE         :: time_coords(:)       !< Time coordinates
+      REAL(fp), ALLOCATABLE         :: longitude(:,:)         !< Longitude coordinates [degrees]
+      REAL(fp), ALLOCATABLE         :: latitude(:,:)          !< Latitude coordinates [degrees]
+      REAL(fp), ALLOCATABLE         :: vertical(:,:)          !< Vertical coordinates (if applicable)
+      REAL(fp), ALLOCATABLE         :: time_coords(:,:)       !< Time coordinates
       LOGICAL                       :: is_loaded = .false. !< Data loading status
       LOGICAL                       :: is_valid = .false.  !< Data validation status
       CHARACTER(LEN=32)             :: interpolation_method = 'bilinear' !< Spatial interpolation method
@@ -356,7 +356,7 @@ CONTAINS
       this%source_file = trim(filename)
       this%is_loaded = .false.  ! Will be set to true by driver after successful load
 
-      call log_message(LOG_WARNING, 'ExtEmisField file loading is handled by driver')
+      print *, 'WARNING: ExtEmisField file loading is handled by driver'
       call error_mgr%pop_context()
 
    end subroutine extemifield_load_from_file
@@ -764,7 +764,7 @@ CONTAINS
       call error_mgr%push_context('extemidata_load_files', 'Loading emission files')
 
       ! Placeholder - actual file loading is handled by the driver
-      call log_message(LOG_WARNING, 'ExtEmisData file loading is handled by driver')
+      print *, 'WARNING: ExtEmisData file loading is handled by driver'
 
       call error_mgr%pop_context()
 

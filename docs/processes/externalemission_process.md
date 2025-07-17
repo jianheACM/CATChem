@@ -30,13 +30,11 @@ The **External Emission Process** is a modernized CATChem process for applying e
 ## Process Workflow
 
 ```mermaid
-graph TD
-    A[Driver reads emission data] --> B[Driver provides emission rates via StateContainer]
-    B --> C[Process validates species mapping]
-    C --> D[Process applies emission tendencies]
-    D --> E[dC/dt += emission_rate]
-    E --> F[Accumulate emissions in EmisState]
-    F --> G[Update diagnostics]
+flowchart TB
+    A["Input Data"] --> B["Emission Config Validator"]
+    B --> C["Emission Process"]
+    C --> D["StateContainer"]
+    D --> E["Diagnostics"]
 ```
 
 ## Features

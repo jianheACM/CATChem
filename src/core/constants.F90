@@ -21,7 +21,7 @@
 !! air_density = pressure / (Rd * temperature)
 !! \endcode
 !!
-module constants
+module Constants
    use precision_mod
 
    implicit none
@@ -119,4 +119,4 @@ module constants
 
    end subroutine validate_atmospheric_constants
 
-end module constants
+end module Constants
