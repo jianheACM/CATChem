@@ -1,7 +1,7 @@
-add_subdirectory(core)
-
-# Always build external dependencies (fyaml is required for core)
+# Always build external dependencies first (yaml-cpp and yaml_interface are required for core)
 add_subdirectory(external)
+
+add_subdirectory(core)
 
 # Make process modules optional (some depend on external libraries)
 option(BUILD_PROCESSES "Build process modules (may require external dependencies)" OFF)

@@ -1,3 +1,7 @@
+# External dependencies
+
+# TODO: GOCART-2G Process Library - currently disabled as source files are missing
+# Uncomment when GOCART source files are available
 #
 # GOCART-2G Process Library
 #
@@ -24,17 +28,10 @@ set_target_properties(
 )
 
 #
-# MICM Fortran API
+# MICM Fortran API - using submodule v0.11.1.4
 #
 
-include(FetchContent)
-
-FetchContent_Declare(
-  musica_fortran
-  GIT_REPOSITORY https://github.com/NCAR/musica.git
-  GIT_TAG v0.9.0
-)
-
+# Set MUSICA build options before adding the subdirectory
 set(MICM_ENABLE_TESTS OFF)
 set(MICM_ENABLE_EXAMPLES OFF)
 
@@ -43,6 +40,10 @@ set(MUSICA_BUILD_FORTRAN_INTERFACE ON)
 set(MUSICA_ENABLE_INSTALL OFF)
 set(MUSICA_ENABLE_TESTS OFF)
 set(MUSICA_ENABLE_MICM ON)
-set(MUSICA_ENABLE_TUVX OFF)
+set(MUSICA_ENABLE_TUVX ON)
 
-FetchContent_MakeAvailable(musica_fortran)
+# Add MUSICA as a subdirectory (from submodule v0.11.1.4)
+add_subdirectory(musica)
+
+# Add our yaml interface (now that yaml-cpp is available from MUSICA)
+add_subdirectory(yaml_interface)
