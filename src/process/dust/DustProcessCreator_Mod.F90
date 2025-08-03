@@ -4,22 +4,22 @@
 !! This module provides the factory functions for creating dust
 !! process instances following the CATChem Process Factory pattern.
 !!
-!! Generated on: 2025-07-09T12:43:17.993393
+!! Generated on: 2025-08-03T14:41:50.757588
 !! Author: Barry Baker
 !! Version: 1.0.0
 
 module DustProcessCreator_Mod
 
    use iso_fortran_env, only: fp => real64
+   use Error_Mod, only: CC_SUCCESS, CC_FAILURE
    use ProcessInterface_Mod
    use ProcessDustInterface_Mod
-   use ErrorHandler_Mod
 
    implicit none
    private
 
    public :: create_dust_process
-   public :: get_dust_process_info
+   public :: register_dust_process
 
    ! Process metadata constants
    character(len=*), parameter :: PROCESS_NAME = 'dust'
@@ -36,26 +36,52 @@ contains
    !! must call the init() method with appropriate configuration.
    !!
    !! @param[out] process     Allocated process instance
-   !! @param[inout] error_handler Error handling object
-   function create_dust_process(error_handler) result(process)
-      type(ErrorHandler), intent(inout) :: error_handler
-      class(ProcessInterface), allocatable :: process
+   !! @param[out] rc          Return code
+   subroutine create_dust_process(process, rc)
+      class(ProcessInterface), allocatable, intent(out) :: process
+      integer, intent(out) :: rc
 
       type(ProcessDustInterface), allocatable :: dust_process
       integer :: alloc_stat
 
+      rc = CC_SUCCESS
+
       ! Allocate the process instance
       allocate(dust_process, stat=alloc_stat)
       if (alloc_stat /= 0) then
-         call error_handler%set_error(ERROR_MEMORY, &
-            "Failed to allocate dust process instance")
+         rc = CC_FAILURE
          return
       end if
 
       ! Move to polymorphic variable
       call move_alloc(dust_process, process)
 
-   end function create_dust_process
+   end subroutine create_dust_process
+
+   !> Register the dust process with the global registry
+   !!
+   !! This subroutine should be called during module initialization to
+   !! register the dust process with the global process registry.
+   !!
+   !! @param[out] rc Return code
+   subroutine register_dust_process(rc)
+      use ProcessRegistry_Mod, only: get_global_registry, ProcessRegistryType
+
+      integer, intent(out) :: rc
+      type(ProcessRegistryType), pointer :: registry
+
+      rc = CC_SUCCESS
+      registry => get_global_registry()
+
+      call registry%register_process( &
+         name=PROCESS_NAME, &
+         category='generic', &
+         description=PROCESS_DESCRIPTION, &
+         creator=create_dust_process, &
+         rc=rc &
+      )
+
+   end subroutine register_dust_process
 
    !> Get information about the dust process
    !!
@@ -73,7 +99,7 @@ contains
       info%author = PROCESS_AUTHOR
 
       ! Process characteristics
-      info%process_type = 'emission'
+      info%process_type = 'generic'
       info%is_multiphase = .false.
       info%has_size_bins = .false.
       info%supports_vectorization = .true.
@@ -84,7 +110,13 @@ contains
       info%memory_requirements = 'low'
 
       ! Species information
-      info%n_species = 0
+      info%n_species = 5
+      allocate(info%species_names(info%n_species))
+      info%species_names(1) = 'DUST1'
+      info%species_names(2) = 'DUST2'
+      info%species_names(3) = 'DUST3'
+      info%species_names(4) = 'DUST4'
+      info%species_names(5) = 'DUST5'
 
 
 
@@ -96,7 +128,7 @@ contains
       info%scheme_descriptions(1) = 'Fengsha Dust emission scheme developed at NOAA ARL for use at NOAA NWS'
       info%scheme_names(2) = 'ginoux'
       info%scheme_descriptions(2) = 'Ginoux dust emission scheme'
-      info%default_scheme = ''
+      info%default_scheme = 'fengsha'
 
       ! Required meteorological fields
       info%n_required_met_fields = 3
@@ -138,6 +170,14 @@ contains
       is_compatible = .true.
 
       ! Check required species
+      ! Check if required species are available in host model
+      do i = 1, 5
+         if (.not. host_config%has_species('DUST1')) then
+            call error_handler%set_warning(WARNING_COMPATIBILITY, &
+               "Required species not available: DUST1")
+            is_compatible = .false.
+         end if
+      end do
 
       ! Check required meteorological fields
       if (.not. host_config%has_met_field('ustar')) then
@@ -206,7 +246,7 @@ contains
          'process:' // new_line('A') // &
          '  name: "dust"' // new_line('A') // &
          '  version: "1.0.0"' // new_line('A') // &
-         '  active_scheme: ""' // new_line('A') // &
+         '  active_scheme: "fengsha"' // new_line('A') // &
          '  is_active: true' // new_line('A') // &
          '' // new_line('A') // &
          '# Scheme configuration' // new_line('A') // &
@@ -219,7 +259,7 @@ contains
          '      beta: 1.0' // new_line('A') // &
          '      drylimit_factor: 1.0' // new_line('A') // &
          '      drag_option: 1' // new_line('A') // &
-         '      moist_option: 1 - fecan' // new_line('A') // &
+         '      moist_option: 1' // new_line('A') // &
          '      distribution_option: 1' // new_line('A') // &
          '' // new_line('A') // &
          '  ginoux:' // new_line('A') // &

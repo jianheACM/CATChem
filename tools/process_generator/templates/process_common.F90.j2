@@ -11,7 +11,8 @@
 module {{ config.class_name }}Common_Mod
 
    use iso_fortran_env, only: fp => real64
-   use ErrorHandler_Mod
+   use precision_mod, only: fp
+   use Error_Mod, only: CC_SUCCESS, CC_FAILURE, ErrorManagerType
 
    implicit none
    private

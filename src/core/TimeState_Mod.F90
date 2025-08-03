@@ -130,6 +130,9 @@ contains
     class(TimeStateType), intent(inout) :: this
     type(ErrorManagerType), pointer, intent(inout) :: error_mgr
     integer, intent(out) :: rc
+
+    ! Suppress unused parameter warning
+    if (associated(error_mgr)) continue
     rc = CC_SUCCESS
   end subroutine timestate_init
 
@@ -138,6 +141,9 @@ contains
     class(TimeStateType), intent(in) :: this
     type(ErrorManagerType), pointer, intent(inout) :: error_mgr
     integer, intent(out) :: rc
+
+    ! Suppress unused parameter warning
+    if (associated(error_mgr)) continue
     rc = CC_SUCCESS
   end subroutine timestate_validate
 
@@ -146,6 +152,9 @@ contains
     class(TimeStateType), intent(inout) :: this
     type(ErrorManagerType), pointer, intent(inout) :: error_mgr
     integer, intent(out) :: rc
+
+    ! Suppress unused parameter warning
+    if (associated(error_mgr)) continue
     rc = CC_SUCCESS
   end subroutine timestate_cleanup
 
@@ -154,6 +163,9 @@ contains
     class(TimeStateType), intent(inout) :: this
     type(ErrorManagerType), pointer, intent(inout) :: error_mgr
     integer, intent(out) :: rc
+
+    ! Suppress unused parameter warning
+    if (associated(error_mgr)) continue
     rc = CC_SUCCESS
   end subroutine timestate_reset
 

@@ -81,7 +81,6 @@ MODULE MetState_Mod
       REAL(fp), ALLOCATABLE        :: SNODP(:,:)        !< Snow depth [m]
       REAL(fp), ALLOCATABLE        :: SNOMAS(:,:)       !< Snow mass [kg/m2]
 
-
       ! Soil and land use arrays (2D for counts, 3D for fractions)
       INTEGER,  ALLOCATABLE        :: DSOILTYPE(:,:)    !< Dominant soil type
       REAL(fp), ALLOCATABLE        :: CLAYFRAC(:,:)     !< Fraction of clay [1]
@@ -216,7 +215,7 @@ CONTAINS
    !! \param[inout] error_mgr Error manager for context and error reporting
    !! \param[out]   rc        Return code (CC_SUCCESS or error code)
    subroutine metstate_init(this, nx, ny, nlevs, error_mgr, rc)
-      use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE, ERROR_MEMORY_ALLOCATION
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, ERROR_MEMORY_ALLOCATION
 
       implicit none
       class(MetStateType), intent(inout) :: this
@@ -248,14 +247,13 @@ CONTAINS
    !! \param[inout] error_mgr Error manager for context and error reporting
    !! \param[out]   rc        Return code
    subroutine allocate_metstate_arrays(this, field_name, error_mgr, rc)
-      use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE, ERROR_MEMORY_ALLOCATION
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, ERROR_MEMORY_ALLOCATION
 
       implicit none
       class(MetStateType), intent(inout) :: this
       character(len=*), intent(in) :: field_name
       type(ErrorManagerType), pointer, intent(inout) :: error_mgr
       integer, intent(out) :: rc
-      integer :: allocStat
       character(len=256) :: thisLoc
       integer :: nx, ny, nz, nsoil, nsoiltype, nSURFTYPE
 
@@ -320,7 +318,7 @@ CONTAINS
    !! \param[inout] error_mgr Error manager for context and error reporting
    !! \param[out]   rc        Return code (CC_SUCCESS or error code)
    subroutine metstate_validate(this, error_mgr, rc)
-      use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE, ERROR_INVALID_INPUT
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, ERROR_INVALID_INPUT
       use utilities_mod, only: is_valid_temperature, is_valid_pressure
 
       implicit none

@@ -25,6 +25,7 @@ module GridManager_Mod
    use Precision_Mod, only: fp
    use Error_Mod, only: CC_SUCCESS, CC_FAILURE, ErrorManagerType, ERROR_PROCESS_INITIALIZATION
    use ColumnInterface_Mod, only: ColumnViewType
+   use VirtualColumn_Mod, only: VirtualColumnType
 
    implicit none
    private
@@ -172,6 +173,7 @@ module GridManager_Mod
       procedure :: create_column_iterator => grid_manager_create_column_iterator
       procedure :: get_column_by_indices => grid_manager_get_column_by_indices
       procedure :: get_column_by_location => grid_manager_get_column_by_location
+      procedure :: create_virtual_column => grid_manager_create_virtual_column
 
       ! Grid operations
       procedure :: compute_distances => grid_manager_compute_distances
@@ -685,5 +687,16 @@ contains
 
       is_ready = this%validate()
    end function grid_manager_is_ready
+
+   !> \brief Create a virtual column for the given (i, j) indices
+   subroutine grid_manager_create_virtual_column(this, i, j, virtual_col, rc)
+      class(GridManagerType), intent(in) :: this
+      integer, intent(in) :: i, j
+      type(VirtualColumnType), intent(out) :: virtual_col
+      integer, intent(out) :: rc
+
+      ! TODO: Implement actual virtual column construction
+      rc = CC_SUCCESS
+   end subroutine grid_manager_create_virtual_column
 
 end module GridManager_Mod

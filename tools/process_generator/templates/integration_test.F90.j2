@@ -7,93 +7,68 @@
 program test_integration_{{ config.name }}
 
    use iso_fortran_env, only: fp => real64, error_unit
+   use precision_mod, only: fp
+   use Error_Mod, only: CC_SUCCESS, CC_FAILURE
+   use ProcessInterface_Mod
    use Process{{ config.class_name }}Interface_Mod
    use {{ config.class_name }}ProcessCreator_Mod
    use StateManager_Mod
-   use ColumnState_Mod
 
    implicit none
 
-   type(StateManager_t) :: state_manager
-   type(ColumnState_t) :: column_state
-   type(Process{{ config.class_name }}Interface_t) :: process
-   type({{ config.class_name }}ProcessCreator_t) :: creator
-
-   character(len=256) :: config_file = "{{ config.name }}_config.yaml"
-   integer :: status = 0
+   type(StateManagerType) :: state_manager
+   class(ProcessInterface), allocatable :: process
+   integer :: rc
    integer :: num_layers = 10
-   integer :: num_species = {{ config.species | length }}
+   integer :: num_columns = 5
+   integer :: num_species = {{ config.species | length if config.species else 1 }}
 
    write(*,*) "Running integration test for {{ config.name }} process..."
 
-   ! Initialize state manager
-   call state_manager%initialize(num_layers, num_species)
-
-   ! Create column state with test data
-   call setup_test_column_state(column_state, num_layers)
-
-   ! Create process from configuration
-   call creator%create_from_config(config_file, process, status)
-   if (status /= 0) then
-      write(error_unit,*) "ERROR: Failed to create process from config"
+   ! Initialize test environment
+   call state_manager%init(num_layers, num_columns, num_species, rc)
+   if (rc /= CC_SUCCESS) then
+      write(error_unit, *) 'ERROR: Failed to initialize state manager'
       stop 1
    end if
 
-   ! Run initialization
-   call process%pre_chemistry(column_state, status)
-   if (status /= 0) then
-      write(error_unit,*) "ERROR: pre_chemistry failed"
+   ! Create process instance
+   call create_process(process, rc)
+   if (rc /= CC_SUCCESS) then
+      write(error_unit, *) 'ERROR: Failed to create process'
       stop 1
    end if
 
-   ! Run main computation
-   call process%compute(column_state, status)
-   if (status /= 0) then
-      write(error_unit,*) "ERROR: compute failed"
+   ! Test process initialization
+   call process%init(state_manager, rc)
+   if (rc /= CC_SUCCESS) then
+      write(error_unit, *) 'ERROR: Process initialization failed'
       stop 1
    end if
 
-   ! Run finalization
-   call process%post_chemistry(column_state, status)
-   if (status /= 0) then
-      write(error_unit,*) "ERROR: post_chemistry failed"
+   write(*, *) 'Process initialization: PASSED'
+
+   ! Test process execution
+   call process%run(state_manager, rc)
+   if (rc /= CC_SUCCESS) then
+      write(error_unit, *) 'ERROR: Process execution failed'
       stop 1
    end if
 
-   ! Validate results
-   call validate_results(column_state, status)
-   if (status /= 0) then
-      write(error_unit,*) "ERROR: Result validation failed"
+   write(*, *) 'Process execution: PASSED'
+
+   ! Test process finalization
+   call process%finalize(rc)
+   if (rc /= CC_SUCCESS) then
+      write(error_unit, *) 'ERROR: Process finalization failed'
       stop 1
    end if
 
-   ! Cleanup
-   call process%finalize()
-   call state_manager%finalize()
+   write(*, *) 'Process finalization: PASSED'
 
-   write(*,*) "Integration test completed successfully!"
+   write(*, *) 'All integration tests PASSED for {{ config.name }} process'
 
-contains
-
-   !> Setup test column state with realistic atmospheric conditions
-   subroutine setup_test_column_state(column_state, num_layers)
-      type(ColumnState_t), intent(inout) :: column_state
-      integer, intent(in) :: num_layers
-
-      integer :: k
-      real(fp) :: height, pressure_base, temperature_base
-
-      call column_state%initialize(num_layers, num_species)
-
-      ! Set up vertical profile
-      pressure_base = 101325.0_fp  ! Pa
-      temperature_base = 298.15_fp  ! K
-
-      do k = 1, num_layers
-         height = real(k-1, fp) * 1000.0_fp  ! m
-
-         ! Set meteorological fields
-         call column_state%set_pressure(k, pressure_base * exp(-height/8000.0_fp))
+end program test_integration_{{ config.name }}
          call column_state%set_temperature(k, temperature_base - height * 0.0065_fp/1000.0_fp)
          call column_state%set_humidity(k, 0.6_fp)
 

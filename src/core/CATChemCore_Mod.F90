@@ -38,7 +38,7 @@
 !!
 module CATChemCore_Mod
    use precision_mod, only: fp
-   use Error_Mod, only: CC_SUCCESS, CC_FAILURE, ErrorManagerType
+   use Error_Mod, only: CC_SUCCESS, CC_FAILURE, ErrorManagerType, ERROR_PROCESS_INITIALIZATION
    use ConfigManager_Mod, only: ConfigManagerType, ConfigDataType
    use StateManager_Mod, only: StateManagerType
    use GridManager_Mod, only: GridManagerType, GridGeometryType
@@ -323,8 +323,15 @@ contains
       ! Initialize chemistry state
       chem_ptr => this%state_mgr%get_chem_state_ptr()
       if (associated(chem_ptr)) then
-         ! TODO: Add proper chemistry state initialization when available
-         ! call chem_ptr%init(this%config%runtime%maxSpecies, this%error_mgr, local_rc)
+         error_mgr_ptr => this%state_mgr%get_error_manager()
+         ! Initialize with a reasonable default number of species
+         ! In production, this would come from configuration
+         call chem_ptr%init(50, error_mgr_ptr, local_rc)
+         if (local_rc /= CC_SUCCESS) then
+            call this%error_mgr%report_error(local_rc, 'Failed to initialize chem state', rc)
+            call this%error_mgr%pop_context()
+            return
+         endif
       endif
 
       call this%error_mgr%pop_context()
@@ -364,7 +371,7 @@ contains
       call this%error_mgr%push_context('core_setup_processes', 'Setting up process manager')
 
       ! Initialize process manager
-      call this%process_mgr%init(this%state_mgr, this%grid_mgr, local_rc)
+      call this%process_mgr%init(local_rc)
       if (local_rc /= CC_SUCCESS) then
          call this%error_mgr%report_error(local_rc, 'Failed to initialize process manager', rc)
          call this%error_mgr%pop_context()
@@ -374,6 +381,46 @@ contains
       call this%error_mgr%pop_context()
 
    end subroutine core_setup_processes
+
+   !> \brief Add a process to the process manager
+   subroutine core_add_process(this, process_name, scheme_name, rc)
+      class(CATChemCoreType), intent(inout) :: this
+      character(len=*), intent(in) :: process_name
+      character(len=*), intent(in) :: scheme_name
+      integer, intent(out) :: rc
+
+      call this%error_mgr%push_context("core_add_process")
+      rc = CC_SUCCESS
+
+      call this%process_mgr%add_process(process_name, scheme_name, this%state_mgr, rc)
+      if (rc /= CC_SUCCESS) then
+         call this%error_mgr%report_error(rc, "Failed to add process: " // trim(process_name), rc)
+         call this%error_mgr%pop_context()
+         return
+      endif
+
+      call this%error_mgr%pop_context()
+
+   end subroutine core_add_process
+
+   !> \brief Run all processes
+   subroutine core_run_processes(this, rc)
+      class(CATChemCoreType), intent(inout) :: this
+      integer, intent(out) :: rc
+
+      call this%error_mgr%push_context("core_run_processes")
+      rc = CC_SUCCESS
+
+      call this%process_mgr%run_all(this%state_mgr, rc)
+      if (rc /= CC_SUCCESS) then
+         call this%error_mgr%report_error(rc, "Failed to run processes", rc)
+         call this%error_mgr%pop_context()
+         return
+      endif
+
+      call this%error_mgr%pop_context()
+
+   end subroutine core_run_processes
 
    !> \brief Run a single timestep
    subroutine core_run_timestep(this, timestep, dt, rc)
@@ -391,12 +438,26 @@ contains
 
       call this%error_mgr%push_context('core_run_timestep', 'Running timestep')
 
-      ! Placeholder for timestep logic
-      ! This would orchestrate:
-      ! - Process execution on grid columns
-      ! - Diagnostic collection
-      ! - State updates
-      ! - Output writing
+      ! Basic timestep orchestration
+      ! 1. Run all processes
+      call this%run_processes(rc)
+      if (rc /= CC_SUCCESS) then
+         call this%error_mgr%report_error(rc, 'Process execution failed', rc)
+         call this%error_mgr%pop_context()
+         return
+      endif
+
+      ! 2. Collect diagnostics
+      call this%diag_mgr%collect_all_diagnostics(this%state_mgr, rc)
+      if (rc /= CC_SUCCESS) then
+         ! Don't fail the timestep for diagnostic issues, just warn
+         call this%error_mgr%report_error(ERROR_PROCESS_INITIALIZATION, &
+                                         'Diagnostic collection failed', rc)
+         rc = CC_SUCCESS
+      endif
+
+      ! 3. Update state timestep counter (if needed)
+      ! This would be where state evolution time tracking occurs
 
       call this%error_mgr%pop_context()
 
@@ -416,7 +477,11 @@ contains
       ! Clean up components in reverse order
       if (this%is_configured) then
          ! Clean up diagnostic manager
-         ! TODO: Add cleanup method to DiagnosticManagerType when available
+         call this%diag_mgr%finalize(local_rc)
+         if (local_rc /= CC_SUCCESS) then
+            call this%error_mgr%report_error(ERROR_PROCESS_INITIALIZATION, &
+                                            'Failed to finalize diagnostic manager', local_rc)
+         endif
 
          ! Clean up state manager
          call this%state_mgr%finalize(local_rc)
@@ -425,7 +490,7 @@ contains
          call this%grid_mgr%cleanup()
 
          ! Clean up configuration
-         ! TODO: Add cleanup to ConfigManagerType when available
+         ! Note: ConfigManager uses automatic finalization for YAML data
       endif
 
       this%is_configured = .false.

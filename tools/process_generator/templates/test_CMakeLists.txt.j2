@@ -20,14 +20,8 @@ foreach(test_source ${TEST_SOURCES})
 
     # Link against process modules
     target_link_libraries(${test_name}
-        Process{{ config.class_name }}Interface_Mod
-        {{ config.class_name }}Common_Mod
-        {{ config.class_name }}ProcessCreator_Mod
-{% for scheme in config.schemes %}
-        {{ config.class_name }}Scheme_{{ scheme.class_name }}_Mod
-{% endfor %}
-        StateManager_Mod
-        ColumnState_Mod
+        CATChem_process_{{ config.name }}
+        CATChem_core
     )
 
     # Set Fortran module directory

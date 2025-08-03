@@ -7,16 +7,19 @@
 program test_{{ config.name }}_unit
 
    use iso_fortran_env, only: fp => real64, error_unit
+   use precision_mod, only: fp
+   use Error_Mod, only: CC_SUCCESS, CC_FAILURE, ErrorManagerType
    use Process{{ config.class_name }}Interface_Mod
    use {{ config.class_name }}Common_Mod
-   use ErrorHandler_Mod
+   use {{ config.class_name }}ProcessCreator_Mod
    use StateManager_Mod
-   use UnitTest_Mod
 
    implicit none
 
-   type(UnitTestSuite) :: test_suite
-   type(ErrorHandler) :: error_handler
+   ! Basic test framework (simplified)
+   integer :: total_tests = 0
+   integer :: passed_tests = 0
+   integer :: failed_tests = 0
    logical :: all_passed
 
    ! Initialize test suite

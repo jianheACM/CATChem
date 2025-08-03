@@ -4,29 +4,28 @@
 !! This program demonstrates how to use the dust process
 !! in a standalone application or host model integration.
 !!
-!! Generated on: 2025-07-09T12:43:18.036132
+!! Generated on: 2025-08-03T14:41:50.813959
 !! Author: Barry Baker
 
 program dust_example
 
    use iso_fortran_env, only: fp => real64, output_unit, error_unit
+   use precision_mod, only: fp
+   use Error_Mod, only: CC_SUCCESS, CC_FAILURE
+   use ProcessInterface_Mod
    use ProcessDustInterface_Mod
    use DustCommon_Mod
    use DustProcessCreator_Mod
    use StateManager_Mod
-   use ErrorHandler_Mod
-   use DiagnosticManager_Mod
 
    implicit none
 
    ! Process and state management
    class(ProcessInterface), allocatable :: process
    type(StateManagerType) :: state_manager
-   type(ErrorHandler) :: error_handler
-   type(DiagnosticManager), pointer :: diag_mgr
+   integer :: rc
 
    ! Configuration
-   character(len=1024) :: config_data
    character(len=256) :: config_file = "dust_config.yaml"
 
    ! Simulation parameters
@@ -38,49 +37,64 @@ program dust_example
    ! Working variables
    integer :: i_time, i_col
    real(fp) :: total_time
-   character(len=32), allocatable :: species_list(:)
-   character(len=32), allocatable :: required_fields(:)
 
    write(output_unit, '(A)') "=== Dust Process Example ==="
    write(output_unit, '(A)') "Process for computing windblown dust emissions"
    write(output_unit, '(A)') "Author: Barry Baker"
    write(output_unit, '(A)') ""
 
-   ! Step 1: Initialize error handler
-   call error_handler%init()
-   write(output_unit, '(A)') "1. Error handler initialized"
-
-   ! Step 2: Create and initialize state manager
-   call state_manager%init(n_columns, n_levels, error_handler)
-   if (error_handler%has_error()) then
-      write(error_unit, '(A)') "Error initializing state manager"
-      call error_handler%print_errors()
+   ! Step 1: Initialize state manager
+   call state_manager%init(n_levels, n_columns, 5, rc)
+   if (rc /= CC_SUCCESS) then
+      write(error_unit, *) 'ERROR: Failed to initialize state manager'
       stop 1
    end if
-   write(output_unit, '(A,I0,A,I0,A)') "2. State manager initialized (", &
-      n_columns, " columns, ", n_levels, " levels)"
 
-   ! Step 3: Set up chemical species
-   call setup_chemical_species(state_manager, error_handler)
-   if (error_handler%has_error()) then
-      write(error_unit, '(A)') "Error setting up chemical species"
-      call error_handler%print_errors()
+   ! Step 2: Create process instance
+   call create_process(process, rc)
+   if (rc /= CC_SUCCESS) then
+      write(error_unit, *) 'ERROR: Failed to create process'
       stop 1
    end if
-   write(output_unit, '(A)') "3. Chemical species configured"
 
-   ! Step 4: Set up meteorological fields
-   call setup_meteorological_fields(state_manager, error_handler)
-   if (error_handler%has_error()) then
-      write(error_unit, '(A)') "Error setting up meteorological fields"
-      call error_handler%print_errors()
+   ! Step 3: Initialize process
+   call process%init(state_manager, rc)
+   if (rc /= CC_SUCCESS) then
+      write(error_unit, *) 'ERROR: Process initialization failed'
       stop 1
    end if
-   write(output_unit, '(A)') "4. Meteorological fields configured"
 
-   ! Step 5: Create dust process
-   process = create_dust_process(error_handler)
-   if (error_handler%has_error()) then
+   write(output_unit, '(A)') "Process initialized successfully"
+
+   ! Step 4: Time loop simulation
+   write(output_unit, '(A,I0,A)') "Starting ", n_time_steps, " time step simulation"
+
+   do i_time = 1, n_time_steps
+      total_time = real(i_time - 1, fp) * dt
+
+      write(output_unit, '(A,I0,A,F8.1,A)') "Time step ", i_time, " (t=", total_time/3600.0_fp, " hours)"
+
+      ! Run process for this time step
+      call process%run(state_manager, rc)
+      if (rc /= CC_SUCCESS) then
+         write(error_unit, *) 'ERROR: Process execution failed at time step ', i_time
+         stop 1
+      end if
+   end do
+
+   write(output_unit, '(A)') "Simulation completed successfully"
+
+   ! Step 5: Finalize process
+   call process%finalize(rc)
+   if (rc /= CC_SUCCESS) then
+      write(error_unit, *) 'ERROR: Process finalization failed'
+      stop 1
+   end if
+
+   write(output_unit, '(A)') "Process finalized successfully"
+   write(output_unit, '(A)') "Example completed!"
+
+end program dust_example
       write(error_unit, '(A)') "Error creating dust process"
       call error_handler%print_errors()
       stop 1
@@ -166,8 +180,17 @@ contains
       type(StateManagerType), intent(inout) :: state_manager
       type(ErrorHandler), intent(inout) :: error_handler
 
-      ! Add generic species
-      call state_manager%add_species('GENERIC_SPECIES', error_handler)
+      ! Add dust species
+      call state_manager%add_species('DUST1', error_handler)
+      if (error_handler%has_error()) return
+      call state_manager%add_species('DUST2', error_handler)
+      if (error_handler%has_error()) return
+      call state_manager%add_species('DUST3', error_handler)
+      if (error_handler%has_error()) return
+      call state_manager%add_species('DUST4', error_handler)
+      if (error_handler%has_error()) return
+      call state_manager%add_species('DUST5', error_handler)
+      if (error_handler%has_error()) return
 
       ! Initialize species concentrations
       call state_manager%allocate_species_arrays(error_handler)
@@ -236,7 +259,7 @@ contains
          'process:' // new_line('A') // &
          '  name: "dust"' // new_line('A') // &
          '  version: "1.0.0"' // new_line('A') // &
-         '  active_scheme: ""' // new_line('A') // &
+         '  active_scheme: "fengsha"' // new_line('A') // &
          '  is_active: true' // new_line('A') // &
          'diagnostics:' // new_line('A') // &
          '  output_frequency: 3600.0' // new_line('A') // &
@@ -253,6 +276,46 @@ contains
       real(fp) :: initial_concentration
 
       ! Set initial chemical concentrations
+      do i_col = 1, n_columns
+         do i_lev = 1, n_levels
+            initial_concentration = 1.0e-9_fp  ! Default initial concentration
+            call state_manager%set_species_concentration('DUST1', &
+               i_col, i_lev, initial_concentration, error_handler)
+            if (error_handler%has_error()) return
+         end do
+      end do
+      do i_col = 1, n_columns
+         do i_lev = 1, n_levels
+            initial_concentration = 1.0e-9_fp  ! Default initial concentration
+            call state_manager%set_species_concentration('DUST2', &
+               i_col, i_lev, initial_concentration, error_handler)
+            if (error_handler%has_error()) return
+         end do
+      end do
+      do i_col = 1, n_columns
+         do i_lev = 1, n_levels
+            initial_concentration = 1.0e-9_fp  ! Default initial concentration
+            call state_manager%set_species_concentration('DUST3', &
+               i_col, i_lev, initial_concentration, error_handler)
+            if (error_handler%has_error()) return
+         end do
+      end do
+      do i_col = 1, n_columns
+         do i_lev = 1, n_levels
+            initial_concentration = 1.0e-9_fp  ! Default initial concentration
+            call state_manager%set_species_concentration('DUST4', &
+               i_col, i_lev, initial_concentration, error_handler)
+            if (error_handler%has_error()) return
+         end do
+      end do
+      do i_col = 1, n_columns
+         do i_lev = 1, n_levels
+            initial_concentration = 1.0e-9_fp  ! Default initial concentration
+            call state_manager%set_species_concentration('DUST5', &
+               i_col, i_lev, initial_concentration, error_handler)
+            if (error_handler%has_error()) return
+         end do
+      end do
 
    end subroutine setup_initial_conditions
 

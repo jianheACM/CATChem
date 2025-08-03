@@ -17,13 +17,12 @@
 !! - Memory management and array allocation
 !! - Integration with host model time stepping
 !!
-!! Generated on: 2025-07-09T12:43:17.999787
+!! Generated on: 2025-08-03T14:41:50.766057
 !! Author: Barry Baker
 !! Reference: Zhang et al. 2022
 module DustScheme_FENGSHA_Mod
 
    use iso_fortran_env, only: fp => real64
-   use constants, only: g0
 
    implicit none
    private
@@ -31,6 +30,11 @@ module DustScheme_FENGSHA_Mod
    ! Public interface - pure science only
    public :: compute_fengsha
    public :: fengsha_params_t
+
+   ! Physical constants (modify as needed for your scheme)
+   real(fp), parameter :: R_GAS = 8.314_fp           ! Universal gas constant [J/mol/K]
+   real(fp), parameter :: T_STANDARD = 303.15_fp    ! Standard reference temperature [K]
+   real(fp), parameter :: DEFAULT_SCALING = 1.0e-9_fp ! Default emission scaling factor
 
 
    !> Science parameters for fengsha scheme
@@ -56,46 +60,47 @@ contains
    !! @param[in]  num_layers     Number of vertical layers
    !! @param[in]  num_species    Number of chemical species
    !! @param[in]  params         Scheme parameters (pre-validated by host)
-   !! @param[in]  IsLand    IsLand field [appropriate units]
-   !! @param[in]  USTAR    USTAR field [appropriate units]
-   !! @param[in]  LWI    LWI field [appropriate units]
-   !! @param[in]  GVF    GVF field [appropriate units]
-   !! @param[in]  LAI    LAI field [appropriate units]
-   !! @param[in]  FROCEAN    FROCEAN field [appropriate units]
-   !! @param[in]  CLAYFRAC    CLAYFRAC field [appropriate units]
-   !! @param[in]  SANDFRAC    SANDFRAC field [appropriate units]
-   !! @param[in]  FRSNO    FRSNO field [appropriate units]
-   !! @param[in]  RDRAG    RDRAG field [appropriate units]
-   !! @param[in]  SSM    SSM field [appropriate units]
-   !! @param[in]  USTAR_THRESHOLD    USTAR_THRESHOLD field [appropriate units]
+   !! @param[in]  {'name': 'IsLand', 'description': 'Land mask', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'is_land'}    {'name': 'IsLand', 'description': 'Land mask', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'is_land'} field [appropriate units]
+   !! @param[in]  {'name': 'USTAR', 'description': 'Friction velocity', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'friction_velocity'}    {'name': 'USTAR', 'description': 'Friction velocity', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'friction_velocity'} field [appropriate units]
+   !! @param[in]  {'name': 'LWI', 'description': 'Land-water index', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'land_water_index'}    {'name': 'LWI', 'description': 'Land-water index', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'land_water_index'} field [appropriate units]
+   !! @param[in]  {'name': 'GVF', 'description': 'Green vegetation fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'green_veg_fraction'}    {'name': 'GVF', 'description': 'Green vegetation fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'green_veg_fraction'} field [appropriate units]
+   !! @param[in]  {'name': 'LAI', 'description': 'Leaf area index', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'leaf_area_index'}    {'name': 'LAI', 'description': 'Leaf area index', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'leaf_area_index'} field [appropriate units]
+   !! @param[in]  {'name': 'FROCEAN', 'description': 'Ocean fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'ocean_fraction'}    {'name': 'FROCEAN', 'description': 'Ocean fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'ocean_fraction'} field [appropriate units]
+   !! @param[in]  {'name': 'CLAYFRAC', 'description': 'Clay fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'clay_fraction'}    {'name': 'CLAYFRAC', 'description': 'Clay fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'clay_fraction'} field [appropriate units]
+   !! @param[in]  {'name': 'SANDFRAC', 'description': 'Sand fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'sand_fraction'}    {'name': 'SANDFRAC', 'description': 'Sand fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'sand_fraction'} field [appropriate units]
+   !! @param[in]  {'name': 'FRSNO', 'description': 'Snow fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'snow_fraction'}    {'name': 'FRSNO', 'description': 'Snow fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'snow_fraction'} field [appropriate units]
+   !! @param[in]  {'name': 'RDRAG', 'description': 'Drag partition', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'drag_partition'}    {'name': 'RDRAG', 'description': 'Drag partition', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'drag_partition'} field [appropriate units]
+   !! @param[in]  {'name': 'SSM', 'description': 'Surface soil moisture', 'units': 'm3/m3', 'dimensions': 'scalar', 'variable_name': 'soil_moisture'}    {'name': 'SSM', 'description': 'Surface soil moisture', 'units': 'm3/m3', 'dimensions': 'scalar', 'variable_name': 'soil_moisture'} field [appropriate units]
+   !! @param[in]  {'name': 'USTAR_THRESHOLD', 'description': 'Threshold friction velocity', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'threshold_ustar'}    {'name': 'USTAR_THRESHOLD', 'description': 'Threshold friction velocity', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'threshold_ustar'} field [appropriate units]
    !! @param[in]  species_conc   Species concentrations [mol/mol] (num_layers, num_species)
    !! @param[out] emission_flux  Emission fluxes [kg/m²/s] (num_layers, num_species)
-   pure subroutine compute_fengsha(num_layers, num_species, params, IsLand, USTAR, &
-      LWI, GVF, LAI, FROCEAN, CLAYFRAC, SANDFRAC, FRSNO, RDRAG, SSM, USTAR_THRESHOLD, &
-      species_conc, emission_flux, horizontal_flux, vertical_flux, effective_threshold)
+   pure subroutine compute_fengsha( &
+      num_layers, &
+      num_species, &
+      params, &
+      {'name': 'IsLand', 'description': 'Land mask', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'is_land'}, &      {'name': 'USTAR', 'description': 'Friction velocity', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'friction_velocity'}, &      {'name': 'LWI', 'description': 'Land-water index', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'land_water_index'}, &      {'name': 'GVF', 'description': 'Green vegetation fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'green_veg_fraction'}, &      {'name': 'LAI', 'description': 'Leaf area index', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'leaf_area_index'}, &      {'name': 'FROCEAN', 'description': 'Ocean fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'ocean_fraction'}, &      {'name': 'CLAYFRAC', 'description': 'Clay fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'clay_fraction'}, &      {'name': 'SANDFRAC', 'description': 'Sand fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'sand_fraction'}, &      {'name': 'FRSNO', 'description': 'Snow fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'snow_fraction'}, &      {'name': 'RDRAG', 'description': 'Drag partition', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'drag_partition'}, &      {'name': 'SSM', 'description': 'Surface soil moisture', 'units': 'm3/m3', 'dimensions': 'scalar', 'variable_name': 'soil_moisture'}, &      {'name': 'USTAR_THRESHOLD', 'description': 'Threshold friction velocity', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'threshold_ustar'}, &
+      species_conc, &
+      emission_flux &
    )
 
       ! Arguments
       integer, intent(in) :: num_layers
       integer, intent(in) :: num_species
       type(fengsha_params_t), intent(in) :: params
-      real(fp), intent(in) :: IsLand(num_layers)
-      real(fp), intent(in) :: USTAR(num_layers)
-      real(fp), intent(in) :: LWI(num_layers)
-      real(fp), intent(in) :: GVF(num_layers)
-      real(fp), intent(in) :: LAI(num_layers)
-      real(fp), intent(in) :: FROCEAN(num_layers)
-      real(fp), intent(in) :: CLAYFRAC(num_layers)
-      real(fp), intent(in) :: SANDFRAC(num_layers)
-      real(fp), intent(in) :: FRSNO(num_layers)
-      real(fp), intent(in) :: RDRAG(num_layers)
-      real(fp), intent(in) :: SSM(num_layers)
-      real(fp), intent(in) :: USTAR_THRESHOLD(num_layers)
+      real(fp), intent(in) :: {'name': 'IsLand', 'description': 'Land mask', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'is_land'}(num_layers)
+      real(fp), intent(in) :: {'name': 'USTAR', 'description': 'Friction velocity', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'friction_velocity'}(num_layers)
+      real(fp), intent(in) :: {'name': 'LWI', 'description': 'Land-water index', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'land_water_index'}(num_layers)
+      real(fp), intent(in) :: {'name': 'GVF', 'description': 'Green vegetation fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'green_veg_fraction'}(num_layers)
+      real(fp), intent(in) :: {'name': 'LAI', 'description': 'Leaf area index', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'leaf_area_index'}(num_layers)
+      real(fp), intent(in) :: {'name': 'FROCEAN', 'description': 'Ocean fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'ocean_fraction'}(num_layers)
+      real(fp), intent(in) :: {'name': 'CLAYFRAC', 'description': 'Clay fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'clay_fraction'}(num_layers)
+      real(fp), intent(in) :: {'name': 'SANDFRAC', 'description': 'Sand fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'sand_fraction'}(num_layers)
+      real(fp), intent(in) :: {'name': 'FRSNO', 'description': 'Snow fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'snow_fraction'}(num_layers)
+      real(fp), intent(in) :: {'name': 'RDRAG', 'description': 'Drag partition', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'drag_partition'}(num_layers)
+      real(fp), intent(in) :: {'name': 'SSM', 'description': 'Surface soil moisture', 'units': 'm3/m3', 'dimensions': 'scalar', 'variable_name': 'soil_moisture'}(num_layers)
+      real(fp), intent(in) :: {'name': 'USTAR_THRESHOLD', 'description': 'Threshold friction velocity', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'threshold_ustar'}(num_layers)
       real(fp), intent(in) :: species_conc(num_layers, num_species)
       real(fp), intent(out) :: emission_flux(num_layers, num_species)
-      real(fp), intent(out) :: horizontal_flux(num_layers, num_species)
-      real(fp), intent(out) :: vertical_flux(num_layers, num_species)
-      real(fp), intent(out) :: effective_threshold(num_layers, num_species)
 
       ! Local variables
       integer :: k, species_idx
@@ -119,29 +124,29 @@ contains
 
          ! Apply scheme-specific environmental responses
          ! Generic field usage (customize for your scheme)
-         ! Consider how IsLand affects your emissions
+         ! Consider how {'name': 'IsLand', 'description': 'Land mask', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'is_land'} affects your emissions
          ! Generic field usage (customize for your scheme)
-         ! Consider how USTAR affects your emissions
+         ! Consider how {'name': 'USTAR', 'description': 'Friction velocity', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'friction_velocity'} affects your emissions
          ! Generic field usage (customize for your scheme)
-         ! Consider how LWI affects your emissions
+         ! Consider how {'name': 'LWI', 'description': 'Land-water index', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'land_water_index'} affects your emissions
          ! Generic field usage (customize for your scheme)
-         ! Consider how GVF affects your emissions
+         ! Consider how {'name': 'GVF', 'description': 'Green vegetation fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'green_veg_fraction'} affects your emissions
          ! Generic field usage (customize for your scheme)
-         ! Consider how LAI affects your emissions
+         ! Consider how {'name': 'LAI', 'description': 'Leaf area index', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'leaf_area_index'} affects your emissions
          ! Generic field usage (customize for your scheme)
-         ! Consider how FROCEAN affects your emissions
+         ! Consider how {'name': 'FROCEAN', 'description': 'Ocean fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'ocean_fraction'} affects your emissions
          ! Generic field usage (customize for your scheme)
-         ! Consider how CLAYFRAC affects your emissions
+         ! Consider how {'name': 'CLAYFRAC', 'description': 'Clay fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'clay_fraction'} affects your emissions
          ! Generic field usage (customize for your scheme)
-         ! Consider how SANDFRAC affects your emissions
+         ! Consider how {'name': 'SANDFRAC', 'description': 'Sand fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'sand_fraction'} affects your emissions
          ! Generic field usage (customize for your scheme)
-         ! Consider how FRSNO affects your emissions
+         ! Consider how {'name': 'FRSNO', 'description': 'Snow fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'snow_fraction'} affects your emissions
          ! Generic field usage (customize for your scheme)
-         ! Consider how RDRAG affects your emissions
+         ! Consider how {'name': 'RDRAG', 'description': 'Drag partition', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'drag_partition'} affects your emissions
          ! Generic field usage (customize for your scheme)
-         ! Consider how SSM affects your emissions
+         ! Consider how {'name': 'SSM', 'description': 'Surface soil moisture', 'units': 'm3/m3', 'dimensions': 'scalar', 'variable_name': 'soil_moisture'} affects your emissions
          ! Generic field usage (customize for your scheme)
-         ! Consider how USTAR_THRESHOLD affects your emissions
+         ! Consider how {'name': 'USTAR_THRESHOLD', 'description': 'Threshold friction velocity', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'threshold_ustar'} affects your emissions
 
          ! Combine environmental factors
          combined_factor = temperature_factor * light_factor

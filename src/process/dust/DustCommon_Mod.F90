@@ -4,14 +4,15 @@
 !! This module defines the configuration and state types used by the
 !! dust process and its schemes.
 !!
-!! Generated on: 2025-07-09T12:43:17.982946
+!! Generated on: 2025-08-03T14:41:50.743567
 !! Author: Barry Baker
 !! Version: 1.0.0
 
 module DustCommon_Mod
 
    use iso_fortran_env, only: fp => real64
-   use ErrorHandler_Mod
+   use precision_mod, only: fp
+   use Error_Mod, only: CC_SUCCESS, CC_FAILURE, ErrorManagerType
 
    implicit none
    private
@@ -31,14 +32,14 @@ module DustCommon_Mod
    type :: DustConfig
 
       ! Process settings
-      character(len=32) :: active_scheme = ''
+      character(len=32) :: active_scheme = 'fengsha'
       logical :: is_active = .true.
       real(fp) :: dt_min = 1.0_fp     ! Minimum time step (seconds)
       real(fp) :: dt_max = 3600.0_fp  ! Maximum time step (seconds)
 
       ! Species configuration
-      integer :: n_species = 0
-      character(len=32) :: species_names(1)
+      integer :: n_species = 5
+      character(len=32) :: species_names(5)
 
 
 
@@ -64,8 +65,6 @@ module DustCommon_Mod
       integer :: n_levels = 0
 
       ! Working arrays (allocated during initialization)
-      real(fp), allocatable :: emission_rates(:,:)    ! (n_species, n_columns)
-      real(fp), allocatable :: total_emissions(:)     ! (n_columns)
 
       ! Diagnostic arrays
       real(fp), allocatable :: total_dust_emission(:)  ! Total dust emissions for all species
@@ -91,7 +90,7 @@ module DustCommon_Mod
       real(fp) :: beta = 1.0  ! Exponential scaling factor on source parameter
       real(fp) :: drylimit_factor = 1.0  ! Dry Limit factor modifying the Fecan dry limit following Zender 2003
       real(fp) :: drag_option = 1  ! Drag Partition Option: 1 - use input drag, 2 - Darmenova, 3 - Leung 2022, 4 - MB95
-      real(fp) :: moist_option = 1 - fecan  ! Moisture parameterization: 1 - Fecan, 2 - shao, 3 - modified shao
+      real(fp) :: moist_option = 1  ! Moisture parameterization: 1 - Fecan, 2 - shao, 3 - modified shao
       real(fp) :: distribution_option = 1  ! Dust Distribution option: 1 - Kok 2011, 2 - Meng 2022
 
       ! Required meteorological fields
@@ -112,9 +111,6 @@ module DustCommon_Mod
       real(fp), allocatable :: work_array_2(:,:)
 
       ! Scheme-specific diagnostic arrays
-      real(fp), allocatable :: dust_horizontal_flux(:)  ! Total horizontal flux - Q
-      real(fp), allocatable :: dust_moisture_correction(:)  ! Moisture Correction - H
-      real(fp), allocatable :: dust_effective_threshold(:)  ! Effective Dust threshold friction velocity: u_thres * H / R
 
    contains
       procedure, public :: init => init_fengsha_state
@@ -133,7 +129,7 @@ module DustCommon_Mod
       character(len=16) :: algorithm_type = 'explicit'
 
       ! Scheme parameters
-      real(fp) :: Ch_DU = [0.1, 0.1, 0.1, 0.1, 0.1]  ! Dust tuning coefficient per species 
+      real(fp) :: Ch_DU = [0.1, 0.1, 0.1, 0.1, 0.1]  ! Dust tuning coefficient per species
 
       ! Required meteorological fields
       integer :: n_required_met_fields = 5
@@ -153,9 +149,6 @@ module DustCommon_Mod
       real(fp), allocatable :: work_array_2(:,:)
 
       ! Scheme-specific diagnostic arrays
-      real(fp), allocatable :: dust_horizontal_flux(:)  ! Total horizontal flux - Q
-      real(fp), allocatable :: dust_moisture_correction(:)  ! Moisture Correction - H
-      real(fp), allocatable :: dust_effective_threshold(:)  ! Effective Dust threshold friction velocity: u_thres * H / R
 
    contains
       procedure, public :: init => init_ginoux_state
@@ -173,6 +166,11 @@ contains
       type(ErrorHandler), intent(inout) :: error_handler
 
       ! Set default species names
+      this%species_names(1) = 'DUST1'
+      this%species_names(2) = 'DUST2'
+      this%species_names(3) = 'DUST3'
+      this%species_names(4) = 'DUST4'
+      this%species_names(5) = 'DUST5'
 
 
 
@@ -257,21 +255,6 @@ contains
 
       integer :: alloc_stat
 
-      ! Allocate emission arrays
-      allocate(this%emission_rates(1, this%n_columns), &
-               stat=alloc_stat)
-      if (alloc_stat /= 0) then
-         call error_handler%set_error(ERROR_MEMORY, &
-            "Failed to allocate emission_rates array")
-         return
-      end if
-
-      allocate(this%total_emissions(this%n_columns), stat=alloc_stat)
-      if (alloc_stat /= 0) then
-         call error_handler%set_error(ERROR_MEMORY, &
-            "Failed to allocate total_emissions array")
-         return
-      end if
 
       ! Allocate diagnostic arrays
       allocate(this%total_dust_emission(this%n_columns), stat=alloc_stat)
@@ -287,8 +270,6 @@ contains
    subroutine reset_dust_state(this)
       class(DustState), intent(inout) :: this
 
-      if (allocated(this%emission_rates)) this%emission_rates = 0.0_fp
-      if (allocated(this%total_emissions)) this%total_emissions = 0.0_fp
 
       if (allocated(this%total_dust_emission)) this%total_dust_emission = 0.0_fp
 
@@ -298,8 +279,6 @@ contains
    subroutine finalize_dust_state(this)
       class(DustState), intent(inout) :: this
 
-      if (allocated(this%emission_rates)) deallocate(this%emission_rates)
-      if (allocated(this%total_emissions)) deallocate(this%total_emissions)
 
       if (allocated(this%total_dust_emission)) deallocate(this%total_dust_emission)
 
@@ -314,18 +293,18 @@ contains
       type(ErrorHandler), intent(inout) :: error_handler
 
       ! Set required meteorological fields
-      this%required_met_fields(1) = 'IsLand'
-      this%required_met_fields(2) = 'USTAR'
-      this%required_met_fields(3) = 'LWI'
-      this%required_met_fields(4) = 'GVF'
-      this%required_met_fields(5) = 'LAI'
-      this%required_met_fields(6) = 'FROCEAN'
-      this%required_met_fields(7) = 'CLAYFRAC'
-      this%required_met_fields(8) = 'SANDFRAC'
-      this%required_met_fields(9) = 'FRSNO'
-      this%required_met_fields(10) = 'RDRAG'
-      this%required_met_fields(11) = 'SSM'
-      this%required_met_fields(12) = 'USTAR_THRESHOLD'
+      this%required_met_fields(1) = '{'name': 'IsLand', 'description': 'Land mask', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'is_land'}'
+      this%required_met_fields(2) = '{'name': 'USTAR', 'description': 'Friction velocity', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'friction_velocity'}'
+      this%required_met_fields(3) = '{'name': 'LWI', 'description': 'Land-water index', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'land_water_index'}'
+      this%required_met_fields(4) = '{'name': 'GVF', 'description': 'Green vegetation fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'green_veg_fraction'}'
+      this%required_met_fields(5) = '{'name': 'LAI', 'description': 'Leaf area index', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'leaf_area_index'}'
+      this%required_met_fields(6) = '{'name': 'FROCEAN', 'description': 'Ocean fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'ocean_fraction'}'
+      this%required_met_fields(7) = '{'name': 'CLAYFRAC', 'description': 'Clay fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'clay_fraction'}'
+      this%required_met_fields(8) = '{'name': 'SANDFRAC', 'description': 'Sand fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'sand_fraction'}'
+      this%required_met_fields(9) = '{'name': 'FRSNO', 'description': 'Snow fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'snow_fraction'}'
+      this%required_met_fields(10) = '{'name': 'RDRAG', 'description': 'Drag partition', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'drag_partition'}'
+      this%required_met_fields(11) = '{'name': 'SSM', 'description': 'Surface soil moisture', 'units': 'm3/m3', 'dimensions': 'scalar', 'variable_name': 'soil_moisture'}'
+      this%required_met_fields(12) = '{'name': 'USTAR_THRESHOLD', 'description': 'Threshold friction velocity', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'threshold_ustar'}'
 
       ! Initialize scheme-specific parameters
       ! TODO: Load from configuration file or use defaults
@@ -368,7 +347,7 @@ contains
       integer :: alloc_stat
 
       ! Allocate working arrays
-      allocate(this%work_array_1(1, n_columns), &
+      allocate(this%work_array_1(5, n_columns), &
                stat=alloc_stat)
       if (alloc_stat /= 0) then
          call error_handler%set_error(ERROR_MEMORY, &
@@ -376,7 +355,7 @@ contains
          return
       end if
 
-      allocate(this%work_array_2(1, n_columns), &
+      allocate(this%work_array_2(5, n_columns), &
                stat=alloc_stat)
       if (alloc_stat /= 0) then
          call error_handler%set_error(ERROR_MEMORY, &
@@ -385,24 +364,6 @@ contains
       end if
 
       ! Allocate diagnostic arrays
-      allocate(this%dust_horizontal_flux(n_columns), stat=alloc_stat)
-      if (alloc_stat /= 0) then
-         call error_handler%set_error(ERROR_MEMORY, &
-            "Failed to allocate fengsha dust_horizontal_flux array")
-         return
-      end if
-      allocate(this%dust_moisture_correction(n_columns), stat=alloc_stat)
-      if (alloc_stat /= 0) then
-         call error_handler%set_error(ERROR_MEMORY, &
-            "Failed to allocate fengsha dust_moisture_correction array")
-         return
-      end if
-      allocate(this%dust_effective_threshold(n_columns), stat=alloc_stat)
-      if (alloc_stat /= 0) then
-         call error_handler%set_error(ERROR_MEMORY, &
-            "Failed to allocate fengsha dust_effective_threshold array")
-         return
-      end if
 
    end subroutine allocate_fengsha_state_arrays
 
@@ -413,9 +374,6 @@ contains
       if (allocated(this%work_array_1)) this%work_array_1 = 0.0_fp
       if (allocated(this%work_array_2)) this%work_array_2 = 0.0_fp
 
-      if (allocated(this%dust_horizontal_flux)) this%dust_horizontal_flux = 0.0_fp
-      if (allocated(this%dust_moisture_correction)) this%dust_moisture_correction = 0.0_fp
-      if (allocated(this%dust_effective_threshold)) this%dust_effective_threshold = 0.0_fp
 
    end subroutine reset_fengsha_state
 
@@ -426,9 +384,6 @@ contains
       if (allocated(this%work_array_1)) deallocate(this%work_array_1)
       if (allocated(this%work_array_2)) deallocate(this%work_array_2)
 
-      if (allocated(this%dust_horizontal_flux)) deallocate(this%dust_horizontal_flux)
-      if (allocated(this%dust_moisture_correction)) deallocate(this%dust_moisture_correction)
-      if (allocated(this%dust_effective_threshold)) deallocate(this%dust_effective_threshold)
 
    end subroutine finalize_fengsha_state
 
@@ -439,11 +394,11 @@ contains
       type(ErrorHandler), intent(inout) :: error_handler
 
       ! Set required meteorological fields
-      this%required_met_fields(1) = 'FRLAKE'
-      this%required_met_fields(2) = 'GWETTOP'
-      this%required_met_fields(3) = 'U10M'
-      this%required_met_fields(4) = 'V10M'
-      this%required_met_fields(5) = 'SSM'
+      this%required_met_fields(1) = '{'name': 'FRLAKE', 'description': 'Lake fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'lake_fraction'}'
+      this%required_met_fields(2) = '{'name': 'GWETTOP', 'description': 'Top soil wetness', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'top_soil_wetness'}'
+      this%required_met_fields(3) = '{'name': 'U10M', 'description': '10m U wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'u_wind_10m'}'
+      this%required_met_fields(4) = '{'name': 'V10M', 'description': '10m V wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'v_wind_10m'}'
+      this%required_met_fields(5) = '{'name': 'SSM', 'description': 'Surface soil moisture', 'units': 'm3/m3', 'dimensions': 'scalar', 'variable_name': 'soil_moisture'}'
 
       ! Initialize scheme-specific parameters
       ! TODO: Load from configuration file or use defaults
@@ -486,7 +441,7 @@ contains
       integer :: alloc_stat
 
       ! Allocate working arrays
-      allocate(this%work_array_1(1, n_columns), &
+      allocate(this%work_array_1(5, n_columns), &
                stat=alloc_stat)
       if (alloc_stat /= 0) then
          call error_handler%set_error(ERROR_MEMORY, &
@@ -494,7 +449,7 @@ contains
          return
       end if
 
-      allocate(this%work_array_2(1, n_columns), &
+      allocate(this%work_array_2(5, n_columns), &
                stat=alloc_stat)
       if (alloc_stat /= 0) then
          call error_handler%set_error(ERROR_MEMORY, &
@@ -503,24 +458,6 @@ contains
       end if
 
       ! Allocate diagnostic arrays
-      allocate(this%dust_horizontal_flux(n_columns), stat=alloc_stat)
-      if (alloc_stat /= 0) then
-         call error_handler%set_error(ERROR_MEMORY, &
-            "Failed to allocate ginoux dust_horizontal_flux array")
-         return
-      end if
-      allocate(this%dust_moisture_correction(n_columns), stat=alloc_stat)
-      if (alloc_stat /= 0) then
-         call error_handler%set_error(ERROR_MEMORY, &
-            "Failed to allocate ginoux dust_moisture_correction array")
-         return
-      end if
-      allocate(this%dust_effective_threshold(n_columns), stat=alloc_stat)
-      if (alloc_stat /= 0) then
-         call error_handler%set_error(ERROR_MEMORY, &
-            "Failed to allocate ginoux dust_effective_threshold array")
-         return
-      end if
 
    end subroutine allocate_ginoux_state_arrays
 
@@ -531,9 +468,6 @@ contains
       if (allocated(this%work_array_1)) this%work_array_1 = 0.0_fp
       if (allocated(this%work_array_2)) this%work_array_2 = 0.0_fp
 
-      if (allocated(this%dust_horizontal_flux)) this%dust_horizontal_flux = 0.0_fp
-      if (allocated(this%dust_moisture_correction)) this%dust_moisture_correction = 0.0_fp
-      if (allocated(this%dust_effective_threshold)) this%dust_effective_threshold = 0.0_fp
 
    end subroutine reset_ginoux_state
 
@@ -544,9 +478,6 @@ contains
       if (allocated(this%work_array_1)) deallocate(this%work_array_1)
       if (allocated(this%work_array_2)) deallocate(this%work_array_2)
 
-      if (allocated(this%dust_horizontal_flux)) deallocate(this%dust_horizontal_flux)
-      if (allocated(this%dust_moisture_correction)) deallocate(this%dust_moisture_correction)
-      if (allocated(this%dust_effective_threshold)) deallocate(this%dust_effective_threshold)
 
    end subroutine finalize_ginoux_state
 

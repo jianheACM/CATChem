@@ -11,15 +11,15 @@
 module {{ config.class_name }}ProcessCreator_Mod
 
    use iso_fortran_env, only: fp => real64
+   use Error_Mod, only: CC_SUCCESS, CC_FAILURE
    use ProcessInterface_Mod
    use Process{{ config.class_name }}Interface_Mod
-   use ErrorHandler_Mod
 
    implicit none
    private
 
    public :: create_{{ config.name }}_process
-   public :: get_{{ config.name }}_process_info
+   public :: register_{{ config.name }}_process
 
    ! Process metadata constants
    character(len=*), parameter :: PROCESS_NAME = '{{ config.name }}'
@@ -36,26 +36,52 @@ contains
    !! must call the init() method with appropriate configuration.
    !!
    !! @param[out] process     Allocated process instance
-   !! @param[inout] error_handler Error handling object
-   function create_{{ config.name }}_process(error_handler) result(process)
-      type(ErrorHandler), intent(inout) :: error_handler
-      class(ProcessInterface), allocatable :: process
+   !! @param[out] rc          Return code
+   subroutine create_{{ config.name }}_process(process, rc)
+      class(ProcessInterface), allocatable, intent(out) :: process
+      integer, intent(out) :: rc
 
       type(Process{{ config.class_name }}Interface), allocatable :: {{ config.name }}_process
       integer :: alloc_stat
 
+      rc = CC_SUCCESS
+
       ! Allocate the process instance
       allocate({{ config.name }}_process, stat=alloc_stat)
       if (alloc_stat /= 0) then
-         call error_handler%set_error(ERROR_MEMORY, &
-            "Failed to allocate {{ config.name }} process instance")
+         rc = CC_FAILURE
          return
       end if
 
       ! Move to polymorphic variable
       call move_alloc({{ config.name }}_process, process)
 
-   end function create_{{ config.name }}_process
+   end subroutine create_{{ config.name }}_process
+
+   !> Register the {{ config.name }} process with the global registry
+   !!
+   !! This subroutine should be called during module initialization to
+   !! register the {{ config.name }} process with the global process registry.
+   !!
+   !! @param[out] rc Return code
+   subroutine register_{{ config.name }}_process(rc)
+      use ProcessRegistry_Mod, only: get_global_registry, ProcessRegistryType
+
+      integer, intent(out) :: rc
+      type(ProcessRegistryType), pointer :: registry
+
+      rc = CC_SUCCESS
+      registry => get_global_registry()
+
+      call registry%register_process( &
+         name=PROCESS_NAME, &
+         category='{{ config.process_type }}', &
+         description=PROCESS_DESCRIPTION, &
+         creator=create_{{ config.name }}_process, &
+         rc=rc &
+      )
+
+   end subroutine register_{{ config.name }}_process
 
    !> Get information about the {{ config.name }} process
    !!

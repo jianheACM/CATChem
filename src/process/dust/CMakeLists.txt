@@ -1,5 +1,5 @@
 # Dust Process CMakeLists.txt
-# Generated on: 2025-07-09T12:43:18.006325
+# Generated on: 2025-08-03T14:41:50.775030
 # Author: Barry Baker
 # Description: Process for computing windblown dust emissions
 
@@ -100,30 +100,15 @@ if(BUILD_DOCUMENTATION)
 endif()
 
 # Performance testing
-if(BUILD_BENCHMARKS)
-    find_package(benchmark QUIET)
-    if(benchmark_FOUND)
-        add_executable(dust_benchmark
-            benchmarks/benchmark_dust.F90
-        )
-        target_link_libraries(dust_benchmark
-            PRIVATE ${_lib} benchmark::benchmark
-        )
-    endif()
-endif()
 
 # Process-specific targets
-# Emission inventory preprocessing (if needed)
-# add_custom_target(dust_preprocess_inventory
-#     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/preprocess_inventory.py
-#     COMMENT "Preprocessing emission inventory for dust"
-# )
 
 # Print configuration summary
 message(STATUS "Configured Dust process:")
-message(STATUS "  Process type: emission")
+message(STATUS "  Process type: generic")
 message(STATUS "  Number of schemes: 2")
-message(STATUS "  Default scheme: ")
+message(STATUS "  Default scheme: fengsha")
+message(STATUS "  Number of species: 5")
 message(STATUS "  Has size bins: No")
 message(STATUS "  Multiphase: No")
 message(STATUS "  Generate tests: Yes")

@@ -39,7 +39,39 @@ logger = logging.getLogger('ProcessGenerator')
 
 
 @dataclass
+class ProcessBehavior:
+    """Configuration for process behavior patterns."""
+    type: str = "source"                    # source, sink, transformation, transport
+    tendency_mode: str = "additive"         # additive, replacement, multiplicative
+    species_filter: Dict[str, Any] = field(default_factory=dict)
+    tendency_calculation: str = "rates"     # rates, concentrations, deltas
+    timestep_dependency: str = "independent"  # independent, dependent, adaptive
+    spatial_scope: str = "column"           # column, global, regional
+    parallelization: str = "column"         # column, species, domain
+    memory_requirements: str = "low"        # low, medium, high
+
+
+@dataclass
+class SchemeBehavior:
+    """Configuration for scheme-specific behavior."""
+    output_format: str = "rates_2d"         # rates_2d, concentrations_1d, delta_concentrations
+    input_requirements: List[str] = field(default_factory=list)  # vertical_profile, surface_properties, etc.
+
+
+@dataclass
 class SchemeConfig:
+    """Configuration for a process scheme."""
+    name: str
+    class_name: str
+    description: str
+    author: str = ""
+    reference: str = ""
+    parameters: Dict[str, Any] = field(default_factory=dict)
+    required_met_fields: List[str] = field(default_factory=list)
+    scheme_diagnostics: List[Dict[str, str]] = field(default_factory=list)
+    algorithm_type: str = "explicit"
+    scheme_type: str = ""  # Optional legacy field
+    scheme_behavior: Optional[SchemeBehavior] = None
     """Configuration for a process scheme."""
     name: str
     class_name: str
@@ -54,49 +86,38 @@ class SchemeConfig:
 
 @dataclass
 class ProcessConfig:
-    """Configuration for a complete process."""
-    # Basic metadata
+    """Main process configuration."""
     name: str
-    class_name: str
     description: str
+    class_name: str
     author: str
     version: str = "1.0.0"
     license: str = "Apache 2.0"
 
-    # Process characteristics
-    process_type: str = "emission"  # emission, chemistry, transport, etc.
+    # Process behavior configuration (replaces hardcoded process_type)
+    process_behavior: Optional[ProcessBehavior] = None
+
+    # Legacy field for backward compatibility
+    process_type: str = "generic"
+
     is_multiphase: bool = False
     has_size_bins: bool = False
     supports_vectorization: bool = True
-
-    # Species and chemistry
     species: List[str] = field(default_factory=list)
     size_bins: Optional[Dict[str, Any]] = None
-    phases: List[str] = field(default_factory=lambda: ["gas"])
-
-    # Schemes
+    phases: List[str] = field(default_factory=lambda: ['gas'])
     schemes: List[SchemeConfig] = field(default_factory=list)
     default_scheme: str = ""
-
-    # Input/output
     required_met_fields: List[str] = field(default_factory=list)
     optional_met_fields: List[str] = field(default_factory=list)
     required_chem_fields: List[str] = field(default_factory=list)
-
-    # Diagnostics
-    diagnostics: List[Dict[str, Any]] = field(default_factory=list)
-
-    # Integration settings
-    timestep_dependency: str = "independent"  # independent, dependent, adaptive
-    parallelization: str = "column"  # none, column, domain
-    memory_requirements: str = "low"  # low, medium, high
-
-    # File generation options
+    diagnostics: List[Dict[str, str]] = field(default_factory=list)
+    timestep_dependency: str = "independent"
+    parallelization: str = "column"
+    memory_requirements: str = "low"
     generate_tests: bool = True
     generate_docs: bool = True
     generate_examples: bool = True
-
-    # Output configuration
     output_dir: str = ""
     src_base_dir: str = "src/process"
 
@@ -252,6 +273,10 @@ class ProcessGenerator:
         with open(config_path, 'r') as f:
             data = yaml.safe_load(f)
 
+        # Convert process_behavior to ProcessBehavior object if present
+        if 'process_behavior' in data and data['process_behavior']:
+            data['process_behavior'] = ProcessBehavior(**data['process_behavior'])
+
         # Convert schemes to SchemeConfig objects
         schemes = []
         schemes_data = data.get('schemes', {})
@@ -261,11 +286,28 @@ class ProcessGenerator:
                 # Add the scheme name if not already present
                 if 'name' not in scheme_data:
                     scheme_data['name'] = scheme_name
+
+                # Convert scheme_behavior to SchemeBehavior object if present
+                if 'scheme_behavior' in scheme_data and scheme_data['scheme_behavior']:
+                    scheme_data['scheme_behavior'] = SchemeBehavior(**scheme_data['scheme_behavior'])
+
+                # Handle diagnostics field name change
+                if 'diagnostics' in scheme_data:
+                    scheme_data['scheme_diagnostics'] = scheme_data.pop('diagnostics')
+
                 scheme = SchemeConfig(**scheme_data)
                 schemes.append(scheme)
         elif isinstance(schemes_data, list):
             # Schemes defined as list
             for scheme_data in schemes_data:
+                # Convert scheme_behavior to SchemeBehavior object if present
+                if 'scheme_behavior' in scheme_data and scheme_data['scheme_behavior']:
+                    scheme_data['scheme_behavior'] = SchemeBehavior(**scheme_data['scheme_behavior'])
+
+                # Handle diagnostics field name change
+                if 'diagnostics' in scheme_data:
+                    scheme_data['scheme_diagnostics'] = scheme_data.pop('diagnostics')
+
                 scheme = SchemeConfig(**scheme_data)
                 schemes.append(scheme)
 
@@ -273,10 +315,59 @@ class ProcessGenerator:
         data['schemes'] = schemes
         config = ProcessConfig(**data)
 
+        # Load species database if process behavior specifies species filtering
+        if config.process_behavior and config.process_behavior.species_filter:
+            config.species = self._load_filtered_species(config.process_behavior.species_filter)
+
         # Validate configuration
         self.validate_config(config)
 
         return config
+
+    def _load_filtered_species(self, species_filter: Dict[str, Any]) -> List[str]:
+        """Load species based on filter criteria.
+
+        Args:
+            species_filter: Dictionary specifying filter criteria
+
+        Returns:
+            List of species names that match the filter
+        """
+        filter_type = species_filter.get('type', 'all_species')
+
+        if filter_type == 'all_species':
+            return []  # Will be filled by ChemState
+
+        elif filter_type == 'by_list':
+            return species_filter.get('species_list', [])
+
+        elif filter_type == 'by_metadata':
+            # Try to load species database
+            species_db_path = Path(self.template_dir.parent / "configs" / "species_database.yaml")
+            if not species_db_path.exists():
+                logger.warning(f"Species database not found at {species_db_path}, using empty species list")
+                return []
+
+            try:
+                with open(species_db_path, 'r') as f:
+                    species_db = yaml.safe_load(f)
+
+                metadata_flags = species_filter.get('metadata_flags', [])
+                filtered_species = []
+
+                for species_name, species_data in species_db.get('species_database', {}).items():
+                    # Check if species has all required metadata flags set to True
+                    if all(species_data.get(flag, False) for flag in metadata_flags):
+                        filtered_species.append(species_name)
+
+                logger.info(f"Filtered {len(filtered_species)} species using metadata flags: {metadata_flags}")
+                return filtered_species
+
+            except Exception as e:
+                logger.warning(f"Error loading species database: {e}, using empty species list")
+                return []
+
+        return []
 
     def generate_process(self, config: ProcessConfig) -> None:
         """Generate complete process implementation.
@@ -663,6 +754,8 @@ Examples:
     generate_parser = subparsers.add_parser('generate', help='Generate process implementation')
     generate_parser.add_argument('--config', '-c', required=True,
                                help='Path to YAML configuration file')
+    generate_parser.add_argument('--output', '-o',
+                               help='Output directory for generated files (overrides config file setting)')
     generate_parser.add_argument('--templates', '-t',
                                help='Path to template directory')
     generate_parser.add_argument('--verbose', '-v', action='store_true',
@@ -696,6 +789,11 @@ Examples:
         if args.command == 'generate':
             generator = ProcessGenerator(args.templates)
             config = generator.load_config(args.config)
+
+            # Override output directory if specified on command line
+            if hasattr(args, 'output') and args.output:
+                config.output_dir = args.output
+
             generator.generate_process(config)
 
         elif args.command == 'validate':

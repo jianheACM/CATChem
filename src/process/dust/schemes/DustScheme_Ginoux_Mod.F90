@@ -17,7 +17,7 @@
 !! - Memory management and array allocation
 !! - Integration with host model time stepping
 !!
-!! Generated on: 2025-07-09T12:43:18.000561
+!! Generated on: 2025-08-03T14:41:50.767651
 !! Author: Barry Baker
 !! Reference: Ginoux et al. [2001]
 module DustScheme_GINOUX_Mod
@@ -40,7 +40,7 @@ module DustScheme_GINOUX_Mod
    !> Science parameters for ginoux scheme
    !! Host model is responsible for initializing and validating these
    type :: ginoux_params_t
-      real(fp) :: Ch_DU  ! Dust tuning coefficient per species 
+      real(fp) :: Ch_DU  ! Dust tuning coefficient per species
    end type ginoux_params_t
 
 
@@ -55,18 +55,18 @@ contains
    !! @param[in]  num_layers     Number of vertical layers
    !! @param[in]  num_species    Number of chemical species
    !! @param[in]  params         Scheme parameters (pre-validated by host)
-   !! @param[in]  FRLAKE    FRLAKE field [appropriate units]
-   !! @param[in]  GWETTOP    GWETTOP field [appropriate units]
-   !! @param[in]  U10M    U10M field [appropriate units]
-   !! @param[in]  V10M    V10M field [appropriate units]
-   !! @param[in]  SSM    SSM field [appropriate units]
+   !! @param[in]  {'name': 'FRLAKE', 'description': 'Lake fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'lake_fraction'}    {'name': 'FRLAKE', 'description': 'Lake fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'lake_fraction'} field [appropriate units]
+   !! @param[in]  {'name': 'GWETTOP', 'description': 'Top soil wetness', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'top_soil_wetness'}    {'name': 'GWETTOP', 'description': 'Top soil wetness', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'top_soil_wetness'} field [appropriate units]
+   !! @param[in]  {'name': 'U10M', 'description': '10m U wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'u_wind_10m'}    {'name': 'U10M', 'description': '10m U wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'u_wind_10m'} field [appropriate units]
+   !! @param[in]  {'name': 'V10M', 'description': '10m V wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'v_wind_10m'}    {'name': 'V10M', 'description': '10m V wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'v_wind_10m'} field [appropriate units]
+   !! @param[in]  {'name': 'SSM', 'description': 'Surface soil moisture', 'units': 'm3/m3', 'dimensions': 'scalar', 'variable_name': 'soil_moisture'}    {'name': 'SSM', 'description': 'Surface soil moisture', 'units': 'm3/m3', 'dimensions': 'scalar', 'variable_name': 'soil_moisture'} field [appropriate units]
    !! @param[in]  species_conc   Species concentrations [mol/mol] (num_layers, num_species)
    !! @param[out] emission_flux  Emission fluxes [kg/m²/s] (num_layers, num_species)
    pure subroutine compute_ginoux( &
       num_layers, &
       num_species, &
       params, &
-      FRLAKE, &      GWETTOP, &      U10M, &      V10M, &      SSM, &
+      {'name': 'FRLAKE', 'description': 'Lake fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'lake_fraction'}, &      {'name': 'GWETTOP', 'description': 'Top soil wetness', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'top_soil_wetness'}, &      {'name': 'U10M', 'description': '10m U wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'u_wind_10m'}, &      {'name': 'V10M', 'description': '10m V wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'v_wind_10m'}, &      {'name': 'SSM', 'description': 'Surface soil moisture', 'units': 'm3/m3', 'dimensions': 'scalar', 'variable_name': 'soil_moisture'}, &
       species_conc, &
       emission_flux &
    )
@@ -75,11 +75,11 @@ contains
       integer, intent(in) :: num_layers
       integer, intent(in) :: num_species
       type(ginoux_params_t), intent(in) :: params
-      real(fp), intent(in) :: FRLAKE(num_layers)
-      real(fp), intent(in) :: GWETTOP(num_layers)
-      real(fp), intent(in) :: U10M(num_layers)
-      real(fp), intent(in) :: V10M(num_layers)
-      real(fp), intent(in) :: SSM(num_layers)
+      real(fp), intent(in) :: {'name': 'FRLAKE', 'description': 'Lake fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'lake_fraction'}(num_layers)
+      real(fp), intent(in) :: {'name': 'GWETTOP', 'description': 'Top soil wetness', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'top_soil_wetness'}(num_layers)
+      real(fp), intent(in) :: {'name': 'U10M', 'description': '10m U wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'u_wind_10m'}(num_layers)
+      real(fp), intent(in) :: {'name': 'V10M', 'description': '10m V wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'v_wind_10m'}(num_layers)
+      real(fp), intent(in) :: {'name': 'SSM', 'description': 'Surface soil moisture', 'units': 'm3/m3', 'dimensions': 'scalar', 'variable_name': 'soil_moisture'}(num_layers)
       real(fp), intent(in) :: species_conc(num_layers, num_species)
       real(fp), intent(out) :: emission_flux(num_layers, num_species)
 
@@ -105,15 +105,15 @@ contains
 
          ! Apply scheme-specific environmental responses
          ! Generic field usage (customize for your scheme)
-         ! Consider how FRLAKE affects your emissions
+         ! Consider how {'name': 'FRLAKE', 'description': 'Lake fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'lake_fraction'} affects your emissions
          ! Generic field usage (customize for your scheme)
-         ! Consider how GWETTOP affects your emissions
+         ! Consider how {'name': 'GWETTOP', 'description': 'Top soil wetness', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'top_soil_wetness'} affects your emissions
          ! Generic field usage (customize for your scheme)
-         ! Consider how U10M affects your emissions
+         ! Consider how {'name': 'U10M', 'description': '10m U wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'u_wind_10m'} affects your emissions
          ! Generic field usage (customize for your scheme)
-         ! Consider how V10M affects your emissions
+         ! Consider how {'name': 'V10M', 'description': '10m V wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'v_wind_10m'} affects your emissions
          ! Generic field usage (customize for your scheme)
-         ! Consider how SSM affects your emissions
+         ! Consider how {'name': 'SSM', 'description': 'Surface soil moisture', 'units': 'm3/m3', 'dimensions': 'scalar', 'variable_name': 'soil_moisture'} affects your emissions
 
          ! Combine environmental factors
          combined_factor = temperature_factor * light_factor

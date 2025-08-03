@@ -29,14 +29,11 @@ module ColumnInterface_Mod
    use ChemState_Mod, only: ChemStateType
    use MetState_Mod, only: MetStateType
    use GridGeometry_Mod, only: GridGeometryType
+   use VirtualColumn_Mod, only: VirtualColumnType
    ! use EmisState_Mod, only: EmisStateType
 
    implicit none
    private
-
-   ! Forward declaration for StateManagerType to avoid circular dependency
-   type :: StateManagerType
-   end type StateManagerType
 
    ! Forward declaration for GridManagerType to avoid circular dependency
    type :: GridManagerType
@@ -44,7 +41,7 @@ module ColumnInterface_Mod
 
    public :: ColumnViewType
    public :: create_column_view
-   public :: VirtualColumnType
+   ! public :: VirtualColumnType
    public :: ColumnProcessorType
 
    !========================================================================
@@ -66,13 +63,14 @@ module ColumnInterface_Mod
    !! - grid_type: Grid type (1=column, 2=2D, 3=3D)
    !! - nx, ny, nlev: Grid dimensions
    !! - current_i, current_j: Current column indices
-   !! - container: Pointer to the state container
+   !! - met_state: Pointer to the meteorological state
+   !! - chem_state: Pointer to the chemistry state
    !! - met_column: Pointer to meteorology column (nlev)
    !! - chem_column: Pointer to chemistry column (nlev, nspecies)
    !! - emis_column: Pointer to emissions column (nlev, nspecies)
    !!
    !! **Usage:**
-   !! 1. Initialize with `init()`
+   !! 1. Initialize with `init()` using state pointers
    !! 2. Set column position with `set_column_position()`
    !! 3. Access or modify column data via pointers
    !!
@@ -87,8 +85,9 @@ module ColumnInterface_Mod
       integer :: current_i  !< Current column i-index
       integer :: current_j  !< Current column j-index
 
-      ! State manager reference
-      type(StateManagerType), pointer :: container => null() !< Pointer to state manager
+      ! State object references (optional - can be null for simple column access)
+      type(MetStateType), pointer :: met_state => null()      !< Pointer to meteorological state
+      type(ChemStateType), pointer :: chem_state => null()    !< Pointer to chemistry state
 
       ! Column data pointers (for current column)
       real(fp), pointer :: met_column(:) => null()            !< Pointer to meteorology column (nlev)
@@ -106,48 +105,6 @@ module ColumnInterface_Mod
 
    end type ColumnViewType
 
-   !> \brief Virtual column abstraction for process-level column virtualization
-   !!
-   !! This type provides a completely virtualized column interface where processes
-   !! see only 1D column data, but the underlying grid can be 1D, 2D, or 3D.
-   !! The virtual column handles all the complexity of 3D grid management internally.
-   type :: VirtualColumnType
-      private
-
-      ! Column data (always 1D from process perspective)
-      real(fp), pointer :: met_data(:) => null()      !< 1D meteorology data
-      real(fp), pointer :: chem_data(:,:) => null()   !< 1D chemistry data (nlev, nspec)
-      real(fp), pointer :: emis_data(:,:) => null()   !< 1D emission data (nlev, nspec)
-
-      ! Column metadata
-      integer :: nlev = 0              !< Number of vertical levels
-      integer :: nspec_chem = 0        !< Number of chemical species
-      integer :: nspec_emis = 0        !< Number of emission species
-      real(fp) :: lat = 0.0_fp         !< Column latitude
-      real(fp) :: lon = 0.0_fp         !< Column longitude
-      real(fp) :: area = 0.0_fp        !< Column area [m²]
-
-      ! Grid position (hidden from processes)
-      integer :: grid_i = 1            !< Grid i-index
-      integer :: grid_j = 1            !< Grid j-index
-      type(StateManagerType), pointer :: container => null()
-
-      logical :: is_valid = .false.    !< Column validity flag
-
-   contains
-      procedure :: init => virtual_column_init
-      procedure :: update_from_grid => virtual_column_update_from_grid
-      procedure :: apply_to_grid => virtual_column_apply_to_grid
-      procedure :: get_met_field => virtual_column_get_met_field
-      procedure :: get_chem_field => virtual_column_get_chem_field
-      procedure :: get_emis_field => virtual_column_get_emis_field
-      procedure :: set_met_field => virtual_column_set_met_field
-      procedure :: set_chem_field => virtual_column_set_chem_field
-      procedure :: set_emis_field => virtual_column_set_emis_field
-      procedure :: get_metadata => virtual_column_get_metadata
-      procedure :: cleanup => virtual_column_cleanup
-   end type VirtualColumnType
-
    !> \brief Column processor for managing multiple virtual columns
    !!
    !! This type manages a collection of virtual columns and provides
@@ -158,7 +115,6 @@ module ColumnInterface_Mod
       type(VirtualColumnType), allocatable :: columns(:)  !< Array of virtual columns
       integer :: n_columns = 0                            !< Number of columns
       integer :: current_column = 1                       !< Current column index
-      type(StateManagerType), pointer :: container => null()
 
    contains
       procedure :: init => processor_init
@@ -183,29 +139,32 @@ module ColumnInterface_Mod
 contains
 
    !========================================================================
-   !! Initialize column view for a state container
+   !! Initialize column view with state objects
    !========================================================================
-   subroutine column_view_init(this, container, rc)
+   subroutine column_view_init(this, met_state, chem_state, rc)
       class(ColumnViewType), intent(inout) :: this
-      type(StateManagerType), intent(in), target :: container
+      type(MetStateType), intent(in), target, optional :: met_state
+      type(ChemStateType), intent(in), target, optional :: chem_state
       integer, intent(out) :: rc
-
-      type(MetStateType), pointer :: met_state
 
       rc = CC_SUCCESS
 
-      ! Store container reference
-      this%container => container
+      ! Store state references if provided
+      if (present(met_state)) this%met_state => met_state
+      if (present(chem_state)) this%chem_state => chem_state
 
-      ! Get grid dimensions from MetState
-      ! Note: Using placeholder methods since actual StateManager methods may differ
-      ! met_state => container%get_met_state_ptr()
-      ! For now, use a direct approach or modify based on actual StateManager interface
-
-      ! For now, set basic defaults instead of using met_state
-      this%nx = 1
-      this%ny = 1
-      this%nlev = 50
+      ! Get grid dimensions from MetState if available
+      if (associated(this%met_state)) then
+         ! For now, use placeholder dimensions
+         this%nx = 1
+         this%ny = 1
+         this%nlev = 50
+      else
+         ! Use default dimensions
+         this%nx = 1
+         this%ny = 1
+         this%nlev = 50
+      endif
 
       if (this%nx == 1 .and. this%ny == 1) then
          this%grid_type = 1  ! Pure column model
@@ -254,23 +213,13 @@ contains
       character(len=*), intent(in) :: field_name
       real(fp), pointer :: column_ptr(:)
 
-      ! Suppress unused variable warnings - these are placeholders for future implementation
-      if (.false.) then
-         print *, trim(field_name), this%nx  ! Use arguments to suppress warnings
-      endif
-
       column_ptr => null()
 
-      if (.not. associated(this%container)) return
+      if (.not. associated(this%met_state)) return
 
-      ! Note: Using placeholder methods since actual StateManager methods may differ
-      ! met_state => this%container%get_met_state_ptr()
+      ! Real implementation would get field from MetState
       ! For now, return null pointer
       column_ptr => null()
-      return
-
-      ! For current column model, MetState fields are already 1D
-      ! column_ptr => met_state%get_field_ptr(field_name)
 
    end function column_view_get_met_ptr
 
@@ -282,20 +231,13 @@ contains
       character(len=*), intent(in) :: species_name
       real(fp), pointer :: column_ptr(:)
 
-      type(ChemStateType), pointer :: chem_state
-
       column_ptr => null()
 
-      if (.not. associated(this%container)) return
+      if (.not. associated(this%chem_state)) return
 
-      ! Note: Using placeholder methods since actual StateManager methods may differ
-      ! chem_state => this%container%get_chem_state_ptr()
+      ! Real implementation would get species from ChemState
       ! For now, return null pointer
       column_ptr => null()
-      return
-
-      ! For current column model, ChemState species are already 1D
-      ! column_ptr => chem_state%get_species_ptr(species_name)
 
    end function column_view_get_chem_ptr
 
@@ -345,8 +287,7 @@ contains
       endif
 
       ! Get chemistry state for species metadata
-      ! Note: Using placeholder methods since actual StateManager methods may differ
-      ! chem_state => this%container%get_chem_state_ptr()
+      ! Real implementation would use this%chem_state directly
       ! For now, skip this step
 
       ! Apply tendency to each vertical level
@@ -367,7 +308,8 @@ contains
       class(ColumnViewType), intent(inout) :: this
 
       ! Nullify pointers
-      this%container => null()
+      this%met_state => null()
+      this%chem_state => null()
       this%met_column => null()
       this%chem_column => null()
       this%emis_column => null()
@@ -377,13 +319,14 @@ contains
    !========================================================================
    !! Convenience function to create column view
    !========================================================================
-   function create_column_view(container) result(col_view)
-      type(StateManagerType), intent(in), target :: container
+   function create_column_view(met_state, chem_state) result(col_view)
+      type(MetStateType), intent(in), target, optional :: met_state
+      type(ChemStateType), intent(in), target, optional :: chem_state
       type(ColumnViewType) :: col_view
 
       integer :: rc
 
-      call col_view%init(container, rc)
+      call col_view%init(met_state, chem_state, rc)
       if (rc /= CC_SUCCESS) then
          print *, 'WARNING: Failed to initialize column view'
       endif
@@ -391,199 +334,17 @@ contains
    end function create_column_view
 
    !========================================================================
-   ! VirtualColumnType Implementation
-   !========================================================================
-
-   !> \brief Initialize virtual column
-   subroutine virtual_column_init(this, container, grid_i, grid_j, rc)
-      class(VirtualColumnType), intent(inout) :: this
-      type(StateManagerType), target, intent(in) :: container
-      integer, intent(in) :: grid_i, grid_j
-      integer, intent(out) :: rc
-
-      type(MetStateType), pointer :: met_state
-      type(ChemStateType), pointer :: chem_state
-      integer :: nx_dummy, ny_dummy
-      ! type(EmisStateType), pointer :: emis_state
-
-      rc = CC_SUCCESS
-
-      this%container => container
-      this%grid_i = grid_i
-      this%grid_j = grid_j
-
-      ! Get state pointers - placeholder since actual methods may differ
-      ! met_state => container%get_met_state_ptr()
-      ! chem_state => container%get_chem_state_ptr()
-      ! emis_state => container%get_emis_state_ptr()
-
-      ! For now, set basic defaults
-      this%nlev = 50  ! Default number of levels
-
-      ! Set up data pointers (this would extract column data from 3D grids)
-      call this%update_from_grid(rc)
-
-      this%is_valid = (rc == CC_SUCCESS)
-
-   end subroutine virtual_column_init
-
-   !> \brief Update virtual column data from 3D grid
-   subroutine virtual_column_update_from_grid(this, rc)
-      class(VirtualColumnType), intent(inout) :: this
-      integer, intent(out) :: rc
-
-      type(MetStateType), pointer :: met_state
-      integer :: nx_dummy, ny_dummy
-
-      rc = CC_SUCCESS
-
-      if (.not. associated(this%container)) then
-         rc = CC_FAILURE
-         return
-      endif
-
-      ! Note: Using placeholder methods since actual StateManager methods may differ
-      ! met_state => this%container%get_met_state_ptr()
-      ! For now, skip the actual data extraction
-      rc = CC_SUCCESS
-
-      ! Get column pointers for meteorology - placeholder
-      ! this%met_data => met_state%get_column_ptr('temperature', this%grid_i, this%grid_j)
-
-      ! Similar for chemistry and emissions...
-      ! this%chem_data => chem_state%get_column_ptr(this%grid_i, this%grid_j)
-      ! this%emis_data => emis_state%get_column_ptr(this%grid_i, this%grid_j)
-
-   end subroutine virtual_column_update_from_grid
-
-   !> \brief Apply virtual column changes back to 3D grid
-   subroutine virtual_column_apply_to_grid(this, rc)
-      class(VirtualColumnType), intent(inout) :: this
-      integer, intent(out) :: rc
-
-      rc = CC_SUCCESS
-
-      ! Apply any changes made to the virtual column back to the 3D grid
-      ! This handles the reverse mapping from 1D column to 3D grid
-
-      ! Implementation would copy modified data back to appropriate grid locations
-
-   end subroutine virtual_column_apply_to_grid
-
-   !> \brief Get meteorological field value at level k
-   function virtual_column_get_met_field(this, field_name, k) result(value)
-      class(VirtualColumnType), intent(in) :: this
-      character(len=*), intent(in) :: field_name
-      integer, intent(in) :: k
-      real(fp) :: value
-
-      ! For now, return from met_data array
-      if (associated(this%met_data) .and. k >= 1 .and. k <= this%nlev) then
-         value = this%met_data(k)
-      else
-         value = 0.0_fp
-      endif
-
-   end function virtual_column_get_met_field
-
-   !> \brief Get chemical species concentration at level k
-   function virtual_column_get_chem_field(this, species_name, k) result(value)
-      class(VirtualColumnType), intent(in) :: this
-      character(len=*), intent(in) :: species_name
-      integer, intent(in) :: k
-      real(fp) :: value
-
-      ! Implementation would look up species by name and return concentration
-      value = 0.0_fp  ! Placeholder
-
-   end function virtual_column_get_chem_field
-
-   !> \brief Get emission flux at level k
-   function virtual_column_get_emis_field(this, species_name, k) result(value)
-      class(VirtualColumnType), intent(in) :: this
-      character(len=*), intent(in) :: species_name
-      integer, intent(in) :: k
-      real(fp) :: value
-
-      ! Implementation would look up species by name and return emission flux
-      value = 0.0_fp  ! Placeholder
-
-   end function virtual_column_get_emis_field
-
-   !> \brief Set meteorological field value at level k
-   subroutine virtual_column_set_met_field(this, field_name, k, value)
-      class(VirtualColumnType), intent(inout) :: this
-      character(len=*), intent(in) :: field_name
-      integer, intent(in) :: k
-      real(fp), intent(in) :: value
-
-      if (associated(this%met_data) .and. k >= 1 .and. k <= this%nlev) then
-         this%met_data(k) = value
-      endif
-
-   end subroutine virtual_column_set_met_field
-
-   !> \brief Set chemical species concentration at level k
-   subroutine virtual_column_set_chem_field(this, species_name, k, value)
-      class(VirtualColumnType), intent(inout) :: this
-      character(len=*), intent(in) :: species_name
-      integer, intent(in) :: k
-      real(fp), intent(in) :: value
-
-      ! Implementation would look up species by name and set concentration
-
-   end subroutine virtual_column_set_chem_field
-
-   !> \brief Set emission flux at level k
-   subroutine virtual_column_set_emis_field(this, species_name, k, value)
-      class(VirtualColumnType), intent(inout) :: this
-      character(len=*), intent(in) :: species_name
-      integer, intent(in) :: k
-      real(fp), intent(in) :: value
-
-      ! Implementation would look up species by name and set emission flux
-
-   end subroutine virtual_column_set_emis_field
-
-   !> \brief Get column metadata
-   subroutine virtual_column_get_metadata(this, lat, lon, area, nlev)
-      class(VirtualColumnType), intent(in) :: this
-      real(fp), intent(out) :: lat, lon, area
-      integer, intent(out) :: nlev
-
-      lat = this%lat
-      lon = this%lon
-      area = this%area
-      nlev = this%nlev
-
-   end subroutine virtual_column_get_metadata
-
-   !> \brief Clean up virtual column
-   subroutine virtual_column_cleanup(this)
-      class(VirtualColumnType), intent(inout) :: this
-
-      this%met_data => null()
-      this%chem_data => null()
-      this%emis_data => null()
-      this%container => null()
-      this%is_valid = .false.
-
-   end subroutine virtual_column_cleanup
-
-   !========================================================================
    ! ColumnProcessorType Implementation
    !========================================================================
 
    !> \brief Initialize column processor
-   subroutine processor_init(this, container, max_columns, rc)
+   subroutine processor_init(this, max_columns, rc)
       class(ColumnProcessorType), intent(inout) :: this
-      type(StateManagerType), target, intent(in) :: container
       integer, intent(in) :: max_columns
       integer, intent(out) :: rc
 
       rc = CC_SUCCESS
 
-      this%container => container
       allocate(this%columns(max_columns))
       this%n_columns = 0
       this%current_column = 1
@@ -591,9 +352,9 @@ contains
    end subroutine processor_init
 
    !> \brief Add a column to the processor
-   subroutine processor_add_column(this, grid_i, grid_j, rc)
+   subroutine processor_add_column(this, virtual_col, rc)
       class(ColumnProcessorType), intent(inout) :: this
-      integer, intent(in) :: grid_i, grid_j
+      type(VirtualColumnType), intent(in) :: virtual_col
       integer, intent(out) :: rc
 
       rc = CC_SUCCESS
@@ -604,7 +365,7 @@ contains
       endif
 
       this%n_columns = this%n_columns + 1
-      call this%columns(this%n_columns)%init(this%container, grid_i, grid_j, rc)
+      this%columns(this%n_columns) = virtual_col
 
    end subroutine processor_add_column
 
@@ -685,7 +446,6 @@ contains
          deallocate(this%columns)
       endif
 
-      this%container => null()
       this%n_columns = 0
 
    end subroutine processor_cleanup

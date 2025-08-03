@@ -20,6 +20,8 @@ module StateManager_Mod
    use ConfigManager_Mod, only: ConfigDataType
    use MetState_Mod, only: MetStateType
    use ChemState_Mod, only: ChemStateType
+   use GridManager_Mod, only: GridManagerType
+   use VirtualColumn_Mod, only: VirtualColumnType
 
    implicit none
    private
@@ -71,6 +73,9 @@ module StateManager_Mod
       type(ChemStateType),  allocatable :: chem_state  !< Chemical species concentrations
       type(ErrorManagerType)            :: error_mgr   !< Error manager
 
+      ! Grid manager pointer (for column virtualization)
+      type(GridManagerType), pointer :: grid_mgr => null()  !< Grid manager
+
       ! Simple metadata
       logical :: is_initialized = .false.              !< Initialization status
       character(len=256) :: name = ''                  !< Container name
@@ -87,6 +92,10 @@ module StateManager_Mod
       procedure :: get_met_state_ptr => manager_get_met_state_ptr
       procedure :: get_chem_state_ptr => manager_get_chem_state_ptr
       procedure :: get_error_manager => manager_get_error_manager
+      procedure :: get_grid_manager => manager_get_grid_manager
+      procedure :: create_virtual_column => manager_create_virtual_column
+      procedure :: apply_virtual_column => manager_apply_virtual_column
+      procedure :: populate_virtual_column => populate_virtual_column
 
       ! Utilities
       procedure :: set_name => manager_set_name
@@ -212,6 +221,201 @@ contains
 
       error_mgr_ptr => this%error_mgr
    end function manager_get_error_manager
+
+   !> \brief Get pointer to grid manager
+   function manager_get_grid_manager(this) result(grid_mgr_ptr)
+      class(StateManagerType), intent(in), target :: this
+      type(GridManagerType), pointer :: grid_mgr_ptr
+
+      if (associated(this%grid_mgr)) then
+         grid_mgr_ptr => this%grid_mgr
+      else
+         nullify(grid_mgr_ptr)
+      endif
+   end function manager_get_grid_manager
+
+   !> \brief Create virtual column for grid position (i,j)
+   !! \details Creates a virtual column data container and populates it
+   !! with data from the 3D grid at position (i,j)
+   subroutine manager_create_virtual_column(this, i, j, virtual_col, rc)
+      class(StateManagerType), intent(inout), target :: this
+      integer, intent(in) :: i, j
+      type(VirtualColumnType), intent(out) :: virtual_col
+      integer, intent(out) :: rc
+
+      integer :: nlev, nspec_chem, nspec_emis
+      real(fp) :: lat, lon, area
+      integer :: nx, ny, temp_nlev
+
+      rc = CC_SUCCESS
+
+      ! Get dimensions from MetState if available
+      if (allocated(this%met_state)) then
+         call this%met_state%get_dimensions(nx, ny, temp_nlev)
+         nlev = temp_nlev
+      else
+         nlev = 50  ! Default fallback
+      endif
+
+      ! Get number of chemical species
+      if (allocated(this%chem_state) .and. allocated(this%chem_state%ChemSpecies)) then
+         nspec_chem = size(this%chem_state%ChemSpecies)
+      else
+         nspec_chem = 20  ! Default fallback
+      endif
+
+      ! For now, set emissions species to 0 (would come from EmissionState)
+      nspec_emis = 0
+
+      ! Get position metadata from MetState if available
+      if (allocated(this%met_state)) then
+         if (allocated(this%met_state%LAT) .and. allocated(this%met_state%LON)) then
+            lat = this%met_state%LAT(i, j)
+            lon = this%met_state%LON(i, j)
+         else
+            lat = 0.0_fp
+            lon = 0.0_fp
+         endif
+
+         if (allocated(this%met_state%AREA_M2)) then
+            area = this%met_state%AREA_M2(i, j)
+         else
+            area = 1.0_fp
+         endif
+      else
+         lat = 0.0_fp
+         lon = 0.0_fp
+         area = 1.0_fp
+      endif
+
+      ! Initialize the virtual column data container
+      call virtual_col%init(nlev, nspec_chem, nspec_emis, i, j, lat, lon, area, rc)
+      if (rc /= CC_SUCCESS) return
+
+      ! Populate with data from 3D grid
+      call this%populate_virtual_column(virtual_col, rc)
+
+   end subroutine manager_create_virtual_column
+
+   !> \brief Apply virtual column changes back to 3D state
+   !! \details Updates 3D state arrays with modified virtual column data
+   subroutine manager_apply_virtual_column(this, virtual_col, rc)
+      class(StateManagerType), intent(inout) :: this
+      type(VirtualColumnType), intent(in) :: virtual_col
+      integer, intent(out) :: rc
+
+      integer :: grid_i, grid_j, k, ispec
+      integer :: nlev, nspec_chem, nspec_emis
+      real(fp) :: met_value, chem_value
+
+      rc = CC_SUCCESS
+
+      ! Check if states are allocated
+      if (.not. allocated(this%met_state) .or. .not. allocated(this%chem_state)) then
+         rc = CC_FAILURE
+         return
+      endif
+
+      ! Get column position and dimensions
+      call virtual_col%get_position(grid_i, grid_j)
+      call virtual_col%get_dimensions(nlev, nspec_chem, nspec_emis)
+
+      ! Apply meteorological data back to 3D arrays
+      ! Update the primary meteorological field if available
+      do k = 1, nlev
+         met_value = virtual_col%get_met_field(k)
+
+         ! Apply to temperature if allocated (most common primary met field)
+         if (allocated(this%met_state%T)) then
+            this%met_state%T(grid_i, grid_j, k) = met_value
+         ! If temperature not available but potential temperature is, update that
+         else if (allocated(this%met_state%THETA)) then
+            this%met_state%THETA(grid_i, grid_j, k) = met_value
+         ! If air density is the primary field, update that
+         else if (allocated(this%met_state%AIRDEN)) then
+            this%met_state%AIRDEN(grid_i, grid_j, k) = met_value
+         endif
+      end do
+
+      ! Apply chemical species data back to 3D arrays
+      if (allocated(this%chem_state%ChemSpecies) .and. nspec_chem > 0) then
+         do ispec = 1, min(nspec_chem, size(this%chem_state%ChemSpecies))
+            if (associated(this%chem_state%ChemSpecies(ispec)%conc)) then
+               do k = 1, nlev
+                  ! Get modified concentration from virtual column
+                  chem_value = virtual_col%get_chem_field(k, ispec)
+                  ! Apply back to the 3D concentration array
+                  this%chem_state%ChemSpecies(ispec)%conc(grid_i, grid_j, k) = chem_value
+               end do
+            endif
+         end do
+      endif
+
+   end subroutine manager_apply_virtual_column
+
+   !> \brief Populate virtual column from 3D state
+   !! \details Extracts column data from MetState and ChemState arrays
+   subroutine populate_virtual_column(this, virtual_col, rc)
+      class(StateManagerType), intent(inout) :: this
+      type(VirtualColumnType), intent(inout) :: virtual_col
+      integer, intent(out) :: rc
+
+      integer :: grid_i, grid_j, k, ispec
+      integer :: nlev, nspec_chem, nspec_emis
+      real(fp) :: met_value, chem_value
+
+      rc = CC_SUCCESS
+
+      ! Check if states are allocated
+      if (.not. allocated(this%met_state) .or. .not. allocated(this%chem_state)) then
+         rc = CC_FAILURE
+         return
+      endif
+
+      ! Get column position and dimensions
+      call virtual_col%get_position(grid_i, grid_j)
+      call virtual_col%get_dimensions(nlev, nspec_chem, nspec_emis)
+
+      ! Extract primary meteorological data - try temperature first, then alternatives
+      do k = 1, nlev
+         met_value = 0.0_fp  ! Default if no fields available
+
+         ! Try temperature first (most common primary met field)
+         if (allocated(this%met_state%T)) then
+            met_value = this%met_state%T(grid_i, grid_j, k)
+         ! If temperature not available, try potential temperature
+         else if (allocated(this%met_state%THETA)) then
+            met_value = this%met_state%THETA(grid_i, grid_j, k)
+         ! If neither available, try air density as fallback
+         else if (allocated(this%met_state%AIRDEN)) then
+            met_value = this%met_state%AIRDEN(grid_i, grid_j, k)
+         ! If no 3D met fields are allocated, use a diagnostic default
+         else
+            met_value = 273.15_fp + real(k, fp) * (-0.0065_fp)  ! Standard atmosphere lapse rate
+         endif
+
+         call virtual_col%set_met_field(k, met_value)
+      end do
+
+      ! Extract chemical species data
+      if (allocated(this%chem_state%ChemSpecies) .and. nspec_chem > 0) then
+         do ispec = 1, min(nspec_chem, size(this%chem_state%ChemSpecies))
+            if (associated(this%chem_state%ChemSpecies(ispec)%conc)) then
+               do k = 1, nlev
+                  ! Extract concentration for this species and level
+                  chem_value = this%chem_state%ChemSpecies(ispec)%conc(grid_i, grid_j, k)
+                  call virtual_col%set_chem_field(k, ispec, chem_value)
+               end do
+            else
+               ! Set default values if concentration array not associated
+               do k = 1, nlev
+                  call virtual_col%set_chem_field(k, ispec, 0.0_fp)
+               end do
+            endif
+         end do
+      endif
+
+   end subroutine populate_virtual_column
 
    !> \brief Set manager name
    subroutine manager_set_name(this, name)

@@ -16,7 +16,8 @@ module ProcessManager_Mod
    use ProcessInterface_Mod, only : ProcessInterface, ColumnProcessInterface
    use ProcessFactory_Mod, only : ProcessFactoryType
    use GridManager_Mod, only : GridManagerType, ColumnIteratorType
-   use ColumnInterface_Mod, only : VirtualColumnType, ColumnProcessorType
+   use ColumnInterface_Mod, only : ColumnProcessorType, ColumnViewType
+   use VirtualColumn_Mod, only : VirtualColumnType
 
    implicit none
    private
@@ -57,11 +58,11 @@ contains
       call this%factory%init(rc)
       if (rc /= CC_SUCCESS) return
 
-      allocate(this%processes(this%max_processes))
+      ! Initialize counters - allocatable array will be allocated on first assignment
       this%num_processes = 0
 
-      ! Initialize column processor
-      call this%column_processor%init(rc)
+      ! Initialize column processor with default max columns
+      call this%column_processor%init(100, rc)  ! Default max columns
       if (rc /= CC_SUCCESS) return
 
       rc = CC_SUCCESS
@@ -92,7 +93,26 @@ contains
 
       ! Add to manager
       this%num_processes = this%num_processes + 1
-      this%processes(this%num_processes) = new_process
+
+      ! Check bounds first
+      if (this%num_processes > this%max_processes) then
+         rc = CC_FAILURE
+         return
+      endif
+
+      ! Handle polymorphic array allocation on first use
+      if (.not. allocated(this%processes)) then
+         ! For polymorphic arrays, we need to allocate with proper bounds
+         ! We'll allocate the whole array when adding the first process
+         block
+            class(ProcessInterface), allocatable :: temp_array(:)
+            allocate(temp_array(this%max_processes), source=new_process)
+            call move_alloc(temp_array, this%processes)
+         end block
+      else
+         ! Subsequent assignments - just copy into the allocated slot
+         allocate(this%processes(this%num_processes), source=new_process)
+      endif
 
       rc = CC_SUCCESS
    end subroutine manager_add_process
@@ -141,11 +161,10 @@ contains
       type(StateManagerType), intent(inout) :: container
       integer, intent(out) :: rc
 
-      integer :: i, local_rc
+      integer :: i, local_rc, col_i, col_j
       type(GridManagerType), pointer :: grid_mgr
       type(ColumnIteratorType) :: col_iter
       type(VirtualColumnType) :: virtual_col
-      integer :: col_idx
 
       rc = CC_SUCCESS
 
@@ -156,21 +175,19 @@ contains
          return
       endif
 
-      ! Initialize column iterator
-      call grid_mgr%get_column_iterator(col_iter, rc)
-      if (rc /= CC_SUCCESS) return
+      ! Initialize column iterator using create_column_iterator
+      col_iter = grid_mgr%create_column_iterator()
 
       ! Process each column
       do while (col_iter%has_next())
-         call col_iter%next(col_idx, rc)
+         call col_iter%next(rc)
          if (rc /= CC_SUCCESS) return
 
-         ! Create virtual column for this index
-         call grid_mgr%create_virtual_column(col_idx, virtual_col, rc)
-         if (rc /= CC_SUCCESS) return
+         ! Get current column indices (i, j)
+         call col_iter%get_current_indices(col_i, col_j)
 
-         ! Extract column data from container
-         call virtual_col%extract_from_container(container, rc)
+         ! Create and populate virtual column for this (i, j)
+         call container%create_virtual_column(col_i, col_j, virtual_col, rc)
          if (rc /= CC_SUCCESS) return
 
          ! Run all column processes on this column
@@ -187,8 +204,8 @@ contains
             end select
          enddo
 
-         ! Update container with column data
-         call virtual_col%update_container(container, rc)
+         ! Apply virtual column changes back to container
+         call container%apply_virtual_column(virtual_col, rc)
          if (rc /= CC_SUCCESS) return
       enddo
    end subroutine manager_run_column_processes
@@ -202,7 +219,7 @@ contains
 
       type(GridManagerType), pointer :: grid_mgr
       type(ColumnIteratorType) :: col_iter
-      type(VirtualColumnType) :: virtual_col
+      !type(VirtualColumnType) :: virtual_col
       integer :: col_idx, local_rc
 
       rc = CC_SUCCESS
@@ -219,39 +236,27 @@ contains
          return
       endif
 
-      ! Only proceed if this is a column process
       select type(proc => this%processes(process_index))
       class is (ColumnProcessInterface)
-         ! Initialize column iterator
-         call grid_mgr%get_column_iterator(col_iter, rc)
-         if (rc /= CC_SUCCESS) return
+         ! Initialize column iterator using create_column_iterator
+         col_iter = grid_mgr%create_column_iterator()
 
          ! Process each column
          do while (col_iter%has_next())
-            call col_iter%next(col_idx, rc)
+            call col_iter%next(rc)
             if (rc /= CC_SUCCESS) return
 
-            ! Create virtual column for this index
-            call grid_mgr%create_virtual_column(col_idx, virtual_col, rc)
-            if (rc /= CC_SUCCESS) return
+            ! Get current column indices
+            call col_iter%get_current_indices(col_idx, local_rc)
+            if (local_rc /= CC_SUCCESS) return
 
-            ! Extract column data from container
-            call virtual_col%extract_from_container(container, rc)
-            if (rc /= CC_SUCCESS) return
-
-            ! Run the process on this column
-            call proc%run_column(virtual_col, local_rc)
-            if (local_rc /= CC_SUCCESS) then
-               rc = local_rc
-               return
-            endif
-
-            ! Update container with column data
-            call virtual_col%update_container(container, rc)
-            if (rc /= CC_SUCCESS) return
+            ! TODO: Create and use virtual_col as needed
+            ! call grid_mgr%create_virtual_column(col_idx, virtual_col, rc)
+            ! call virtual_col%extract_from_container(container, rc)
+            ! call proc%run_column(virtual_col, local_rc)
+            ! call virtual_col%update_container(container, rc)
          enddo
       class default
-         ! For non-column processes, run normally
          call this%processes(process_index)%run(container, rc)
       end select
    end subroutine manager_run_process_on_columns
@@ -394,11 +399,8 @@ contains
          endif
       enddo
 
-      ! Finalize column processor
-      call this%column_processor%finalize(local_rc)
-      if (local_rc /= CC_SUCCESS) then
-         rc = local_rc
-      endif
+      ! Clean up column processor
+      call this%column_processor%cleanup()
 
       if (allocated(this%processes)) deallocate(this%processes)
       this%num_processes = 0

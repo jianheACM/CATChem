@@ -521,7 +521,7 @@ CONTAINS
    !! \param[in] error_mgr Error manager for context and error reporting
    !! \param[out] rc Return code
    subroutine chemstate_init(this, max_species, error_mgr, rc, grid)
-      use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE, ERROR_MEMORY_ALLOCATION
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, ERROR_MEMORY_ALLOCATION
       use GridGeometry_Mod, only: GridGeometryType
       implicit none
       class(ChemStateType), intent(inout) :: this
@@ -692,7 +692,7 @@ CONTAINS
 
    !> \brief Validate ChemStateType for consistency
    subroutine chemstate_validate(this, error_mgr, rc)
-      use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE, ERROR_INVALID_INPUT
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, ERROR_INVALID_INPUT
 
       implicit none
       class(ChemStateType), intent(in) :: this
@@ -844,7 +844,7 @@ CONTAINS
 
    !> \brief Add a species to the chemistry state
    subroutine chemstate_add_species(this, species_name, species_type, error_mgr, rc)
-      use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE, ERROR_BOUNDS_CHECK
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, ERROR_BOUNDS_CHECK
 
       implicit none
       class(ChemStateType), intent(inout) :: this

@@ -48,7 +48,9 @@ module ConfigManager_Mod
    use iso_c_binding, only: c_associated
    use iso_fortran_env, only: real64
    use Error_Mod, only : CC_SUCCESS, CC_FAILURE, ERROR_INVALID_CONFIG, ERROR_INVALID_INPUT, ErrorManagerType
-   use yaml_interface_mod, only : yaml_node_t, yaml_load_file, yaml_destroy_node, yaml_get, yaml_set, yaml_get_array, yaml_has_key
+   use yaml_interface_mod, only : yaml_node_t, yaml_load_file, yaml_load_string, yaml_destroy_node, &
+                                  yaml_get_string, yaml_get_integer, yaml_get_real, yaml_get_logical, &
+                                  yaml_has_key, yaml_get, yaml_set, yaml_is_map, yaml_get_size
 
    implicit none
    private
@@ -314,11 +316,11 @@ module ConfigManager_Mod
    end type ConfigManagerType
 
    ! Built-in configuration presets
-   type(ConfigPresetType), parameter :: PRESET_BASIC = ConfigPresetType( &
-      name = 'basic', &
-      description = 'Basic CATChem configuration for testing', &
-      yaml_content = 'simulation: {start_date: "2023-01-01", end_date: "2023-01-02"}' &
-   )
+   ! type(ConfigPresetType), parameter :: PRESET_BASIC = ConfigPresetType( &
+   !    name = 'basic', &
+   !    description = 'Basic CATChem configuration for testing', &
+   !    yaml_content = 'simulation: {start_date: "2023-01-01", end_date: "2023-01-02"}' &
+   ! )
 
 contains
 
@@ -394,7 +396,12 @@ contains
       type(yaml_node_t), intent(in) :: yaml_data
       integer, intent(out) :: rc
 
+      integer :: i
+      logical :: key_exists
+      character(len=512) :: missing_fields
+
       rc = CC_SUCCESS
+      missing_fields = ''
 
       ! Basic validation - check if we have a valid node
       if (.not. c_associated(yaml_data%ptr)) then
@@ -402,8 +409,40 @@ contains
          return
       endif
 
-      ! Additional validation logic would go here
-      ! For now, just return success
+      ! Check required fields
+      if (allocated(this%required_fields)) then
+         do i = 1, size(this%required_fields)
+            key_exists = yaml_has_key(yaml_data, trim(this%required_fields(i)))
+            if (.not. key_exists) then
+               if (len_trim(missing_fields) > 0) then
+                  missing_fields = trim(missing_fields) // ', ' // trim(this%required_fields(i))
+               else
+                  missing_fields = trim(this%required_fields(i))
+               endif
+            endif
+         end do
+      endif
+
+      ! Report missing required fields
+      if (len_trim(missing_fields) > 0) then
+         write(*, '(A,A)') 'ERROR: Missing required configuration fields: ', trim(missing_fields)
+         if (this%strict_validation) then
+            rc = CC_FAILURE
+            return
+         endif
+      endif
+
+      ! Validate optional fields exist (if present)
+      if (allocated(this%optional_fields)) then
+         do i = 1, size(this%optional_fields)
+            key_exists = yaml_has_key(yaml_data, trim(this%optional_fields(i)))
+            if (key_exists) then
+               write(*, '(A,A)') 'INFO: Found optional field: ', trim(this%optional_fields(i))
+            endif
+         end do
+      endif
+
+      write(*, '(A)') 'INFO: Configuration validation completed'
 
    end subroutine schema_validate_config
 
@@ -415,8 +454,15 @@ contains
       character(len=*), intent(in) :: config_file
       integer, intent(out) :: rc
 
-      logical :: file_exists
-      character(len=256) :: message
+      logical :: file_exists, key_exists
+      type(yaml_node_t) :: emission_config
+      integer :: n_sources, n_species
+      character(len=256) :: data_directory
+
+      ! Suppress warning for unused argument (used for interface compatibility)
+      if (.false.) then
+         key_exists = yaml_has_key(yaml_data, "dummy")
+      endif
 
       rc = CC_SUCCESS
 
@@ -428,14 +474,56 @@ contains
          return
       endif
 
-      ! TODO: Add full emission YAML parsing and validation
-      ! This would include:
-      ! 1. Parse emission configuration file
-      ! 2. Validate species mapping
-      ! 3. Check scaling factors
-      ! 4. Validate emission sources and vertical distributions
+      ! Load and validate emission configuration
+      emission_config = yaml_load_file(config_file)
+      if (.not. c_associated(emission_config%ptr)) then
+         write(*, '(A)') 'ERROR: Failed to parse emission configuration file'
+         rc = CC_FAILURE
+         return
+      endif
 
-      write(*, '(A)') 'INFO: Emission configuration validation placeholder - implementation pending'
+      ! Validate required emission fields
+      key_exists = yaml_has_key(emission_config, "emissions")
+      if (.not. key_exists) then
+         write(*, '(A)') 'ERROR: Missing emissions section in configuration'
+         rc = CC_FAILURE
+         call yaml_destroy_node(emission_config)
+         return
+      endif
+
+      ! Check for data directory
+      key_exists = yaml_has_key(emission_config, "emissions/data_directory")
+      if (key_exists) then
+         if (yaml_get_string(emission_config, "emissions/data_directory", data_directory)) then
+            inquire(file=trim(data_directory), exist=file_exists)
+            if (.not. file_exists) then
+               write(*, '(A,A)') 'WARNING: Emission data directory does not exist: ', trim(data_directory)
+            endif
+         endif
+      endif
+
+      ! Validate emission sources
+      if (yaml_get_integer(emission_config, "emissions/n_sources", n_sources)) then
+         if (n_sources <= 0) then
+            write(*, '(A)') 'WARNING: No emission sources configured'
+         else
+            write(*, '(A,I0,A)') 'INFO: Found ', n_sources, ' emission sources'
+         endif
+      endif
+
+      ! Validate species mapping
+      if (yaml_get_integer(emission_config, "emissions/n_species", n_species)) then
+         if (n_species <= 0) then
+            write(*, '(A)') 'WARNING: No emission species configured'
+         else
+            write(*, '(A,I0,A)') 'INFO: Found ', n_species, ' emission species'
+         endif
+      endif
+
+      ! Clean up
+      call yaml_destroy_node(emission_config)
+
+      write(*, '(A)') 'INFO: Emission configuration validation completed'
 
    end subroutine schema_validate_emission_config
 
@@ -576,14 +664,23 @@ contains
       character(len=*), intent(in) :: filename
       integer, intent(out) :: rc
 
+      logical :: file_exists
+
       rc = CC_SUCCESS
+
+      ! Check if file exists
+      inquire(file=trim(filename), exist=file_exists)
+      if (.not. file_exists) then
+         rc = CC_FAILURE
+         return
+      endif
 
       ! Clean up any existing configuration
       if (this%is_loaded) then
          call yaml_destroy_node(this%yaml_data)
       endif
 
-      ! Load YAML configuration using yaml-cpp
+      ! Load YAML configuration using yaml_interface_mod
       this%yaml_data = yaml_load_file(filename)
       if (.not. c_associated(this%yaml_data%ptr)) then
          rc = CC_FAILURE
@@ -613,22 +710,33 @@ contains
       character(len=*), intent(in) :: yaml_string
       integer, intent(out) :: rc
 
-      ! This would require extending QFYAML to support string input
-      ! For now, write to temporary file and load
-      character(len=256) :: temp_file
-      integer :: unit_num
-
       rc = CC_SUCCESS
 
-      temp_file = 'temp_config.yml'
+      ! Clean up any existing configuration
+      if (this%is_loaded) then
+         call yaml_destroy_node(this%yaml_data)
+      endif
 
-      open(newunit=unit_num, file=temp_file, status='replace', iostat=rc)
-      if (rc /= 0) return
+      ! Load YAML configuration from string using yaml_interface_mod
+      this%yaml_data = yaml_load_string(yaml_string)
+      if (.not. c_associated(this%yaml_data%ptr)) then
+         rc = CC_FAILURE
+         return
+      endif
 
-      write(unit_num, '(A)') trim(yaml_string)
-      close(unit_num)
+      this%config_file = '<string>'
+      this%is_loaded = .true.
 
-      call this%load_from_file(temp_file, rc)
+      ! Validate against schema if loaded
+      if (this%schema_loaded) then
+         call this%validate(rc)
+         if (rc /= CC_SUCCESS .and. this%load_strategy == CONFIG_STRATEGY_STRICT) then
+            return
+         endif
+      endif
+
+      ! Parse structured configuration data
+      call this%parse_config_data(rc)
 
    end subroutine config_manager_load_from_string
 
@@ -665,9 +773,72 @@ contains
       character(len=*), intent(in) :: schema_file
       integer, intent(out) :: rc
 
-      ! Placeholder - would load schema from file
+      type(yaml_node_t) :: schema_config
+      logical :: file_exists, success
+      character(len=64) :: required_fields(100), optional_fields(100)
+      character(len=256) :: schema_name, schema_description
+      integer :: n_required, n_optional, i
+      character(len=256) :: key
+
       rc = CC_SUCCESS
+
+      ! Check if schema file exists
+      inquire(file=trim(schema_file), exist=file_exists)
+      if (.not. file_exists) then
+         write(*, '(A,A)') 'INFO: Schema file not found, using default schema: ', trim(schema_file)
+         ! Use default schema initialization
+         this%schema_loaded = .true.
+         return
+      endif
+
+      ! Load schema configuration file
+      schema_config = yaml_load_file(schema_file)
+      if (.not. c_associated(schema_config%ptr)) then
+         write(*, '(A)') 'WARNING: Failed to parse schema file, using defaults'
+         this%schema_loaded = .true.
+         return
+      endif
+
+      ! Read schema metadata
+      success = yaml_get_string(schema_config, "schema/name", schema_name)
+      if (success) then
+         write(*, '(A,A)') 'INFO: Loading schema: ', trim(schema_name)
+      endif
+
+      success = yaml_get_string(schema_config, "schema/description", &
+                               schema_description)
+
+      ! Read required fields
+      success = yaml_get_integer(schema_config, "schema/required_fields/n_fields", n_required)
+      if (success .and. n_required > 0) then
+         do i = 1, min(n_required, size(required_fields))
+            write(key, '(A,I0)') 'schema/required_fields/field_', i
+            success = yaml_get_string(schema_config, trim(key), required_fields(i))
+            if (success) then
+               call this%schema%add_required_field(trim(required_fields(i)))
+            endif
+         end do
+         write(*, '(A,I0,A)') 'INFO: Added ', min(n_required, size(required_fields)), ' required fields to schema'
+      endif
+
+      ! Read optional fields
+      success = yaml_get_integer(schema_config, "schema/optional_fields/n_fields", n_optional)
+      if (success .and. n_optional > 0) then
+         do i = 1, min(n_optional, size(optional_fields))
+            write(key, '(A,I0)') 'schema/optional_fields/field_', i
+            success = yaml_get_string(schema_config, trim(key), optional_fields(i))
+            if (success) then
+               call this%schema%add_optional_field(trim(optional_fields(i)))
+            endif
+         end do
+         write(*, '(A,I0,A)') 'INFO: Added ', min(n_optional, size(optional_fields)), ' optional fields to schema'
+      endif
+
+      ! Clean up
+      call yaml_destroy_node(schema_config)
+
       this%schema_loaded = .true.
+      write(*, '(A)') 'INFO: Schema loaded successfully'
 
    end subroutine config_manager_load_schema
 
@@ -799,8 +970,8 @@ contains
       character(len=*), allocatable, intent(out) :: values(:)
       integer, intent(out) :: rc
 
-      logical :: found
-      integer :: n_values
+      ! Suppress warnings for unused arguments/variables
+      if (.false.) write(*,*) trim(key)
 
       ! Try to get array from loaded YAML data
       if (this%is_loaded) then
@@ -1158,11 +1329,143 @@ contains
       integer, intent(out) :: num_species
       integer, intent(out) :: rc
 
-      rc = CC_SUCCESS
+      type(yaml_node_t) :: species_config
+      logical :: file_exists, success, already_found
+      integer :: i, count, total_size, j
+      character(len=256) :: key, temp_name, test_key
+      character(len=64), allocatable :: candidate_species(:)
+      integer :: n_candidates
 
-      ! Placeholder implementation - would load from YAML file
-      allocate(species_names(0))
+      ! Common chemical species patterns to look for
+      character(len=32), parameter :: species_patterns(30) = [ &
+          "so2   ", "so4   ", "dms   ", "msa   ", "bc1   ", "bc2   ", &
+          "oc1   ", "oc2   ", "dust1 ", "dust2 ", "dust3 ", "dust4 ", &
+          "dust5 ", "seas1 ", "seas2 ", "seas3 ", "seas4 ", "seas5 ", &
+          "nh3   ", "nh4   ", "nh4a  ", "no3an1", "no3an2", "no3an3", &
+          "co    ", "co2   ", "ch4   ", "h2o2  ", "hno3  ", "pan   " ]
+
+      ! Additional base names for extended search (uniform 8-char length)
+      character(len=8), parameter :: base_names(20) = [ &
+          "so      ", "bc      ", "oc      ", "dust    ", "seas    ", &
+          "no      ", "nh      ", "co      ", "o3      ", "hno     ", &
+          "pan     ", "h2o     ", "ch      ", "dms     ", "msa     ", &
+          "acetone ", "benzene ", "toluene ", "isoprene", "monoterp" ]
+
+      rc = CC_SUCCESS
       num_species = 0
+
+      ! Check if file exists
+      inquire(file=trim(filename), exist=file_exists)
+      if (.not. file_exists) then
+         write(*, '(A,A)') 'WARNING: Species configuration file not found: ', trim(filename)
+         allocate(species_names(0))
+         return
+      endif
+
+      ! Load species configuration file
+      species_config = yaml_load_file(filename)
+      if (.not. c_associated(species_config%ptr)) then
+         rc = CC_FAILURE
+         allocate(species_names(0))
+         return
+      endif
+
+      ! Check if this is a map/dictionary structure
+      if (.not. yaml_is_map(species_config)) then
+         write(*, '(A)') 'ERROR: Species configuration file must be a YAML map/dictionary'
+         rc = CC_FAILURE
+         allocate(species_names(0))
+         call yaml_destroy_node(species_config)
+         return
+      endif
+
+      ! Get the total size of the map to understand how many top-level keys exist
+      total_size = yaml_get_size(species_config)
+      write(*, '(A,I0,A)') 'INFO: Found ', total_size, ' top-level keys in species configuration'
+
+      ! Since we can't iterate keys directly, we'll use a two-pass approach:
+      ! 1. Check common species patterns first
+      ! 2. Then use a more extensive search if needed
+
+      ! Allocate temporary array for candidate species
+      allocate(candidate_species(max(total_size, 100)))
+      n_candidates = 0
+
+      ! First pass: Check common species patterns
+      do i = 1, size(species_patterns)
+         if (yaml_has_key(species_config, trim(species_patterns(i)))) then
+            n_candidates = n_candidates + 1
+            candidate_species(n_candidates) = trim(species_patterns(i))
+         endif
+      end do
+
+      ! If we found fewer species than expected, try broader search patterns
+      if (n_candidates < total_size / 2) then
+         write(*, '(A)') 'INFO: Performing extended species search...'
+
+         ! Try numbered variations (1-10) for common base names
+         do i = 1, size(base_names)
+            do count = 1, 10
+               write(test_key, '(A,I0)') trim(base_names(i)), count
+               if (yaml_has_key(species_config, trim(test_key))) then
+                  ! Check if we already have this species
+                  already_found = .false.
+                  do j = 1, n_candidates
+                     if (trim(candidate_species(j)) == trim(test_key)) then
+                        already_found = .true.
+                        exit
+                     endif
+                  end do
+
+                  if (.not. already_found) then
+                     n_candidates = n_candidates + 1
+                     if (n_candidates <= size(candidate_species)) then
+                        candidate_species(n_candidates) = trim(test_key)
+                     endif
+                  endif
+               endif
+            end do
+         end do
+      endif
+
+      num_species = n_candidates
+
+      if (num_species <= 0) then
+         write(*, '(A)') 'WARNING: No recognizable species found in configuration'
+         write(*, '(A,I0,A)') 'NOTE: Total YAML keys found: ', total_size, &
+              ' - consider checking key naming conventions'
+         allocate(species_names(0))
+         call yaml_destroy_node(species_config)
+         deallocate(candidate_species)
+         return
+      endif
+
+      ! Allocate final species names array
+      allocate(species_names(num_species))
+
+      ! Read species data from found keys
+      do i = 1, num_species
+         ! Try to get the name field, fallback to key name
+         write(key, '(A,A)') trim(candidate_species(i)), '/name'
+         success = yaml_get_string(species_config, trim(key), temp_name)
+
+         if (success) then
+            species_names(i) = trim(temp_name)
+         else
+            ! Fallback to the key name itself
+            species_names(i) = trim(candidate_species(i))
+         endif
+
+         write(*, '(A,I0,A,A,A,A)') 'INFO: Species ', i, ': ', &
+              trim(candidate_species(i)), ' -> ', trim(species_names(i))
+      end do
+
+      ! Clean up
+      call yaml_destroy_node(species_config)
+      deallocate(candidate_species)
+
+      write(*, '(A,I0,A,I0,A)') 'INFO: Successfully loaded ', num_species, &
+           ' species out of ', total_size, ' total keys'
 
    end subroutine config_manager_load_species_config
 
@@ -1173,9 +1476,61 @@ contains
       character(len=*), intent(in) :: filename
       integer, intent(out) :: rc
 
+      type(yaml_node_t) :: emission_config
+      logical :: file_exists, success
+      character(len=256) :: emission_directory, scaling_method
+      integer :: n_emission_sources
+      real(fp) :: global_scaling_factor
+
       rc = CC_SUCCESS
 
-      ! Placeholder implementation - would load from YAML file
+      ! Check if file exists
+      inquire(file=trim(filename), exist=file_exists)
+      if (.not. file_exists) then
+         write(*, '(A,A)') 'WARNING: Emission configuration file not found: ', trim(filename)
+         ! Don't fail - emissions may be optional
+         return
+      endif
+
+      ! Load emission configuration file
+      emission_config = yaml_load_file(filename)
+      if (.not. c_associated(emission_config%ptr)) then
+         rc = CC_FAILURE
+         return
+      endif
+
+      ! Read basic emission settings
+      success = yaml_get_string(emission_config, "emissions/data_directory", &
+                               emission_directory)
+      if (success) then
+         write(*, '(A,A)') 'INFO: Emission data directory: ', trim(emission_directory)
+      endif
+
+      success = yaml_get_string(emission_config, "emissions/scaling_method", &
+                               scaling_method)
+      if (success) then
+         write(*, '(A,A)') 'INFO: Emission scaling method: ', trim(scaling_method)
+      endif
+
+      success = yaml_get_real(emission_config, "emissions/global_scaling_factor", &
+                             global_scaling_factor)
+      if (success) then
+         write(*, '(A,F8.3)') 'INFO: Global emission scaling factor: ', global_scaling_factor
+      endif
+
+      success = yaml_get_integer(emission_config, "emissions/n_sources", n_emission_sources)
+      if (success) then
+         write(*, '(A,I0)') 'INFO: Number of emission sources: ', n_emission_sources
+      endif
+
+      ! TODO: Parse individual emission sources, species mapping,
+      ! vertical distributions, temporal profiles, etc.
+      ! This would require extending the ConfigDataType to store emission data
+
+      ! Clean up
+      call yaml_destroy_node(emission_config)
+
+      write(*, '(A)') 'INFO: Emission configuration loaded successfully'
 
    end subroutine config_manager_load_emission_config
 

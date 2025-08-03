@@ -14,12 +14,11 @@ set(_state_srcs
   ChemState_Mod.F90
   ExtEmisData_Mod.F90
   DiagnosticInterface_Mod.F90
-  # EmissionState_Mod.F90 - deprecated, using ExtEmisData_Mod for inputs and DiagnosticManager for accumulated outputs
-  # DiagnosticState_Mod.F90 - deprecated, using DiagnosticManager_Mod instead
 )
 
 set(_core_srcs
   ConfigManager_Mod.F90
+  VirtualColumn_Mod.F90
   ColumnInterface_Mod.F90
   GridManager_Mod.F90
   StateManager_Mod.F90
