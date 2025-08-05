@@ -1,5 +1,5 @@
 # Dust Process CMakeLists.txt
-# Generated on: 2025-08-03T14:41:50.775030
+# Generated on: 2025-08-05T10:07:05.830900
 # Author: Barry Baker
 # Description: Process for computing windblown dust emissions
 
@@ -108,7 +108,6 @@ message(STATUS "Configured Dust process:")
 message(STATUS "  Process type: generic")
 message(STATUS "  Number of schemes: 2")
 message(STATUS "  Default scheme: fengsha")
-message(STATUS "  Number of species: 5")
 message(STATUS "  Has size bins: No")
 message(STATUS "  Multiphase: No")
 message(STATUS "  Generate tests: Yes")

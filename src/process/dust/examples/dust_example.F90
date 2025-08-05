@@ -4,7 +4,7 @@
 !! This program demonstrates how to use the dust process
 !! in a standalone application or host model integration.
 !!
-!! Generated on: 2025-08-03T14:41:50.813959
+!! Generated on: 2025-08-05T10:07:05.873728
 !! Author: Barry Baker
 
 program dust_example
@@ -44,7 +44,7 @@ program dust_example
    write(output_unit, '(A)') ""
 
    ! Step 1: Initialize state manager
-   call state_manager%init(n_levels, n_columns, 5, rc)
+   call state_manager%init(n_levels, n_columns, 1, rc)
    if (rc /= CC_SUCCESS) then
       write(error_unit, *) 'ERROR: Failed to initialize state manager'
       stop 1
@@ -180,17 +180,8 @@ contains
       type(StateManagerType), intent(inout) :: state_manager
       type(ErrorHandler), intent(inout) :: error_handler
 
-      ! Add dust species
-      call state_manager%add_species('DUST1', error_handler)
-      if (error_handler%has_error()) return
-      call state_manager%add_species('DUST2', error_handler)
-      if (error_handler%has_error()) return
-      call state_manager%add_species('DUST3', error_handler)
-      if (error_handler%has_error()) return
-      call state_manager%add_species('DUST4', error_handler)
-      if (error_handler%has_error()) return
-      call state_manager%add_species('DUST5', error_handler)
-      if (error_handler%has_error()) return
+      ! Add generic species
+      call state_manager%add_species('GENERIC_SPECIES', error_handler)
 
       ! Initialize species concentrations
       call state_manager%allocate_species_arrays(error_handler)
@@ -276,46 +267,6 @@ contains
       real(fp) :: initial_concentration
 
       ! Set initial chemical concentrations
-      do i_col = 1, n_columns
-         do i_lev = 1, n_levels
-            initial_concentration = 1.0e-9_fp  ! Default initial concentration
-            call state_manager%set_species_concentration('DUST1', &
-               i_col, i_lev, initial_concentration, error_handler)
-            if (error_handler%has_error()) return
-         end do
-      end do
-      do i_col = 1, n_columns
-         do i_lev = 1, n_levels
-            initial_concentration = 1.0e-9_fp  ! Default initial concentration
-            call state_manager%set_species_concentration('DUST2', &
-               i_col, i_lev, initial_concentration, error_handler)
-            if (error_handler%has_error()) return
-         end do
-      end do
-      do i_col = 1, n_columns
-         do i_lev = 1, n_levels
-            initial_concentration = 1.0e-9_fp  ! Default initial concentration
-            call state_manager%set_species_concentration('DUST3', &
-               i_col, i_lev, initial_concentration, error_handler)
-            if (error_handler%has_error()) return
-         end do
-      end do
-      do i_col = 1, n_columns
-         do i_lev = 1, n_levels
-            initial_concentration = 1.0e-9_fp  ! Default initial concentration
-            call state_manager%set_species_concentration('DUST4', &
-               i_col, i_lev, initial_concentration, error_handler)
-            if (error_handler%has_error()) return
-         end do
-      end do
-      do i_col = 1, n_columns
-         do i_lev = 1, n_levels
-            initial_concentration = 1.0e-9_fp  ! Default initial concentration
-            call state_manager%set_species_concentration('DUST5', &
-               i_col, i_lev, initial_concentration, error_handler)
-            if (error_handler%has_error()) return
-         end do
-      end do
 
    end subroutine setup_initial_conditions
 

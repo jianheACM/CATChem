@@ -19,13 +19,13 @@ module ProcessDustInterface_Mod
    use StateManager_Mod, only: StateManagerType
    use error_mod, only: CC_SUCCESS, CC_FAILURE, ErrorManagerType
    use DiagnosticManager_Mod, only: DiagnosticManagerType
-   
+
    ! Core utilities (leverage existing infrastructure)
    use ChemSpeciesUtils_Mod, only: ChemSpeciesUtilsType
    use UnitConversion_Mod, only: UnitConverterType
    use MetFieldUtils_Mod, only: MetFieldUtilsType
    use ConfigManager_Mod, only: ConfigDataType
-   
+
    ! Scheme modules
    use fengsha_scheme_mod, only: compute_fengsha, fengsha_params_t
    use ginoux_scheme_mod, only: compute_ginoux, ginoux_params_t
@@ -45,7 +45,7 @@ module ProcessDustInterface_Mod
 
       ! Process-specific configuration
       character(len=64) :: active_scheme = 'fengsha'
-      
+
       ! Scheme configuration parameters (lightweight delegation)
       type(fengsha_params_t) :: config_fengsha
       type(ginoux_params_t) :: config_ginoux
@@ -80,7 +80,7 @@ module ProcessDustInterface_Mod
 contains
 
    !> Initialize the dust process
-   !! 
+   !!
    !! Leverages ProcessInterface base class for common initialization tasks.
    !! Only handles process-specific configuration and scheme setup.
    subroutine process_init(this, config_data, state_manager, error_manager)
@@ -216,7 +216,7 @@ contains
 
       ! Get dimensions from state manager
       n_levels = state_manager%get_n_levels()
-      call this%species_utils%get_indices(['DUST1', 'DUST2', 'DUST3', 'DUST4', 'DUST5'], species_indices, error_manager)
+      call this%species_utils%get_indices([], species_indices, error_manager)
       if (error_manager%has_error()) return
       n_species = size(species_indices)
 
@@ -298,7 +298,7 @@ contains
 
       ! Get dimensions from state manager
       n_levels = state_manager%get_n_levels()
-      call this%species_utils%get_indices(['DUST1', 'DUST2', 'DUST3', 'DUST4', 'DUST5'], species_indices, error_manager)
+      call this%species_utils%get_indices([], species_indices, error_manager)
       if (error_manager%has_error()) return
       n_species = size(species_indices)
 

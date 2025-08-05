@@ -17,7 +17,7 @@
 !! - Memory management and array allocation
 !! - Integration with host model time stepping
 !!
-!! Generated on: 2025-08-03T14:41:50.767651
+!! Generated on: 2025-08-05T10:07:05.823353
 !! Author: Barry Baker
 !! Reference: Ginoux et al. [2001]
 module DustScheme_GINOUX_Mod
@@ -35,14 +35,13 @@ module DustScheme_GINOUX_Mod
    real(fp), parameter :: R_GAS = 8.314_fp           ! Universal gas constant [J/mol/K]
    real(fp), parameter :: T_STANDARD = 303.15_fp    ! Standard reference temperature [K]
    real(fp), parameter :: DEFAULT_SCALING = 1.0e-9_fp ! Default emission scaling factor
-
+   real(fp), parameter :: PI = 3.14159265359_fp     ! Pi constant
 
    !> Science parameters for ginoux scheme
    !! Host model is responsible for initializing and validating these
    type :: ginoux_params_t
       real(fp) :: Ch_DU  ! Dust tuning coefficient per species
    end type ginoux_params_t
-
 
 contains
 
@@ -55,18 +54,18 @@ contains
    !! @param[in]  num_layers     Number of vertical layers
    !! @param[in]  num_species    Number of chemical species
    !! @param[in]  params         Scheme parameters (pre-validated by host)
-   !! @param[in]  {'name': 'FRLAKE', 'description': 'Lake fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'lake_fraction'}    {'name': 'FRLAKE', 'description': 'Lake fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'lake_fraction'} field [appropriate units]
-   !! @param[in]  {'name': 'GWETTOP', 'description': 'Top soil wetness', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'top_soil_wetness'}    {'name': 'GWETTOP', 'description': 'Top soil wetness', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'top_soil_wetness'} field [appropriate units]
-   !! @param[in]  {'name': 'U10M', 'description': '10m U wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'u_wind_10m'}    {'name': 'U10M', 'description': '10m U wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'u_wind_10m'} field [appropriate units]
-   !! @param[in]  {'name': 'V10M', 'description': '10m V wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'v_wind_10m'}    {'name': 'V10M', 'description': '10m V wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'v_wind_10m'} field [appropriate units]
-   !! @param[in]  {'name': 'SSM', 'description': 'Surface soil moisture', 'units': 'm3/m3', 'dimensions': 'scalar', 'variable_name': 'soil_moisture'}    {'name': 'SSM', 'description': 'Surface soil moisture', 'units': 'm3/m3', 'dimensions': 'scalar', 'variable_name': 'soil_moisture'} field [appropriate units]
+   !! @param[in]  lake_fraction    Lake fraction [dimensionless]
+   !! @param[in]  top_soil_wetness    Top soil wetness [dimensionless]
+   !! @param[in]  u_wind_10m    10m U wind [m/s]
+   !! @param[in]  v_wind_10m    10m V wind [m/s]
+   !! @param[in]  soil_moisture    Surface soil moisture [m3/m3]
    !! @param[in]  species_conc   Species concentrations [mol/mol] (num_layers, num_species)
    !! @param[out] emission_flux  Emission fluxes [kg/m²/s] (num_layers, num_species)
    pure subroutine compute_ginoux( &
       num_layers, &
       num_species, &
       params, &
-      {'name': 'FRLAKE', 'description': 'Lake fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'lake_fraction'}, &      {'name': 'GWETTOP', 'description': 'Top soil wetness', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'top_soil_wetness'}, &      {'name': 'U10M', 'description': '10m U wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'u_wind_10m'}, &      {'name': 'V10M', 'description': '10m V wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'v_wind_10m'}, &      {'name': 'SSM', 'description': 'Surface soil moisture', 'units': 'm3/m3', 'dimensions': 'scalar', 'variable_name': 'soil_moisture'}, &
+      lake_fraction, &      top_soil_wetness, &      u_wind_10m, &      v_wind_10m, &      soil_moisture, &
       species_conc, &
       emission_flux &
    )
@@ -75,20 +74,19 @@ contains
       integer, intent(in) :: num_layers
       integer, intent(in) :: num_species
       type(ginoux_params_t), intent(in) :: params
-      real(fp), intent(in) :: {'name': 'FRLAKE', 'description': 'Lake fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'lake_fraction'}(num_layers)
-      real(fp), intent(in) :: {'name': 'GWETTOP', 'description': 'Top soil wetness', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'top_soil_wetness'}(num_layers)
-      real(fp), intent(in) :: {'name': 'U10M', 'description': '10m U wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'u_wind_10m'}(num_layers)
-      real(fp), intent(in) :: {'name': 'V10M', 'description': '10m V wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'v_wind_10m'}(num_layers)
-      real(fp), intent(in) :: {'name': 'SSM', 'description': 'Surface soil moisture', 'units': 'm3/m3', 'dimensions': 'scalar', 'variable_name': 'soil_moisture'}(num_layers)
+      real(fp), intent(in) :: lake_fraction  ! Lake fraction [dimensionless]
+      real(fp), intent(in) :: top_soil_wetness  ! Top soil wetness [dimensionless]
+      real(fp), intent(in) :: u_wind_10m  ! 10m U wind [m/s]
+      real(fp), intent(in) :: v_wind_10m  ! 10m V wind [m/s]
+      real(fp), intent(in) :: soil_moisture  ! Surface soil moisture [m3/m3]
       real(fp), intent(in) :: species_conc(num_layers, num_species)
       real(fp), intent(out) :: emission_flux(num_layers, num_species)
 
       ! Local variables
       integer :: k, species_idx
       real(fp) :: base_emission_factor
-      real(fp) :: temperature_factor
-      real(fp) :: light_factor
-      real(fp) :: combined_factor
+      real(fp) :: environmental_factor
+      real(fp) :: species_factor
 
       ! Initialize output (pure subroutines must initialize all outputs)
       emission_flux = 0.0_fp
@@ -100,33 +98,40 @@ contains
          ! This is a placeholder that demonstrates the expected structure
 
          ! Initialize environmental factors
-         temperature_factor = 1.0_fp
-         light_factor = 1.0_fp
+         environmental_factor = 1.0_fp
 
-         ! Apply scheme-specific environmental responses
-         ! Generic field usage (customize for your scheme)
-         ! Consider how {'name': 'FRLAKE', 'description': 'Lake fraction', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'lake_fraction'} affects your emissions
-         ! Generic field usage (customize for your scheme)
-         ! Consider how {'name': 'GWETTOP', 'description': 'Top soil wetness', 'units': 'dimensionless', 'dimensions': 'scalar', 'variable_name': 'top_soil_wetness'} affects your emissions
-         ! Generic field usage (customize for your scheme)
-         ! Consider how {'name': 'U10M', 'description': '10m U wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'u_wind_10m'} affects your emissions
-         ! Generic field usage (customize for your scheme)
-         ! Consider how {'name': 'V10M', 'description': '10m V wind', 'units': 'm/s', 'dimensions': 'scalar', 'variable_name': 'v_wind_10m'} affects your emissions
-         ! Generic field usage (customize for your scheme)
-         ! Consider how {'name': 'SSM', 'description': 'Surface soil moisture', 'units': 'm3/m3', 'dimensions': 'scalar', 'variable_name': 'soil_moisture'} affects your emissions
-
-         ! Combine environmental factors
-         combined_factor = temperature_factor * light_factor
+         ! Apply scheme-specific environmental responses based on meteorological fields
+         ! Lake fraction usage (customize for your scheme)
+         ! TODO: Consider how FRLAKE affects your emissions
+         ! Field available: lake_fraction [dimensionless]
+         ! Top soil wetness usage (customize for your scheme)
+         ! TODO: Consider how GWETTOP affects your emissions
+         ! Field available: top_soil_wetness [dimensionless]
+         ! 10m U wind usage (customize for your scheme)
+         ! TODO: Consider how U10M affects your emissions
+         ! Field available: u_wind_10m [m/s]
+         ! 10m V wind usage (customize for your scheme)
+         ! TODO: Consider how V10M affects your emissions
+         ! Field available: v_wind_10m [m/s]
+         ! Soil moisture response (customize for your scheme)
+         ! TODO: Implement moisture inhibition
+         environmental_factor = environmental_factor * &
+                               max(0.1_fp, 1.0_fp - soil_moisture)
 
          ! Apply to each species
          do species_idx = 1, num_species
             ! Base emission factor (customize this for species-specific emissions)
             base_emission_factor = DEFAULT_SCALING
 
+            ! Species-specific factor (customize based on species properties)
+            species_factor = 1.0_fp  ! TODO: Add species-specific scaling
+
             ! Compute emission flux using your scheme's formula
             ! This is a simple example - replace with your actual algorithm
-            emission_flux(k, species_idx) = base_emission_factor * combined_factor * &
-                                          species_conc(k, species_idx)
+            emission_flux(k, species_idx) = base_emission_factor * &
+                                          environmental_factor * &
+                                          species_factor * &
+                                          (1.0_fp + species_conc(k, species_idx))
 
             ! Ensure non-negative emissions
             emission_flux(k, species_idx) = max(0.0_fp, emission_flux(k, species_idx))
@@ -142,16 +147,33 @@ contains
    ! Add your custom scientific algorithms here as pure functions/subroutines
    ! Examples: environmental response functions, species-specific calculations, etc.
 
-   ! Example helper subroutine template:
-   !
-   ! !> Compute custom environmental response for ginoux scheme
-   ! pure function compute_temperature_response_ginoux(temperature, params) result(factor)
-   !    real(fp), intent(in) :: temperature     ! Temperature [K]
-   !    type(ginoux_params_t), intent(in) :: params
-   !    real(fp) :: factor
-   !
-   !    ! Add your temperature response algorithm here
-   !    factor = exp(params%temperature_dependency * (temperature - T_STANDARD) / T_STANDARD)
-   ! end function compute_temperature_response_ginoux
+   !> Example helper function for environmental response
+   pure function compute_ginoux(met_value, reference_value) result(factor)
+      real(fp), intent(in) :: met_value       ! Meteorological value
+      real(fp), intent(in) :: reference_value ! Reference value
+      real(fp) :: factor
+
+      ! Simple exponential response - customize for your scheme
+      factor = exp((met_value - reference_value) / reference_value)
+      factor = max(0.0_fp, min(10.0_fp, factor))  ! Reasonable bounds
+   end function compute_ginoux
+
+   !> Example helper function for species-specific scaling
+   pure function compute_species_scaling_ginoux(species_idx, params) result(scaling)
+      integer, intent(in) :: species_idx
+      type(ginoux_params_t), intent(in) :: params
+      real(fp) :: scaling
+
+      ! Species-specific scaling - customize for your scheme
+      select case (species_idx)
+      case (1)
+         scaling = 1.0_fp    ! First species baseline
+      case (2:3)
+         scaling = 0.5_fp    ! Reduced emission for species 2-3
+      case default
+         scaling = 0.1_fp    ! Low emission for other species
+      end select
+
+   end function compute_species_scaling_ginoux
 
 end module DustScheme_GINOUX_Mod

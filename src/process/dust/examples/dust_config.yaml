@@ -1,5 +1,5 @@
 # Example configuration for dust process
-# Generated on: 2025-08-03T14:41:50.822598
+# Generated on: 2025-08-05T10:07:05.882384
 # Author: Barry Baker
 
 process:
@@ -13,28 +13,6 @@ process:
   dt_min: 1.0      # Minimum time step (seconds)
   dt_max: 3600.0   # Maximum time step (seconds)
 
-# Species configuration
-species:
-  - name: "DUST1"
-    molecular_weight: 1.0  # g/mol (update with actual values)
-    properties:
-      is_generic: true
-  - name: "DUST2"
-    molecular_weight: 1.0  # g/mol (update with actual values)
-    properties:
-      is_generic: true
-  - name: "DUST3"
-    molecular_weight: 1.0  # g/mol (update with actual values)
-    properties:
-      is_generic: true
-  - name: "DUST4"
-    molecular_weight: 1.0  # g/mol (update with actual values)
-    properties:
-      is_generic: true
-  - name: "DUST5"
-    molecular_weight: 1.0  # g/mol (update with actual values)
-    properties:
-      is_generic: true
 
 
 

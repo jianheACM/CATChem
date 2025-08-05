@@ -4,7 +4,7 @@
 !! This module provides the factory functions for creating dust
 !! process instances following the CATChem Process Factory pattern.
 !!
-!! Generated on: 2025-08-03T14:41:50.757588
+!! Generated on: 2025-08-05T10:07:05.796244
 !! Author: Barry Baker
 !! Version: 1.0.0
 
@@ -110,13 +110,7 @@ contains
       info%memory_requirements = 'low'
 
       ! Species information
-      info%n_species = 5
-      allocate(info%species_names(info%n_species))
-      info%species_names(1) = 'DUST1'
-      info%species_names(2) = 'DUST2'
-      info%species_names(3) = 'DUST3'
-      info%species_names(4) = 'DUST4'
-      info%species_names(5) = 'DUST5'
+      info%n_species = 0
 
 
 
@@ -170,14 +164,6 @@ contains
       is_compatible = .true.
 
       ! Check required species
-      ! Check if required species are available in host model
-      do i = 1, 5
-         if (.not. host_config%has_species('DUST1')) then
-            call error_handler%set_warning(WARNING_COMPATIBILITY, &
-               "Required species not available: DUST1")
-            is_compatible = .false.
-         end if
-      end do
 
       ! Check required meteorological fields
       if (.not. host_config%has_met_field('ustar')) then

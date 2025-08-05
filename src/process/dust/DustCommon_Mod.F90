@@ -4,7 +4,7 @@
 !! This module defines the configuration and state types used by the
 !! dust process and its schemes.
 !!
-!! Generated on: 2025-08-03T14:41:50.743567
+!! Generated on: 2025-08-05T10:07:05.777372
 !! Author: Barry Baker
 !! Version: 1.0.0
 
@@ -38,8 +38,8 @@ module DustCommon_Mod
       real(fp) :: dt_max = 3600.0_fp  ! Maximum time step (seconds)
 
       ! Species configuration
-      integer :: n_species = 5
-      character(len=32) :: species_names(5)
+      integer :: n_species = 0
+      character(len=32) :: species_names(1)
 
 
 
@@ -166,11 +166,6 @@ contains
       type(ErrorHandler), intent(inout) :: error_handler
 
       ! Set default species names
-      this%species_names(1) = 'DUST1'
-      this%species_names(2) = 'DUST2'
-      this%species_names(3) = 'DUST3'
-      this%species_names(4) = 'DUST4'
-      this%species_names(5) = 'DUST5'
 
 
 
@@ -347,7 +342,7 @@ contains
       integer :: alloc_stat
 
       ! Allocate working arrays
-      allocate(this%work_array_1(5, n_columns), &
+      allocate(this%work_array_1(1, n_columns), &
                stat=alloc_stat)
       if (alloc_stat /= 0) then
          call error_handler%set_error(ERROR_MEMORY, &
@@ -355,7 +350,7 @@ contains
          return
       end if
 
-      allocate(this%work_array_2(5, n_columns), &
+      allocate(this%work_array_2(1, n_columns), &
                stat=alloc_stat)
       if (alloc_stat /= 0) then
          call error_handler%set_error(ERROR_MEMORY, &
@@ -441,7 +436,7 @@ contains
       integer :: alloc_stat
 
       ! Allocate working arrays
-      allocate(this%work_array_1(5, n_columns), &
+      allocate(this%work_array_1(1, n_columns), &
                stat=alloc_stat)
       if (alloc_stat /= 0) then
          call error_handler%set_error(ERROR_MEMORY, &
@@ -449,7 +444,7 @@ contains
          return
       end if
 
-      allocate(this%work_array_2(5, n_columns), &
+      allocate(this%work_array_2(1, n_columns), &
                stat=alloc_stat)
       if (alloc_stat /= 0) then
          call error_handler%set_error(ERROR_MEMORY, &
