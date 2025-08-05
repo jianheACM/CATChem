@@ -19,13 +19,13 @@ module Process{{ config.class_name }}Interface_Mod
    use StateManager_Mod, only: StateManagerType
    use error_mod, only: CC_SUCCESS, CC_FAILURE, ErrorManagerType
    use DiagnosticManager_Mod, only: DiagnosticManagerType
-   
+
    ! Core utilities (leverage existing infrastructure)
    use ChemSpeciesUtils_Mod, only: ChemSpeciesUtilsType
    use UnitConversion_Mod, only: UnitConverterType
    use MetFieldUtils_Mod, only: MetFieldUtilsType
    use ConfigManager_Mod, only: ConfigDataType
-   
+
    ! Scheme modules
 {% for scheme in config.schemes %}
    use {{ scheme.name }}_scheme_mod, only: compute_{{ scheme.name }}, {{ scheme.name }}_params_t
@@ -46,7 +46,7 @@ module Process{{ config.class_name }}Interface_Mod
 
       ! Process-specific configuration
       character(len=64) :: active_scheme = '{{ config.schemes[0].name if config.schemes else "default" }}'
-      
+
       ! Scheme configuration parameters (lightweight delegation)
 {% for scheme in config.schemes %}
       type({{ scheme.name }}_params_t) :: config_{{ scheme.name }}
@@ -93,7 +93,7 @@ module Process{{ config.class_name }}Interface_Mod
 contains
 
    !> Initialize the {{ config.name }} process
-   !! 
+   !!
    !! Leverages ProcessInterface base class for common initialization tasks.
    !! Only handles process-specific configuration and scheme setup.
    subroutine process_init(this, config_data, state_manager, error_manager)
@@ -201,7 +201,7 @@ contains
       ! Column initialization handled by base class
    end subroutine column_init
 
-   !> Finalize column processing  
+   !> Finalize column processing
    subroutine column_finalize(this, error_manager)
       class(Process{{ config.class_name }}Interface), intent(inout) :: this
       type(ErrorManagerType), intent(inout) :: error_manager
