@@ -69,8 +69,7 @@ module SeaSaltCommon_Mod
       ! Species configuration
       integer :: n_species = 0
       character(len=32), allocatable :: species_names(:)
-
-
+      integer, allocatable :: species_indices(:)  ! Indices of seasalt species in ChemState
 
       ! Diagnostic configuration
       logical :: output_diagnostics = .true.
@@ -93,7 +92,7 @@ module SeaSaltCommon_Mod
 
       ! Scheme parameters
       real(fp) :: scale_factor = 1.0  ! Emission scale factor
-      real(fp) :: weibull_flag = False  ! Apply Weibull distribution for particle size
+      logical :: weibull_flag = .false.  ! Apply Weibull distribution for particle size
 
       ! Required meteorological fields
       integer :: n_required_met_fields = 2
@@ -117,7 +116,7 @@ module SeaSaltCommon_Mod
 
       ! Scheme parameters
       real(fp) :: scale_factor = 1.0  ! Emission scale factor
-      real(fp) :: weibull_flag = False  ! Apply Weibull distribution for particle size
+      logical :: weibull_flag = .false.  ! Apply Weibull distribution for particle size
 
       ! Required meteorological fields
       integer :: n_required_met_fields = 2
@@ -209,6 +208,11 @@ contains
       ! Deallocate species names array
       if (allocated(this%species_names)) then
          deallocate(this%species_names)
+      end if
+
+      ! Deallocate species indices array
+      if (allocated(this%species_indices)) then
+         deallocate(this%species_indices)
       end if
 
    end subroutine finalize_seasalt_config
@@ -332,7 +336,7 @@ contains
 
    end subroutine seasalt_process_load_config
 
-   !> Load species from ChemState based on is_seasalt property
+   !> Load species from ChemState based on SeaSaltIndex
    !! This should be called after process configuration is loaded and ChemState is available
    subroutine load_species_from_chem_state(this, chem_state, error_handler)
       use ChemState_Mod, only: ChemStateType
@@ -341,8 +345,7 @@ contains
       type(ChemStateType), pointer, intent(in) :: chem_state
       type(ErrorManagerType), intent(inout) :: error_handler
       
-      integer :: i, species_count
-      character(len=32), allocatable :: species_names_tmp(:)
+      integer :: i
       
       if (.not. associated(chem_state)) then
          call error_handler%set_error(CC_FAILURE, &
@@ -355,34 +358,51 @@ contains
       
       if (this%seasalt_config%n_species <= 0) then
          call error_handler%set_error(CC_FAILURE, &
-            "No seasalt species found in ChemState with is_seasalt=true")
+            "No seasalt species found in ChemState")
          return
       end if
       
-      ! Allocate species names array
+      ! Check if SeaSaltIndex is allocated and has correct size
+      if (.not. allocated(chem_state%SeaSaltIndex)) then
+         call error_handler%set_error(CC_FAILURE, &
+            "SeaSaltIndex not allocated in ChemState")
+         return
+      end if
+      
+      if (size(chem_state%SeaSaltIndex) < this%seasalt_config%n_species) then
+         call error_handler%set_error(CC_FAILURE, &
+            "SeaSaltIndex size inconsistent with nSpeciesSeaSalt")
+         return
+      end if
+      
+      ! Deallocate existing arrays if allocated
       if (allocated(this%seasalt_config%species_names)) then
          deallocate(this%seasalt_config%species_names)
       end if
-      allocate(this%seasalt_config%species_names(this%seasalt_config%n_species))
+      if (allocated(this%seasalt_config%species_indices)) then
+         deallocate(this%seasalt_config%species_indices)
+      end if
       
-      ! Get species names for seasalt species from ChemState
-      species_count = 0
-      do i = 1, chem_state%nSpecies
-         if (allocated(chem_state%ChemSpecies) .and. i <= size(chem_state%ChemSpecies)) then
-            if (chem_state%ChemSpecies(i)%is_seasalt) then
-               species_count = species_count + 1
-               if (species_count <= this%seasalt_config%n_species) then
-                  this%seasalt_config%species_names(species_count) = trim(chem_state%SpeciesNames(i))
-               end if
-            end if
+      ! Allocate arrays
+      allocate(this%seasalt_config%species_names(this%seasalt_config%n_species))
+      allocate(this%seasalt_config%species_indices(this%seasalt_config%n_species))
+      
+      ! Copy species indices directly from ChemState
+      this%seasalt_config%species_indices(1:this%seasalt_config%n_species) = &
+         chem_state%SeaSaltIndex(1:this%seasalt_config%n_species)
+      
+      ! Get species names using the indices
+      do i = 1, this%seasalt_config%n_species
+         if (this%seasalt_config%species_indices(i) > 0 .and. &
+             this%seasalt_config%species_indices(i) <= size(chem_state%SpeciesNames)) then
+            this%seasalt_config%species_names(i) = &
+               trim(chem_state%SpeciesNames(this%seasalt_config%species_indices(i)))
+         else
+            call error_handler%set_error(CC_FAILURE, &
+               "Invalid species index in SeaSaltIndex")
+            return
          end if
       end do
-      
-      ! Validate that we found the expected number of species
-      if (species_count /= this%seasalt_config%n_species) then
-         write(*,*) 'Warning: Expected', this%seasalt_config%n_species, &
-                   'seasalt species but found', species_count
-      end if
       
    end subroutine load_species_from_chem_state
 
@@ -398,9 +418,9 @@ contains
       call config_data%get_real("processes/seasalt/gong97/scale_factor", &
            this%gong97_config%scale_factor, ierr)
       if (ierr /= CC_SUCCESS) this%gong97_config%scale_factor = 1.0
-      call config_data%get_real("processes/seasalt/gong97/weibull_flag", &
+      call config_data%get_logical("processes/seasalt/gong97/weibull_flag", &
            this%gong97_config%weibull_flag, ierr)
-      if (ierr /= CC_SUCCESS) this%gong97_config%weibull_flag = False
+      if (ierr /= CC_SUCCESS) this%gong97_config%weibull_flag = .false.
 
 
    end subroutine load_gong97_config
@@ -417,9 +437,9 @@ contains
       call config_data%get_real("processes/seasalt/gong03/scale_factor", &
            this%gong03_config%scale_factor, ierr)
       if (ierr /= CC_SUCCESS) this%gong03_config%scale_factor = 1.0
-      call config_data%get_real("processes/seasalt/gong03/weibull_flag", &
+      call config_data%get_logical("processes/seasalt/gong03/weibull_flag", &
            this%gong03_config%weibull_flag, ierr)
-      if (ierr /= CC_SUCCESS) this%gong03_config%weibull_flag = False
+      if (ierr /= CC_SUCCESS) this%gong03_config%weibull_flag = .false.
 
 
    end subroutine load_gong03_config

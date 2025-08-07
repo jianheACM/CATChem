@@ -69,6 +69,7 @@ module {{ config.class_name }}Common_Mod
       ! Species configuration
       integer :: n_species = 0
       character(len=32), allocatable :: species_names(:)
+      integer, allocatable :: species_indices(:)  ! Indices of {{ config.name }} species in ChemState
 
 {% if config.has_size_bins %}
       ! Size bin configuration
@@ -105,7 +106,15 @@ module {{ config.class_name }}Common_Mod
 
       ! Scheme parameters
 {% for param_name, param_info in scheme.parameters.items() %}
-      {{ param_info.type | default('real(fp)') }} :: {{ param_name }} = {{ param_info.default | default('0.0_fp') }}  ! {{ param_info.description | default('Parameter') }}
+{% set param_type = param_info.type | default('auto') %}
+{% if param_type == 'auto' %}
+{% if param_info.default is sameas true or param_info.default is sameas false %}
+{% set param_type = 'logical' %}
+{% else %}
+{% set param_type = 'real(fp)' %}
+{% endif %}
+{% endif %}
+      {{ param_type }} :: {{ param_name }} = {% if param_type == 'logical' %}{% if param_info.default %}{% if param_info.default is sameas true %}.true.{% else %}.false.{% endif %}{% else %}.false.{% endif %}{% else %}{{ param_info.default | default('0.0_fp') }}{% endif %}  ! {{ param_info.description | default('Parameter') }}
 {% endfor %}
 
       ! Required meteorological fields
@@ -186,6 +195,11 @@ contains
       ! Deallocate species names array
       if (allocated(this%species_names)) then
          deallocate(this%species_names)
+      end if
+
+      ! Deallocate species indices array
+      if (allocated(this%species_indices)) then
+         deallocate(this%species_indices)
       end if
 
    end subroutine finalize_{{ config.name }}_config
@@ -281,7 +295,7 @@ contains
 
    end subroutine {{ config.name }}_process_load_config
 
-   !> Load species from ChemState based on is_{{ config.name }} property
+   !> Load species from ChemState based on {{ config.class_name }}Index
    !! This should be called after process configuration is loaded and ChemState is available
    subroutine load_species_from_chem_state(this, chem_state, error_handler)
       use ChemState_Mod, only: ChemStateType
@@ -290,8 +304,7 @@ contains
       type(ChemStateType), pointer, intent(in) :: chem_state
       type(ErrorManagerType), intent(inout) :: error_handler
       
-      integer :: i, species_count
-      character(len=32), allocatable :: species_names_tmp(:)
+      integer :: i
       
       if (.not. associated(chem_state)) then
          call error_handler%set_error(CC_FAILURE, &
@@ -304,34 +317,51 @@ contains
       
       if (this%{{ config.name }}_config%n_species <= 0) then
          call error_handler%set_error(CC_FAILURE, &
-            "No {{ config.name }} species found in ChemState with is_{{ config.name }}=true")
+            "No {{ config.name }} species found in ChemState")
          return
       end if
       
-      ! Allocate species names array
+      ! Check if {{ config.class_name }}Index is allocated and has correct size
+      if (.not. allocated(chem_state%{{ config.class_name }}Index)) then
+         call error_handler%set_error(CC_FAILURE, &
+            "{{ config.class_name }}Index not allocated in ChemState")
+         return
+      end if
+      
+      if (size(chem_state%{{ config.class_name }}Index) < this%{{ config.name }}_config%n_species) then
+         call error_handler%set_error(CC_FAILURE, &
+            "{{ config.class_name }}Index size inconsistent with nSpecies{{ config.class_name }}")
+         return
+      end if
+      
+      ! Deallocate existing arrays if allocated
       if (allocated(this%{{ config.name }}_config%species_names)) then
          deallocate(this%{{ config.name }}_config%species_names)
       end if
-      allocate(this%{{ config.name }}_config%species_names(this%{{ config.name }}_config%n_species))
+      if (allocated(this%{{ config.name }}_config%species_indices)) then
+         deallocate(this%{{ config.name }}_config%species_indices)
+      end if
       
-      ! Get species names for {{ config.name }} species from ChemState
-      species_count = 0
-      do i = 1, chem_state%nSpecies
-         if (allocated(chem_state%ChemSpecies) .and. i <= size(chem_state%ChemSpecies)) then
-            if (chem_state%ChemSpecies(i)%is_{{ config.name }}) then
-               species_count = species_count + 1
-               if (species_count <= this%{{ config.name }}_config%n_species) then
-                  this%{{ config.name }}_config%species_names(species_count) = trim(chem_state%SpeciesNames(i))
-               end if
-            end if
+      ! Allocate arrays
+      allocate(this%{{ config.name }}_config%species_names(this%{{ config.name }}_config%n_species))
+      allocate(this%{{ config.name }}_config%species_indices(this%{{ config.name }}_config%n_species))
+      
+      ! Copy species indices directly from ChemState
+      this%{{ config.name }}_config%species_indices(1:this%{{ config.name }}_config%n_species) = &
+         chem_state%{{ config.class_name }}Index(1:this%{{ config.name }}_config%n_species)
+      
+      ! Get species names using the indices
+      do i = 1, this%{{ config.name }}_config%n_species
+         if (this%{{ config.name }}_config%species_indices(i) > 0 .and. &
+             this%{{ config.name }}_config%species_indices(i) <= size(chem_state%SpeciesNames)) then
+            this%{{ config.name }}_config%species_names(i) = &
+               trim(chem_state%SpeciesNames(this%{{ config.name }}_config%species_indices(i)))
+         else
+            call error_handler%set_error(CC_FAILURE, &
+               "Invalid species index in {{ config.class_name }}Index")
+            return
          end if
       end do
-      
-      ! Validate that we found the expected number of species
-      if (species_count /= this%{{ config.name }}_config%n_species) then
-         write(*,*) 'Warning: Expected', this%{{ config.name }}_config%n_species, &
-                   '{{ config.name }} species but found', species_count
-      end if
       
    end subroutine load_species_from_chem_state
 
@@ -346,9 +376,22 @@ contains
 
       ! Load scheme parameters directly from processes/{{ config.name }}/{{ scheme.name }}/* in master YAML
 {% for param_name, param_info in scheme.parameters.items() %}
-      call config_data%get_{{ param_info.yaml_type | default('real') }}("processes/{{ config.name }}/{{ scheme.name }}/{{ param_name }}", &
+{% set param_type = param_info.type | default('auto') %}
+{% if param_type == 'auto' %}
+{% if param_info.default is sameas true or param_info.default is sameas false %}
+{% set yaml_type = 'logical' %}
+{% else %}
+{% set yaml_type = 'real' %}
+{% endif %}
+{% else %}
+{% set yaml_type = param_info.yaml_type | default('real') %}
+{% if param_type == 'logical' %}
+{% set yaml_type = 'logical' %}
+{% endif %}
+{% endif %}
+      call config_data%get_{{ yaml_type }}("processes/{{ config.name }}/{{ scheme.name }}/{{ param_name }}", &
            this%{{ scheme.name }}_config%{{ param_name }}, ierr)
-      if (ierr /= CC_SUCCESS) this%{{ scheme.name }}_config%{{ param_name }} = {{ param_info.default }}
+      if (ierr /= CC_SUCCESS) this%{{ scheme.name }}_config%{{ param_name }} = {% if yaml_type == 'logical' %}{% if param_info.default %}{% if param_info.default is sameas true %}.true.{% else %}.false.{% endif %}{% else %}.false.{% endif %}{% else %}{{ param_info.default }}{% endif %}
 {% endfor %}
 
 

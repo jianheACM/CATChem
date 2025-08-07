@@ -350,8 +350,6 @@ contains
       real(fp), allocatable :: species_tendencies(:)
       integer :: n_species, n_levels
       integer, allocatable :: species_indices(:)
-      character(len=32), allocatable :: species_names(:)
-      integer :: i
 
       rc = CC_SUCCESS
 
@@ -361,24 +359,12 @@ contains
       ! Get seasalt species information from process configuration
       n_species = this%process_config%seasalt_config%n_species
       if (n_species <= 0) then
-         rc = CC_FAILURE
          return
       end if
       
-      ! Get species names from configuration
-      allocate(species_names(n_species))
-      species_names(1:n_species) = this%process_config%seasalt_config%species_names(1:n_species)
-      
-      ! Find species indices in chem_state
+      ! Get species indices directly from configuration (pre-computed)
       allocate(species_indices(n_species))
-      do i = 1, n_species
-         species_indices(i) = this%chem_state%find_species(trim(species_names(i)))
-         if (species_indices(i) <= 0) then
-            ! Species not found in chem_state
-            rc = CC_FAILURE
-            return
-         end if
-      end do
+      species_indices(1:n_species) = this%process_config%seasalt_config%species_indices(1:n_species)
 
       ! Allocate arrays
       allocate(species_conc(n_species))
@@ -425,8 +411,6 @@ contains
       real(fp), allocatable :: species_tendencies(:)
       integer :: n_species, n_levels
       integer, allocatable :: species_indices(:)
-      character(len=32), allocatable :: species_names(:)
-      integer :: i
 
       rc = CC_SUCCESS
 
@@ -436,24 +420,12 @@ contains
       ! Get seasalt species information from process configuration
       n_species = this%process_config%seasalt_config%n_species
       if (n_species <= 0) then
-         rc = CC_FAILURE
          return
       end if
       
-      ! Get species names from configuration
-      allocate(species_names(n_species))
-      species_names(1:n_species) = this%process_config%seasalt_config%species_names(1:n_species)
-      
-      ! Find species indices in chem_state
+      ! Get species indices directly from configuration (pre-computed)
       allocate(species_indices(n_species))
-      do i = 1, n_species
-         species_indices(i) = this%chem_state%find_species(trim(species_names(i)))
-         if (species_indices(i) <= 0) then
-            ! Species not found in chem_state
-            rc = CC_FAILURE
-            return
-         end if
-      end do
+      species_indices(1:n_species) = this%process_config%seasalt_config%species_indices(1:n_species)
 
       ! Allocate arrays
       allocate(species_conc(n_species))
@@ -499,8 +471,6 @@ contains
       real(fp), allocatable :: species_tendencies(:)
       integer :: n_species, n_levels
       integer, allocatable :: species_indices(:)
-      character(len=32), allocatable :: species_names(:)
-      integer :: i
 
       rc = CC_SUCCESS
 
@@ -510,24 +480,12 @@ contains
       ! Get seasalt species information from process configuration
       n_species = this%process_config%seasalt_config%n_species
       if (n_species <= 0) then
-         rc = CC_FAILURE
          return
       end if
       
-      ! Get species names from configuration
-      allocate(species_names(n_species))
-      species_names(1:n_species) = this%process_config%seasalt_config%species_names(1:n_species)
-      
-      ! Find species indices in chem_state
+      ! Get species indices directly from configuration (pre-computed)
       allocate(species_indices(n_species))
-      do i = 1, n_species
-         species_indices(i) = this%chem_state%find_species(trim(species_names(i)))
-         if (species_indices(i) <= 0) then
-            ! Species not found in chem_state
-            rc = CC_FAILURE
-            return
-         end if
-      end do
+      species_indices(1:n_species) = this%process_config%seasalt_config%species_indices(1:n_species)
 
       ! Allocate arrays
       allocate(species_conc(n_species))

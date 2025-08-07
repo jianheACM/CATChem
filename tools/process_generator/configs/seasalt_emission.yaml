@@ -1,4 +1,4 @@
-name: "seasalt"
+name: "seasalt1"
 description: "Process for computing sea salt aerosol emissions over ocean surfaces"
 class_name: "SeaSalt"
 process_type: "emission"
@@ -20,6 +20,9 @@ schemes:
     author: "Barry Baker"
 
     required_met_fields:
+      - FROCEAN
+      - FRSEAICE
+      - SST
       - U10M
       - V10M
 
@@ -51,6 +54,9 @@ schemes:
     author: "Barry Baker"
 
     required_met_fields:
+      - FROCEAN
+      - FRSEAICE
+      - SST
       - U10M
       - V10M
 
@@ -81,6 +87,9 @@ schemes:
     author: "Barry Baker"
 
     required_met_fields:
+      - FROCEAN
+      - FRSEAICE
+      - SST
       - USTAR
 
     parameters:
