@@ -1,0 +1,108 @@
+name: "seasalt"
+description: "Process for computing sea salt aerosol emissions over ocean surfaces"
+class_name: "SeaSalt"
+process_type: "emission"
+enable_column_processing : true
+author: "Barry Baker & Wei Li"
+
+required_met_fields:
+  - "FROCEAN"
+  - "FRSEAICE"
+  - "SST"
+
+schemes:
+  gong97:
+    name: "gong97"
+    class_name: "GONG97"
+    description: "Gong 1997 sea salt emission scheme"
+    algorithm_type: "explicit"
+    reference: "Gong et al. [1997]"
+    author: "Barry Baker"
+
+    required_met_fields:
+      - U10M
+      - V10M
+
+    parameters:
+      scale_factor:
+        default: 1.0
+        min: 0.1
+        max: 10.0
+        description: "Emission scale factor"
+      weibull_flag:
+        default: false
+        description: "Apply Weibull distribution for particle size"
+
+    diagnostics:
+      - name: "seasalt_mass_emission_per_bin"
+        description: "Sea salt mass emission flux per bin"
+        units: "ug/m2/s"
+      - name: "seasalt_number_emission_per_bin"
+        description: "Sea salt number emission flux per bin"
+        units: "#/m2/s"
+
+
+  gong03:
+    name: "gong03"
+    class_name: "GONG03"
+    description: "Gong 2003 sea salt emission scheme with improved sub- and super-micron treatment"
+    algorithm_type: "explicit"
+    reference: "Gong [2003]"
+    author: "Barry Baker"
+
+    required_met_fields:
+      - U10M
+      - V10M
+
+    parameters:
+      scale_factor:
+        default: 1.0
+        min: 0.1
+        max: 10.0
+        description: "Emission scale factor"
+      weibull_flag:
+        default: false
+        description: "Apply Weibull distribution for particle size"
+
+    diagnostics:
+      - name: "seasalt_mass_emission_per_bin"
+        description: "Sea salt mass emission flux per bin"
+        units: "ug/m2/s"
+      - name: "seasalt_number_emission_per_bin"
+        description: "Sea salt number emission flux per bin"
+        units: "#/m2/s"
+
+  geos12:
+    name: "geos12"
+    class_name: "GEOS12"
+    description: "GEOS-Chem 2012 sea salt emission scheme with observational constraints"
+    algorithm_type: "explicit"
+    reference: "Jaeglé et al. [2011]"
+    author: "Barry Baker"
+
+    required_met_fields:
+      - USTAR
+
+    parameters:
+      scale_factor:
+        default: 1.0
+        min: 0.1
+        max: 10.0
+        description: "Emission scale factor"
+
+    diagnostics:
+      - name: "seasalt_mass_emission_per_bin"
+        description: "Sea salt mass emission flux per bin"
+        units: "ug/m2/s"
+      - name: "seasalt_number_emission_per_bin"
+        description: "Sea salt number emission flux per bin"
+        units: "#/m2/s"
+
+diagnostics:
+  - name: "seasalt_mass_emission_total"
+    description: "Sea salt mass emission flux total"
+    units: "ug/m2/s"
+  - name: "seasalt_number_emission_total"
+    description: "Sea salt number emission flux total"
+    units: "#/m2/s"
+

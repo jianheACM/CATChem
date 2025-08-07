@@ -17,18 +17,23 @@ module Process{{ config.class_name }}Interface_Mod
    use precision_mod, only: fp
    use ProcessInterface_Mod, only: ProcessInterface, ColumnProcessInterface
    use StateManager_Mod, only: StateManagerType
+   use GridManager_Mod, only: GridManagerType
    use error_mod, only: CC_SUCCESS, CC_FAILURE, ErrorManagerType
    use DiagnosticManager_Mod, only: DiagnosticManagerType
+   use VirtualColumn_Mod, only: VirtualColumnType
 
    ! Core utilities (leverage existing infrastructure)
-   use ChemSpeciesUtils_Mod, only: ChemSpeciesUtilsType
    use UnitConversion_Mod, only: UnitConverterType
-   use MetFieldUtils_Mod, only: MetFieldUtilsType
    use ConfigManager_Mod, only: ConfigDataType
+   use ChemState_Mod, only: ChemStateType
+   use MetState_Mod, only: MetStateType
+
+   ! Common utilities - unified configuration
+   use {{ config.class_name }}Common_Mod, only: {{ config.class_name }}ProcessConfig
 
    ! Scheme modules
 {% for scheme in config.schemes %}
-   use {{ scheme.name }}_scheme_mod, only: compute_{{ scheme.name }}, {{ scheme.name }}_params_t
+   use {{ scheme.name }}_scheme_mod, only: compute_{{ scheme.name }}
 {% endfor %}
 
    implicit none
@@ -36,26 +41,27 @@ module Process{{ config.class_name }}Interface_Mod
 
    public :: Process{{ config.class_name }}Interface
 
-   !> Main {{ config.name }} process interface type - extends core ProcessInterface
+   !> Main {{ config.name }} process interface type - extends core {% if config.enable_column_processing %}ColumnProcessInterface{% else %}ProcessInterface{% endif %}
    !!
+{% if config.enable_column_processing %}
+   !! This type leverages CATChem's core ColumnProcessInterface infrastructure for column
+   !! virtualization, focusing only on process-specific configuration and scheme management.
+   !! All boilerplate infrastructure and column processing is handled by the base class.
+{% else %}
    !! This type leverages CATChem's core ProcessInterface infrastructure, focusing only
    !! on process-specific configuration and scheme management. All boilerplate infrastructure
    !! is handled by the base class.
+{% endif %}
    type, extends({% if config.enable_column_processing %}ColumnProcessInterface{% else %}ProcessInterface{% endif %}) :: Process{{ config.class_name }}Interface
       private
 
-      ! Process-specific configuration
-      character(len=64) :: active_scheme = '{{ config.schemes[0].name if config.schemes else "default" }}'
-
-      ! Scheme configuration parameters (lightweight delegation)
-{% for scheme in config.schemes %}
-      type({{ scheme.name }}_params_t) :: config_{{ scheme.name }}
-{% endfor %}
+      ! Unified process configuration (bridges ConfigManager to process-specific config)
+      type({{ config.class_name }}ProcessConfig) :: process_config
 
       ! Process utilities (leverage core infrastructure)
-      type(ChemSpeciesUtilsType) :: species_utils
       type(UnitConverterType) :: unit_converter
-      type(MetFieldUtilsType) :: met_utils
+      type(ChemStateType), pointer :: chem_state => null()
+      type(MetStateType), pointer :: met_state => null()
 
 {% if config.diagnostics %}
       ! Process-specific diagnostic indices (base class handles storage)
@@ -69,23 +75,30 @@ module Process{{ config.class_name }}Interface_Mod
       procedure :: init => process_init
       procedure :: run => process_run
       procedure :: finalize => process_finalize
+      procedure :: parse_process_config => parse_{{ config.name }}_config
 
-      ! ProcessInterface capability registration (simplified)
+{% if config.enable_column_processing %}
+      ! Required ColumnProcessInterface implementations
+      procedure :: init_column_processing => init_column_processing
+      procedure :: run_column => run_column
+      procedure :: finalize_column_processing => finalize_column_processing
+{% endif %}
+
+      ! ProcessInterface capability registration
       procedure :: get_required_met_fields => get_required_met_fields
       procedure :: get_required_diagnostic_fields => get_required_diagnostic_fields
 
-      ! Process-specific implementations
-      procedure, private :: configure_schemes
+      ! Process-specific implementations{% if config.enable_column_processing %} (column virtualization){% endif %}
+{% if config.enable_column_processing %}
+      procedure, private :: run_active_scheme_column
+{% for scheme in config.schemes %}
+      procedure, private :: run_{{ scheme.name }}_scheme_column
+{% endfor %}
+{% else %}
       procedure, private :: run_active_scheme
 {% for scheme in config.schemes %}
       procedure, private :: run_{{ scheme.name }}_scheme
 {% endfor %}
-
-{% if config.enable_column_processing %}
-      ! Column processing support (if enabled)
-      procedure :: init_column_processing => column_init
-      procedure :: run_column => column_run
-      procedure :: finalize_column_processing => column_finalize
 {% endif %}
 
    end type Process{{ config.class_name }}Interface
@@ -96,160 +109,282 @@ contains
    !!
    !! Leverages ProcessInterface base class for common initialization tasks.
    !! Only handles process-specific configuration and scheme setup.
-   subroutine process_init(this, config_data, state_manager, error_manager)
+   subroutine process_init(this, state_manager, rc)
       class(Process{{ config.class_name }}Interface), intent(inout) :: this
-      type(ConfigDataType), intent(in) :: config_data
-      type(StateManagerType), intent(in) :: state_manager
-      type(ErrorManagerType), intent(inout) :: error_manager
+      type(StateManagerType), intent(inout) :: state_manager
+      integer, intent(out) :: rc
 
-      integer :: rc
+      type(ErrorManagerType), pointer :: error_manager
+
+      rc = CC_SUCCESS
+
+      ! Get error manager
+      error_manager => state_manager%get_error_manager()
 
       ! Call base class initialization (handles common infrastructure)
-      call this%ProcessInterface%init(config_data, state_manager, error_manager)
-      if (error_manager%has_error()) return
+      call this%{% if config.enable_column_processing %}ColumnProcessInterface{% else %}ProcessInterface{% endif %}%init(state_manager, rc)
+      if (rc /= CC_SUCCESS) return
+
+{% if config.enable_column_processing %}
+      ! Initialize column processing capabilities
+      call this%init_column_processing(state_manager, rc)
+      if (rc /= CC_SUCCESS) return
+{% endif %}
 
       ! Set process-specific name and info
       call this%set_name('{{ config.name }}')
       call this%set_version('{{ version }}')
       call this%set_description('{{ config.description }}')
 
-      ! Parse process-specific configuration
-      call this%parse_process_config(config_data, error_manager)
-      if (error_manager%has_error()) return
+      ! Parse process-specific configuration using unified approach
+      call this%parse_process_config(state_manager, error_manager)
+      if (error_manager%has_error()) then
+         rc = CC_FAILURE
+         return
+      end if
 
-      ! Configure schemes
-      call this%configure_schemes(config_data, error_manager)
-      if (error_manager%has_error()) return
+      ! Get state pointers from state_manager (needed for species loading)
+      this%chem_state => state_manager%get_chem_state_ptr()
+      this%met_state => state_manager%get_met_state_ptr()
+
+      ! Load species from ChemState based on is_{{ config.name }} property
+      call this%process_config%load_species_from_chem_state(this%chem_state, error_manager)
+      if (error_manager%has_error()) then
+         rc = CC_FAILURE
+         return
+      end if
+
+      ! Validate the configuration with StateManager
+      call this%process_config%validate(state_manager, error_manager)
+      if (error_manager%has_error()) then
+         rc = CC_FAILURE
+         return
+      end if
 
       ! Initialize utility helpers
-      call this%species_utils%init(state_manager, error_manager)
       call this%unit_converter%init(error_manager)
-      call this%met_utils%init(state_manager, error_manager)
-      if (error_manager%has_error()) return
+      if (error_manager%has_error()) then
+         rc = CC_FAILURE
+         return
+      end if
 
    end subroutine process_init
 
    !> Run the {{ config.name }} process
    !!
-   !! Simplified implementation leveraging base class column processing or 3D processing.
-   subroutine process_run(this, state_manager, dt, error_manager)
+{% if config.enable_column_processing %}
+   !! This method implements the main ProcessInterface run method using column virtualization.
+   !! It handles the column iteration and calls run_column for each virtual column.
+{% else %}
+   !! Simplified implementation leveraging base class 3D processing.
+{% endif %}
+   subroutine process_run(this, state_manager, rc)
       class(Process{{ config.class_name }}Interface), intent(inout) :: this
       type(StateManagerType), intent(inout) :: state_manager
-      real(fp), intent(in) :: dt
-      type(ErrorManagerType), intent(inout) :: error_manager
+      integer, intent(out) :: rc
 
 {% if config.enable_column_processing %}
-      ! Use column virtualization (handled by base class)
-      call this%run_column_batch(state_manager, dt, error_manager)
+      integer :: n_columns, i_col, batch_size, batch_start, batch_end
+      integer :: nx, ny, nz, i, j
+      type(VirtualColumnType) :: virtual_column
+      type(GridManagerType), pointer :: grid_manager
+
+      rc = CC_SUCCESS
+
+      ! Check if process is active
+      if (.not. this%process_config%is_active) then
+         return
+      end if
+
+      ! Only proceed if column processing is enabled
+      if (.not. this%is_column_processing_enabled()) then
+         rc = CC_FAILURE
+         return
+      end if
+
+      ! Get grid manager and dimensions
+      grid_manager => state_manager%get_grid_manager()
+      call grid_manager%geometry%get_dimensions(nx, ny, nz)
+      n_columns = nx * ny
+      batch_size = this%get_column_batch_size()
+
+      ! Process columns in batches for optimal memory usage
+      do batch_start = 1, n_columns, batch_size
+         batch_end = min(batch_start + batch_size - 1, n_columns)
+         
+         ! Process each column in the current batch
+         do i_col = batch_start, batch_end
+            ! Convert linear column index to 2D indices
+            j = (i_col - 1) / nx + 1
+            i = i_col - (j - 1) * nx
+            
+            ! Create virtual column for this column index
+            call state_manager%create_virtual_column(i, j, virtual_column, rc)
+            if (rc /= CC_SUCCESS) return
+            
+            ! Process the virtual column using column processing
+            call this%run_column(virtual_column, rc)
+            if (rc /= CC_SUCCESS) return
+            
+            ! Apply results back to state manager
+            call state_manager%apply_virtual_column(virtual_column, rc)
+            if (rc /= CC_SUCCESS) return
+         end do
+      end do
 {% else %}
+      rc = CC_SUCCESS
+      
+      ! Check if process is active
+      if (.not. this%process_config%is_active) then
+         return
+      end if
+      
       ! Use standard 3D processing
-      call this%run_3d_processing(state_manager, dt, error_manager)
+      call this%run_3d_processing(state_manager, rc)
 {% endif %}
 
    end subroutine process_run
 
    !> Finalize the {{ config.name }} process
-   subroutine process_finalize(this, error_manager)
+   subroutine process_finalize(this, rc)
       class(Process{{ config.class_name }}Interface), intent(inout) :: this
-      type(ErrorManagerType), intent(inout) :: error_manager
+      integer, intent(out) :: rc
+
+      rc = CC_SUCCESS
+
+{% if config.enable_column_processing %}
+      ! Finalize column processing
+      call this%finalize_column_processing(rc)
+      if (rc /= CC_SUCCESS) return
+{% endif %}
+
+      ! Finalize unified configuration
+      call this%process_config%finalize()
 
       ! Call base class finalization (handles common cleanup)
-      call this%ProcessInterface%finalize(error_manager)
+      call this%{% if config.enable_column_processing %}ColumnProcessInterface{% else %}ProcessInterface{% endif %}%finalize(rc)
 
    end subroutine process_finalize
 
-   !> Configure all schemes for this process
-   subroutine configure_schemes(this, config_data, error_manager)
+   !> Parse process configuration using unified approach
+   !! This function bridges the ConfigManager YAML structure to process-specific configuration
+   subroutine parse_{{ config.name }}_config(this, state_manager, error_manager)
       class(Process{{ config.class_name }}Interface), intent(inout) :: this
-      type(ConfigDataType), intent(in) :: config_data
+      type(StateManagerType), intent(in) :: state_manager
       type(ErrorManagerType), intent(inout) :: error_manager
 
-      ! Parse active scheme from configuration
-      call config_data%get_value('active_scheme', this%active_scheme, error_manager)
-      if (error_manager%has_error()) return
+      type(ConfigDataType), pointer :: config_data
 
-      ! Configure scheme-specific parameters
-      select case (trim(this%active_scheme))
+      ! Get configuration data from state manager
+      config_data => state_manager%get_config_data()
+
+      ! Use the unified configuration loader from {{ config.class_name }}Common_Mod
+      ! This handles the complexity of parsing hierarchical YAML into process-specific types
+      call this%process_config%load_from_config(config_data, error_manager)
+      if (error_manager%has_error()) then
+         call error_manager%add_context("Process{{ config.class_name }}Interface", &
+            "Failed to parse {{ config.name }} process configuration")
+         return
+      end if
+
+      ! Process is now configured - the unified config contains all scheme-specific settings
+
+   end subroutine parse_{{ config.name }}_config
+
+{% if config.enable_column_processing %}
+   !========================================================================
+   ! Column Processing Interface Implementation
+   !========================================================================
+
+   !> Initialize column processing for {{ config.name }}
+   !!
+   !! This method sets up the column processing infrastructure for the process.
+   !! The base class ColumnProcessInterface handles the actual column virtualization.
+   subroutine init_column_processing(this, state_manager, rc)
+      class(Process{{ config.class_name }}Interface), intent(inout) :: this
+      type(StateManagerType), intent(inout) :: state_manager
+      integer, intent(out) :: rc
+
+      rc = CC_SUCCESS
+
+      ! Enable column processing and set batch size for optimal performance
+      call this%enable_column_processing()
+      call this%set_column_batch_size(50)  ! Process 50 columns at a time
+
+      ! Any process-specific column processing setup would go here
+      ! For {{ config.name }}, no additional setup is needed
+
+   end subroutine init_column_processing
+
+   !> Process a single virtual column for {{ config.name }}
+   !!
+   !! This is the core column processing method where the actual atmospheric process
+   !! calculations happen for a single column. The base class handles column
+   !! virtualization and calls this method for each virtual column.
+   subroutine run_column(this, column, rc)
+      class(Process{{ config.class_name }}Interface), intent(inout) :: this
+      type(VirtualColumnType), intent(inout) :: column
+      integer, intent(out) :: rc
+
+      rc = CC_SUCCESS
+
+      ! Check if process is active
+      if (.not. this%process_config%is_active) return
+
+      ! Delegate to the active scheme for column processing
+      call this%run_active_scheme_column(column, rc)
+
+   end subroutine run_column
+
+   !> Finalize column processing for {{ config.name }}
+   !!
+   !! Clean up any column processing resources.
+   subroutine finalize_column_processing(this, rc)
+      class(Process{{ config.class_name }}Interface), intent(inout) :: this
+      integer, intent(out) :: rc
+
+      rc = CC_SUCCESS
+
+      ! Clean up column processing
+      call this%disable_column_processing()
+
+      ! Any process-specific cleanup would go here
+
+   end subroutine finalize_column_processing
+
+   !> Run the active scheme for a single virtual column
+   !!
+   !! This method adapts the existing scheme methods to work with virtual columns
+   !! instead of state manager column indices.
+   subroutine run_active_scheme_column(this, column, rc)
+      class(Process{{ config.class_name }}Interface), intent(inout) :: this
+      type(VirtualColumnType), intent(inout) :: column
+      integer, intent(out) :: rc
+
+      rc = CC_SUCCESS
+
+      ! Delegate to appropriate scheme using unified config
+      select case (trim(this%process_config%{{ config.name }}_config%scheme))
 {% for scheme in config.schemes %}
       case ('{{ scheme.name }}')
-         call config_data%get_section('{{ scheme.name }}', this%config_{{ scheme.name }}, error_manager)
+         call this%run_{{ scheme.name }}_scheme_column(column, rc)
 {% endfor %}
       case default
-         call error_manager%set_error(CC_FAILURE, &
-            "Unknown {{ config.name }} scheme: " // trim(this%active_scheme))
+         rc = CC_FAILURE
       end select
 
-   end subroutine configure_schemes
-
-{% if config.enable_column_processing %}
-   !> Run column processing (for column virtualization)
-   subroutine column_run(this, virtual_column, dt, error_manager)
-      class(Process{{ config.class_name }}Interface), intent(inout) :: this
-      type(VirtualColumnType), intent(inout) :: virtual_column
-      real(fp), intent(in) :: dt
-      type(ErrorManagerType), intent(inout) :: error_manager
-
-      ! Simplified column processing - delegate to active scheme
-      call this%run_active_scheme(virtual_column, dt, error_manager)
-
-   end subroutine column_run
-
-   !> Initialize column processing
-   subroutine column_init(this, error_manager)
-      class(Process{{ config.class_name }}Interface), intent(inout) :: this
-      type(ErrorManagerType), intent(inout) :: error_manager
-      ! Column initialization handled by base class
-   end subroutine column_init
-
-   !> Finalize column processing
-   subroutine column_finalize(this, error_manager)
-      class(Process{{ config.class_name }}Interface), intent(inout) :: this
-      type(ErrorManagerType), intent(inout) :: error_manager
-      ! Column finalization handled by base class
-   end subroutine column_finalize
-{% endif %}
-
-   !> Run the active scheme (delegation pattern)
-   subroutine run_active_scheme(this, {% if config.enable_column_processing %}virtual_column{% else %}state_manager, i_col{% endif %}, dt, error_manager)
-      class(Process{{ config.class_name }}Interface), intent(inout) :: this
-{% if config.enable_column_processing %}
-      type(VirtualColumnType), intent(inout) :: virtual_column
-{% else %}
-      type(StateManagerType), intent(inout) :: state_manager
-      integer, intent(in) :: i_col
-{% endif %}
-      real(fp), intent(in) :: dt
-      type(ErrorManagerType), intent(inout) :: error_manager
-
-      ! Delegate to appropriate scheme
-      select case (trim(this%active_scheme))
-{% for scheme in config.schemes %}
-      case ('{{ scheme.name }}')
-         call this%run_{{ scheme.name }}_scheme({% if config.enable_column_processing %}virtual_column{% else %}state_manager, i_col{% endif %}, dt, error_manager)
-{% endfor %}
-      case default
-         call error_manager%set_error(CC_FAILURE, &
-            "Unknown {{ config.name }} scheme: " // trim(this%active_scheme))
-      end select
-
-   end subroutine run_active_scheme
+   end subroutine run_active_scheme_column
 
 {% for scheme in config.schemes %}
-   !> Run the {{ scheme.name }} scheme (simplified data marshaling)
-   subroutine run_{{ scheme.name }}_scheme(this, {% if config.enable_column_processing %}virtual_column{% else %}state_manager, i_col{% endif %}, dt, error_manager)
+   !> Run the {{ scheme.name }} scheme for a single virtual column
+   subroutine run_{{ scheme.name }}_scheme_column(this, column, rc)
       class(Process{{ config.class_name }}Interface), intent(inout) :: this
-{% if config.enable_column_processing %}
-      type(VirtualColumnType), intent(inout) :: virtual_column
-{% else %}
-      type(StateManagerType), intent(inout) :: state_manager
-      integer, intent(in) :: i_col
-{% endif %}
-      real(fp), intent(in) :: dt
-      type(ErrorManagerType), intent(inout) :: error_manager
+      type(VirtualColumnType), intent(inout) :: column
+      integer, intent(out) :: rc
 
-      ! Local variables for scheme calculation (simplified)
+      ! Local variables for scheme calculation
 {% if scheme.required_met_fields %}
-      ! Meteorological fields - use utility helper for retrieval
+      ! Meteorological fields
 {% for field in scheme.required_met_fields %}
 {% if field is string %}
       real(fp), allocatable :: {{ field | lower | replace('-', '_') | replace('.', '_') }}(:)
@@ -262,55 +397,69 @@ contains
 {% endif %}
 {% endfor %}
 {% endif %}
-
-      ! Species data - use species utilities
       real(fp), allocatable :: species_conc(:)
       real(fp), allocatable :: species_tendencies(:)
       integer :: n_species, n_levels
       integer, allocatable :: species_indices(:)
+      character(len=32), allocatable :: species_names(:)
+      integer :: i
 
-{% if config.enable_column_processing %}
-      ! Get column dimensions
-      n_levels = virtual_column%get_n_levels()
-      n_species = virtual_column%get_n_species()
-{% else %}
-      ! Get dimensions from state manager
-      n_levels = state_manager%get_n_levels()
-      call this%species_utils%get_indices([{% for species in config.species %}'{{ species }}'{% if not loop.last %}, {% endif %}{% endfor %}], species_indices, error_manager)
-      if (error_manager%has_error()) return
-      n_species = size(species_indices)
-{% endif %}
+      rc = CC_SUCCESS
+
+      ! Get dimensions from virtual column
+      n_levels = column%get_n_levels()
+      
+      ! Get {{ config.name }} species information from process configuration
+      n_species = this%process_config%{{ config.name }}_config%n_species
+      if (n_species <= 0) then
+         rc = CC_FAILURE
+         return
+      end if
+      
+      ! Get species names from configuration
+      allocate(species_names(n_species))
+      species_names(1:n_species) = this%process_config%{{ config.name }}_config%species_names(1:n_species)
+      
+      ! Find species indices in chem_state
+      allocate(species_indices(n_species))
+      do i = 1, n_species
+         species_indices(i) = this%chem_state%find_species(trim(species_names(i)))
+         if (species_indices(i) <= 0) then
+            ! Species not found in chem_state
+            rc = CC_FAILURE
+            return
+         end if
+      end do
 
       ! Allocate arrays
       allocate(species_conc(n_species))
       allocate(species_tendencies(n_species))
+{% if scheme.required_met_fields %}
+      allocate({% for field in scheme.required_met_fields %}{% if field is string %}{{ field | lower | replace('-', '_') | replace('.', '_') }}(1){% else %}{{ field.variable_name }}({% if field.dimensions == "scalar" %}1{% else %}1{% endif %}){% endif %}{% if not loop.last %}, {% endif %}{% endfor %})
+{% endif %}
       species_tendencies = 0.0_fp
 
 {% if scheme.required_met_fields %}
-      ! Retrieve meteorological fields using utilities
+      ! Get meteorological fields from virtual column
 {% for field in scheme.required_met_fields %}
 {% if field is string %}
-      call this%met_utils%get_field('{{ field }}', {% if config.enable_column_processing %}virtual_column{% else %}state_manager, i_col{% endif %}, {{ field | lower | replace('-', '_') | replace('.', '_') }}, error_manager)
+      call column%get_met_field('{{ field }}', {{ field | lower | replace('-', '_') | replace('.', '_') }}, rc)
 {% else %}
-      call this%met_utils%get_field('{{ field.name }}', {% if config.enable_column_processing %}virtual_column{% else %}state_manager, i_col{% endif %}, {{ field.variable_name }}, error_manager)
+      call column%get_met_field('{{ field.name }}', {{ field.variable_name }}, rc)
 {% endif %}
-      if (error_manager%has_error()) return
+      if (rc /= CC_SUCCESS) return
 {% endfor %}
 {% endif %}
 
-      ! Get species concentrations using utilities
-{% if config.enable_column_processing %}
-      call virtual_column%get_species_concentrations(species_conc, error_manager)
-{% else %}
-      call this%species_utils%get_concentrations(species_indices, state_manager, i_col, species_conc, error_manager)
-{% endif %}
-      if (error_manager%has_error()) return
+      ! Get species concentrations from virtual column
+      call column%get_species_concentrations(species_indices, species_conc, rc)
+      if (rc /= CC_SUCCESS) return
 
-      ! Call the science scheme (clean interface)
+      ! Call the science scheme
       call compute_{{ scheme.name }}( &
          n_levels, &
          n_species, &
-         this%config_{{ scheme.name }}{% if scheme.required_met_fields and scheme.required_met_fields|length > 0 %}, &
+         this%process_config%{{ scheme.name }}_config{% if scheme.required_met_fields and scheme.required_met_fields|length > 0 %}, &
 {% for field in scheme.required_met_fields %}
 {% if field is string %}
          {{ field | lower | replace('-', '_') | replace('.', '_') }}{% if not loop.last %}, &{% endif %}
@@ -322,22 +471,51 @@ contains
          species_tendencies &
       )
 
-      ! Apply tendencies using base class utilities
-{% if config.enable_column_processing %}
-      call virtual_column%apply_species_tendencies(species_tendencies, dt, error_manager)
-{% else %}
-      call this%apply_tendency(species_indices, state_manager, i_col, species_tendencies, dt, error_manager)
-{% endif %}
-      if (error_manager%has_error()) return
+      ! Apply tendencies back to virtual column
+      call column%apply_species_tendencies(species_indices, species_tendencies, this%get_timestep(), rc)
 
-      ! Update process diagnostics (handled by base class)
-{% if config.diagnostics %}
-      call this%update_process_diagnostics(species_tendencies, {% if config.enable_column_processing %}virtual_column{% else %}state_manager, i_col{% endif %}, error_manager)
-{% endif %}
+   end subroutine run_{{ scheme.name }}_scheme_column
+
+{% endfor %}
+{% else %}
+   !> Run the active scheme (delegation pattern using unified configuration)
+   subroutine run_active_scheme(this, state_manager, i_col, error_manager)
+      class(Process{{ config.class_name }}Interface), intent(inout) :: this
+      type(StateManagerType), intent(inout) :: state_manager
+      integer, intent(in) :: i_col
+      type(ErrorManagerType), intent(inout) :: error_manager
+
+      ! Check if process is active
+      if (.not. this%process_config%is_active) return
+
+      ! Delegate to appropriate scheme using unified config
+      select case (trim(this%process_config%{{ config.name }}_config%scheme))
+{% for scheme in config.schemes %}
+      case ('{{ scheme.name }}')
+         call this%run_{{ scheme.name }}_scheme(state_manager, i_col, error_manager)
+{% endfor %}
+      case default
+         call error_manager%set_error(CC_FAILURE, &
+            "Unknown {{ config.name }} scheme: " // trim(this%process_config%{{ config.name }}_config%scheme))
+      end select
+
+   end subroutine run_active_scheme
+
+{% for scheme in config.schemes %}
+   !> Run the {{ scheme.name }} scheme using unified configuration
+   subroutine run_{{ scheme.name }}_scheme(this, state_manager, i_col, error_manager)
+      class(Process{{ config.class_name }}Interface), intent(inout) :: this
+      type(StateManagerType), intent(inout) :: state_manager
+      integer, intent(in) :: i_col
+      type(ErrorManagerType), intent(inout) :: error_manager
+
+      ! TODO: Implement 3D processing version of scheme
+      ! This would be similar to column version but work directly with StateManager
 
    end subroutine run_{{ scheme.name }}_scheme
 
 {% endfor %}
+{% endif %}
 
    !> Get required meteorological fields for this process
    function get_required_met_fields(this) result(field_names)
@@ -356,12 +534,18 @@ contains
       common_fields({{ loop.index }}) = '{{ field }}'
 {% endfor %}
 {% else %}
-      n_common = 0
-      allocate(common_fields(0))
+      n_common = 6
+      allocate(common_fields(n_common))
+      common_fields(1) = 'FROCEAN'
+      common_fields(2) = 'FRSEAICE'
+      common_fields(3) = 'U10M'
+      common_fields(4) = 'V10M'
+      common_fields(5) = 'SST'
+      common_fields(6) = 'USTAR'
 {% endif %}
 
       ! Scheme-specific fields
-      select case (trim(this%active_scheme))
+      select case (trim(this%process_config%{{ config.name }}_config%scheme))
 {% for scheme in config.schemes %}
       case ('{{ scheme.name }}')
 {% if scheme.required_met_fields %}
