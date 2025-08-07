@@ -1,7 +1,7 @@
 !> \file {{ config.class_name }}Common_Mod.F90
 !! \brief Common types and utilities for {{ config.name }} process
 !!
-!! This module defines the configuration and state types used by the
+!! This module defines the configuration types used by the
 !! {{ config.name }} process and its schemes.
 !!
 !! Generated on: {{ timestamp }}
@@ -13,33 +13,62 @@ module {{ config.class_name }}Common_Mod
    use iso_fortran_env, only: fp => real64
    use precision_mod, only: fp
    use Error_Mod, only: CC_SUCCESS, CC_FAILURE, ErrorManagerType
+   use ConfigManager_Mod, only: ConfigDataType  ! Add ConfigManager integration
+   use StateManager_Mod, only: StateManagerType  ! Add StateManager integration
 
    implicit none
    private
 
    ! Export types
+   public :: {{ config.class_name }}ProcessConfig  ! New unified process config
    public :: {{ config.class_name }}Config
-   public :: {{ config.class_name }}State
 {% for scheme in config.schemes %}
    public :: {{ config.class_name }}Scheme{{ scheme.class_name }}Config
-   public :: {{ config.class_name }}Scheme{{ scheme.class_name }}State
 {% endfor %}
 
    ! Export utility functions
    public :: int_to_string
 
+   !> Unified process configuration type that bridges ConfigManager and process-specific configs
+   !! This is the main configuration type that ProcessInterface should use
+   type :: {{ config.class_name }}ProcessConfig
+      
+      ! Process metadata
+      character(len=64) :: process_name = '{{ config.name }}'
+      character(len=16) :: process_version = '1.0.0'
+      logical :: is_active = .true.
+      
+      ! Process-specific configuration (delegate to {{ config.class_name }}Config)
+      type({{ config.class_name }}Config) :: {{ config.name }}_config
+      
+      ! Scheme configurations
+{% for scheme in config.schemes %}
+      type({{ config.class_name }}Scheme{{ scheme.class_name }}Config) :: {{ scheme.name }}_config
+{% endfor %}
+      
+   contains
+      procedure, public :: load_from_config => {{ config.name }}_process_load_config
+      procedure, public :: load_species_from_chem_state => load_species_from_chem_state
+      procedure, public :: validate => {{ config.name }}_process_validate
+      procedure, public :: finalize => {{ config.name }}_process_finalize
+      procedure, public :: get_active_scheme_config => get_active_scheme_config
+{% for scheme in config.schemes %}
+      procedure, private :: load_{{ scheme.name }}_config
+{% endfor %}
+   end type {{ config.class_name }}ProcessConfig
+
    !> Main configuration type for {{ config.name }} process
    type :: {{ config.class_name }}Config
 
       ! Process settings
-      character(len=32) :: active_scheme = '{{ config.default_scheme }}'
+      character(len=32) :: scheme = '{{ config.default_scheme if config.default_scheme else config.schemes[0].name if config.schemes else "default" }}'
       logical :: is_active = .true.
       real(fp) :: dt_min = 1.0_fp     ! Minimum time step (seconds)
       real(fp) :: dt_max = 3600.0_fp  ! Maximum time step (seconds)
 
       ! Species configuration
-      integer :: n_species = {{ config.species | length if config.species else 0 }}
-      character(len=32) :: species_names({{ config.species | length if config.species else 1 }})
+      integer :: n_species = 0
+      character(len=32), allocatable :: species_names(:)
 
 {% if config.has_size_bins %}
       ! Size bin configuration
@@ -59,42 +88,10 @@ module {{ config.class_name }}Common_Mod
       real(fp) :: diagnostic_frequency = 3600.0_fp  ! Output frequency (seconds)
 
    contains
-      procedure, public :: init => init_{{ config.name }}_config
       procedure, public :: validate => validate_{{ config.name }}_config
       procedure, public :: finalize => finalize_{{ config.name }}_config
       procedure, public :: print_summary => print_{{ config.name }}_config_summary
    end type {{ config.class_name }}Config
-
-   !> Main state type for {{ config.name }} process
-   type :: {{ config.class_name }}State
-
-      ! Runtime state
-      logical :: is_initialized = .false.
-      real(fp) :: current_time = 0.0_fp
-      real(fp) :: last_update_time = 0.0_fp
-      integer :: n_columns = 0
-      integer :: n_levels = 0
-
-      ! Working arrays (allocated during initialization)
-{% if config.process_type == "emission" %}
-      real(fp), allocatable :: emission_rates(:,:)    ! (n_species, n_columns)
-      real(fp), allocatable :: total_emissions(:)     ! (n_columns)
-{% elif config.process_type == "chemistry" %}
-      real(fp), allocatable :: reaction_rates(:,:)    ! (n_reactions, n_columns)
-      real(fp), allocatable :: concentrations(:,:,:)  ! (n_species, n_levels, n_columns)
-{% endif %}
-
-      ! Diagnostic arrays
-{% for diagnostic in config.diagnostics %}
-      real(fp), allocatable :: {{ diagnostic.name | lower_snake }}(:)  ! {{ diagnostic.description }}
-{% endfor %}
-
-   contains
-      procedure, public :: init => init_{{ config.name }}_state
-      procedure, public :: allocate_arrays => allocate_{{ config.name }}_state_arrays
-      procedure, public :: reset => reset_{{ config.name }}_state
-      procedure, public :: finalize => finalize_{{ config.name }}_state
-   end type {{ config.class_name }}State
 
 {% for scheme in config.schemes %}
    !> Configuration type for {{ scheme.name }} scheme
@@ -116,59 +113,15 @@ module {{ config.class_name }}Common_Mod
       character(len=32) :: required_met_fields({{ scheme.required_met_fields | length if scheme.required_met_fields else 1 }})
 
    contains
-      procedure, public :: init => init_{{ scheme.name }}_config
       procedure, public :: validate => validate_{{ scheme.name }}_config
       procedure, public :: finalize => finalize_{{ scheme.name }}_config
    end type {{ config.class_name }}Scheme{{ scheme.class_name }}Config
 
-   !> State type for {{ scheme.name }} scheme
-   type :: {{ config.class_name }}Scheme{{ scheme.class_name }}State
-
-      ! Scheme working arrays
-      real(fp), allocatable :: work_array_1(:,:)
-      real(fp), allocatable :: work_array_2(:,:)
-
-      ! Scheme-specific diagnostic arrays
-{% for diagnostic in scheme.diagnostics %}
-      real(fp), allocatable :: {{ diagnostic.name | lower_snake }}(:)  ! {{ diagnostic.description }}
-{% endfor %}
-
-   contains
-      procedure, public :: init => init_{{ scheme.name }}_state
-      procedure, public :: allocate_arrays => allocate_{{ scheme.name }}_state_arrays
-      procedure, public :: reset => reset_{{ scheme.name }}_state
-      procedure, public :: finalize => finalize_{{ scheme.name }}_state
-   end type {{ config.class_name }}Scheme{{ scheme.class_name }}State
+   ! {{ scheme.name }} scheme uses local variables only - no persistent state type needed
 
 {% endfor %}
 
 contains
-
-   !> Initialize {{ config.name }} configuration
-   subroutine init_{{ config.name }}_config(this, error_handler)
-      class({{ config.class_name }}Config), intent(inout) :: this
-      type(ErrorHandler), intent(inout) :: error_handler
-
-      ! Set default species names
-{% for species in config.species %}
-      this%species_names({{ loop.index }}) = '{{ species }}'
-{% endfor %}
-
-{% if config.has_size_bins and config.size_bins %}
-      ! Set default size bin bounds
-{% for bound in config.size_bins.bounds %}
-      this%size_bounds({{ loop.index }}) = {{ bound }}_fp
-{% endfor %}
-{% endif %}
-
-{% if config.is_multiphase %}
-      ! Set phase names
-{% for phase in config.phases %}
-      this%phase_names({{ loop.index }}) = '{{ phase }}'
-{% endfor %}
-{% endif %}
-
-   end subroutine init_{{ config.name }}_config
 
    !> Validate {{ config.name }} configuration
    subroutine validate_{{ config.name }}_config(this, error_handler)
@@ -193,15 +146,15 @@ contains
       ! Validate active scheme
 {% for scheme in config.schemes %}
 {% if loop.first %}
-      if (trim(this%active_scheme) /= '{{ scheme.name }}' .and. &
+      if (trim(this%scheme) /= '{{ scheme.name }}' .and. &
 {% else %}
-          trim(this%active_scheme) /= '{{ scheme.name }}' .and. &
+          trim(this%scheme) /= '{{ scheme.name }}' .and. &
 {% endif %}
 {% if loop.last %}
           .true.) then
 {% endif %}
 {% endfor %}
-         write(error_msg, '(A)') "Invalid scheme: " // trim(this%active_scheme)
+         write(error_msg, '(A)') "Invalid scheme: " // trim(this%scheme)
          call error_handler%set_error(ERROR_CONFIG, error_msg)
          return
       end if
@@ -213,7 +166,7 @@ contains
       class({{ config.class_name }}Config), intent(in) :: this
 
       write(*, '(A)') "=== {{ config.class_name }} Process Configuration ==="
-      write(*, '(A,A)') "  Active scheme: ", trim(this%active_scheme)
+      write(*, '(A,A)') "  Active scheme: ", trim(this%scheme)
       write(*, '(A,I0)') "  Number of species: ", this%n_species
       write(*, '(A,F0.1,A)') "  Minimum time step: ", this%dt_min, " s"
       write(*, '(A,F0.1,A)') "  Maximum time step: ", this%dt_max, " s"
@@ -226,133 +179,18 @@ contains
 
    end subroutine print_{{ config.name }}_config_summary
 
-   !> Finalize {{ config.name }} configuration
+      !> Finalize {{ config.name }} configuration
    subroutine finalize_{{ config.name }}_config(this)
       class({{ config.class_name }}Config), intent(inout) :: this
 
-      ! Nothing to deallocate for basic configuration
+      ! Deallocate species names array
+      if (allocated(this%species_names)) then
+         deallocate(this%species_names)
+      end if
 
    end subroutine finalize_{{ config.name }}_config
 
-   !> Initialize {{ config.name }} state
-   subroutine init_{{ config.name }}_state(this, n_columns, n_levels, error_handler)
-      class({{ config.class_name }}State), intent(inout) :: this
-      integer, intent(in) :: n_columns
-      integer, intent(in) :: n_levels
-      type(ErrorHandler), intent(inout) :: error_handler
-
-      this%n_columns = n_columns
-      this%n_levels = n_levels
-      this%current_time = 0.0_fp
-      this%last_update_time = 0.0_fp
-
-      call this%allocate_arrays(error_handler)
-      if (error_handler%has_error()) return
-
-      this%is_initialized = .true.
-
-   end subroutine init_{{ config.name }}_state
-
-   !> Allocate state arrays
-   subroutine allocate_{{ config.name }}_state_arrays(this, error_handler)
-      class({{ config.class_name }}State), intent(inout) :: this
-      type(ErrorHandler), intent(inout) :: error_handler
-
-      integer :: alloc_stat
-
-{% if config.process_type == "emission" %}
-      ! Allocate emission arrays
-      allocate(this%emission_rates({{ config.species | length if config.species else 1 }}, this%n_columns), &
-               stat=alloc_stat)
-      if (alloc_stat /= 0) then
-         call error_handler%set_error(ERROR_MEMORY, &
-            "Failed to allocate emission_rates array")
-         return
-      end if
-
-      allocate(this%total_emissions(this%n_columns), stat=alloc_stat)
-      if (alloc_stat /= 0) then
-         call error_handler%set_error(ERROR_MEMORY, &
-            "Failed to allocate total_emissions array")
-         return
-      end if
-{% elif config.process_type == "chemistry" %}
-      ! Allocate chemistry arrays
-      allocate(this%concentrations({{ config.species | length if config.species else 1 }}, &
-                                   this%n_levels, this%n_columns), &
-               stat=alloc_stat)
-      if (alloc_stat /= 0) then
-         call error_handler%set_error(ERROR_MEMORY, &
-            "Failed to allocate concentrations array")
-         return
-      end if
-{% endif %}
-
-      ! Allocate diagnostic arrays
-{% for diagnostic in config.diagnostics %}
-      allocate(this%{{ diagnostic.name | lower_snake }}(this%n_columns), stat=alloc_stat)
-      if (alloc_stat /= 0) then
-         call error_handler%set_error(ERROR_MEMORY, &
-            "Failed to allocate {{ diagnostic.name | lower_snake }} array")
-         return
-      end if
-{% endfor %}
-
-   end subroutine allocate_{{ config.name }}_state_arrays
-
-   !> Reset state arrays to zero
-   subroutine reset_{{ config.name }}_state(this)
-      class({{ config.class_name }}State), intent(inout) :: this
-
-{% if config.process_type == "emission" %}
-      if (allocated(this%emission_rates)) this%emission_rates = 0.0_fp
-      if (allocated(this%total_emissions)) this%total_emissions = 0.0_fp
-{% elif config.process_type == "chemistry" %}
-      if (allocated(this%concentrations)) this%concentrations = 0.0_fp
-{% endif %}
-
-{% for diagnostic in config.diagnostics %}
-      if (allocated(this%{{ diagnostic.name | lower_snake }})) this%{{ diagnostic.name | lower_snake }} = 0.0_fp
-{% endfor %}
-
-   end subroutine reset_{{ config.name }}_state
-
-   !> Finalize {{ config.name }} state
-   subroutine finalize_{{ config.name }}_state(this)
-      class({{ config.class_name }}State), intent(inout) :: this
-
-{% if config.process_type == "emission" %}
-      if (allocated(this%emission_rates)) deallocate(this%emission_rates)
-      if (allocated(this%total_emissions)) deallocate(this%total_emissions)
-{% elif config.process_type == "chemistry" %}
-      if (allocated(this%concentrations)) deallocate(this%concentrations)
-{% endif %}
-
-{% for diagnostic in config.diagnostics %}
-      if (allocated(this%{{ diagnostic.name | lower_snake }})) deallocate(this%{{ diagnostic.name | lower_snake }})
-{% endfor %}
-
-      this%is_initialized = .false.
-
-   end subroutine finalize_{{ config.name }}_state
-
 {% for scheme in config.schemes %}
-   !> Initialize {{ scheme.name }} scheme configuration
-   subroutine init_{{ scheme.name }}_config(this, parent_config, error_handler)
-      class({{ config.class_name }}Scheme{{ scheme.class_name }}Config), intent(inout) :: this
-      type({{ config.class_name }}Config), intent(in) :: parent_config
-      type(ErrorHandler), intent(inout) :: error_handler
-
-      ! Set required meteorological fields
-{% for field in scheme.required_met_fields %}
-      this%required_met_fields({{ loop.index }}) = '{{ field }}'
-{% endfor %}
-
-      ! Initialize scheme-specific parameters
-      ! TODO: Load from configuration file or use defaults
-
-   end subroutine init_{{ scheme.name }}_config
-
    !> Validate {{ scheme.name }} scheme configuration
    subroutine validate_{{ scheme.name }}_config(this, error_handler)
       class({{ config.class_name }}Scheme{{ scheme.class_name }}Config), intent(inout) :: this
@@ -370,78 +208,6 @@ contains
 
    end subroutine finalize_{{ scheme.name }}_config
 
-   !> Initialize {{ scheme.name }} scheme state
-   subroutine init_{{ scheme.name }}_state(this, parent_state, error_handler)
-      class({{ config.class_name }}Scheme{{ scheme.class_name }}State), intent(inout) :: this
-      type({{ config.class_name }}State), intent(in) :: parent_state
-      type(ErrorHandler), intent(inout) :: error_handler
-
-      call this%allocate_arrays(parent_state%n_columns, error_handler)
-
-   end subroutine init_{{ scheme.name }}_state
-
-   !> Allocate {{ scheme.name }} scheme state arrays
-   subroutine allocate_{{ scheme.name }}_state_arrays(this, n_columns, error_handler)
-      class({{ config.class_name }}Scheme{{ scheme.class_name }}State), intent(inout) :: this
-      integer, intent(in) :: n_columns
-      type(ErrorHandler), intent(inout) :: error_handler
-
-      integer :: alloc_stat
-
-      ! Allocate working arrays
-      allocate(this%work_array_1({{ config.species | length if config.species else 1 }}, n_columns), &
-               stat=alloc_stat)
-      if (alloc_stat /= 0) then
-         call error_handler%set_error(ERROR_MEMORY, &
-            "Failed to allocate {{ scheme.name }} work_array_1")
-         return
-      end if
-
-      allocate(this%work_array_2({{ config.species | length if config.species else 1 }}, n_columns), &
-               stat=alloc_stat)
-      if (alloc_stat /= 0) then
-         call error_handler%set_error(ERROR_MEMORY, &
-            "Failed to allocate {{ scheme.name }} work_array_2")
-         return
-      end if
-
-      ! Allocate diagnostic arrays
-{% for diagnostic in scheme.diagnostics %}
-      allocate(this%{{ diagnostic.name | lower_snake }}(n_columns), stat=alloc_stat)
-      if (alloc_stat /= 0) then
-         call error_handler%set_error(ERROR_MEMORY, &
-            "Failed to allocate {{ scheme.name }} {{ diagnostic.name | lower_snake }} array")
-         return
-      end if
-{% endfor %}
-
-   end subroutine allocate_{{ scheme.name }}_state_arrays
-
-   !> Reset {{ scheme.name }} scheme state
-   subroutine reset_{{ scheme.name }}_state(this)
-      class({{ config.class_name }}Scheme{{ scheme.class_name }}State), intent(inout) :: this
-
-      if (allocated(this%work_array_1)) this%work_array_1 = 0.0_fp
-      if (allocated(this%work_array_2)) this%work_array_2 = 0.0_fp
-
-{% for diagnostic in scheme.diagnostics %}
-      if (allocated(this%{{ diagnostic.name | lower_snake }})) this%{{ diagnostic.name | lower_snake }} = 0.0_fp
-{% endfor %}
-
-   end subroutine reset_{{ scheme.name }}_state
-
-   !> Finalize {{ scheme.name }} scheme state
-   subroutine finalize_{{ scheme.name }}_state(this)
-      class({{ config.class_name }}Scheme{{ scheme.class_name }}State), intent(inout) :: this
-
-      if (allocated(this%work_array_1)) deallocate(this%work_array_1)
-      if (allocated(this%work_array_2)) deallocate(this%work_array_2)
-
-{% for diagnostic in scheme.diagnostics %}
-      if (allocated(this%{{ diagnostic.name | lower_snake }})) deallocate(this%{{ diagnostic.name | lower_snake }})
-{% endfor %}
-
-   end subroutine finalize_{{ scheme.name }}_state
 
 {% endfor %}
 
@@ -454,5 +220,187 @@ contains
       str_val = adjustl(str_val)
 
    end function int_to_string
+
+   !> Load unified process configuration from ConfigManager
+   !! This is the main function that ProcessInterface.parse_process_config should call
+   !! Process reads its configuration directly from the master YAML via ConfigManager
+   subroutine {{ config.name }}_process_load_config(this, config_data, error_handler)
+      class({{ config.class_name }}ProcessConfig), intent(inout) :: this
+      type(ConfigDataType), intent(in) :: config_data
+      type(ErrorManagerType), intent(inout) :: error_handler
+
+      character(len=256) :: scheme_name
+      integer :: ierr
+
+      ! Process reads directly from master YAML structure: processes.{{ config.name }}.*
+      ! ConfigManager provides generic YAML access, process handles its own configuration
+      
+      ! Load process metadata
+      call config_data%get_string("processes/{{ config.name }}/name", this%process_name, ierr)
+      if (ierr /= CC_SUCCESS) this%process_name = "{{ config.name }}"  ! default
+
+      call config_data%get_string("processes/{{ config.name }}/version", this%process_version, ierr)
+      if (ierr /= CC_SUCCESS) this%process_version = "1.0.0"  ! default
+
+      call config_data%get_logical("processes/{{ config.name }}/activate", this%is_active, ierr)
+      if (ierr /= CC_SUCCESS) this%is_active = .true.  ! default
+
+      ! Load process-specific configuration directly from master YAML
+      call config_data%get_string("processes/{{ config.name }}/scheme", this%{{ config.name }}_config%scheme, ierr)
+      if (ierr /= CC_SUCCESS) then
+         call error_handler%set_error(CC_FAILURE, &
+            "Missing required 'scheme' in processes/{{ config.name }} configuration")
+         return
+      end if
+
+      ! Species configuration is loaded from ChemState in load_species_from_chem_state
+      ! The species come from the master species YAML file (CATChem_species.yml)
+      ! and are filtered by is_{{ config.name }} property
+
+{% if config.process_specific_params %}
+      ! Load process-specific parameters from master YAML
+{% for param_name, param_info in config.process_specific_params.items() %}
+      call config_data%get_{{ param_info.yaml_type | default('real') }}("processes/{{ config.name }}/{{ param_name }}", &
+           this%{{ config.name }}_config%{{ param_name }}, ierr)
+      if (ierr /= CC_SUCCESS) this%{{ config.name }}_config%{{ param_name }} = {{ param_info.default }}
+{% endfor %}
+{% endif %}
+
+      ! Load scheme-specific configuration from master YAML
+      scheme_name = trim(this%{{ config.name }}_config%scheme)
+      select case (scheme_name)
+{% for scheme in config.schemes %}
+      case ('{{ scheme.name }}')
+         call this%load_{{ scheme.name }}_config(config_data, error_handler)
+{% endfor %}
+      case default
+         call error_handler%set_error(CC_FAILURE, &
+            "Unknown {{ config.name }} scheme: " // trim(scheme_name))
+         return
+      end select
+
+   end subroutine {{ config.name }}_process_load_config
+
+   !> Load species from ChemState based on is_{{ config.name }} property
+   !! This should be called after process configuration is loaded and ChemState is available
+   subroutine load_species_from_chem_state(this, chem_state, error_handler)
+      use ChemState_Mod, only: ChemStateType
+      
+      class({{ config.class_name }}ProcessConfig), intent(inout) :: this
+      type(ChemStateType), pointer, intent(in) :: chem_state
+      type(ErrorManagerType), intent(inout) :: error_handler
+      
+      integer :: i, species_count
+      character(len=32), allocatable :: species_names_tmp(:)
+      
+      if (.not. associated(chem_state)) then
+         call error_handler%set_error(CC_FAILURE, &
+            "ChemState not associated in load_species_from_chem_state")
+         return
+      end if
+      
+      ! Get the count of {{ config.name }} species from ChemState
+      this%{{ config.name }}_config%n_species = chem_state%nSpecies{{ config.class_name }}
+      
+      if (this%{{ config.name }}_config%n_species <= 0) then
+         call error_handler%set_error(CC_FAILURE, &
+            "No {{ config.name }} species found in ChemState with is_{{ config.name }}=true")
+         return
+      end if
+      
+      ! Allocate species names array
+      if (allocated(this%{{ config.name }}_config%species_names)) then
+         deallocate(this%{{ config.name }}_config%species_names)
+      end if
+      allocate(this%{{ config.name }}_config%species_names(this%{{ config.name }}_config%n_species))
+      
+      ! Get species names for {{ config.name }} species from ChemState
+      species_count = 0
+      do i = 1, chem_state%nSpecies
+         if (allocated(chem_state%ChemSpecies) .and. i <= size(chem_state%ChemSpecies)) then
+            if (chem_state%ChemSpecies(i)%is_{{ config.name }}) then
+               species_count = species_count + 1
+               if (species_count <= this%{{ config.name }}_config%n_species) then
+                  this%{{ config.name }}_config%species_names(species_count) = trim(chem_state%SpeciesNames(i))
+               end if
+            end if
+         end if
+      end do
+      
+      ! Validate that we found the expected number of species
+      if (species_count /= this%{{ config.name }}_config%n_species) then
+         write(*,*) 'Warning: Expected', this%{{ config.name }}_config%n_species, &
+                   '{{ config.name }} species but found', species_count
+      end if
+      
+   end subroutine load_species_from_chem_state
+
+{% for scheme in config.schemes %}
+   !> Load {{ scheme.name }} scheme configuration from master YAML
+   subroutine load_{{ scheme.name }}_config(this, config_data, error_handler)
+      class({{ config.class_name }}ProcessConfig), intent(inout) :: this
+      type(ConfigDataType), intent(in) :: config_data
+      type(ErrorManagerType), intent(inout) :: error_handler
+
+      integer :: ierr
+
+      ! Load scheme parameters directly from processes/{{ config.name }}/{{ scheme.name }}/* in master YAML
+{% for param_name, param_info in scheme.parameters.items() %}
+      call config_data%get_{{ param_info.yaml_type | default('real') }}("processes/{{ config.name }}/{{ scheme.name }}/{{ param_name }}", &
+           this%{{ scheme.name }}_config%{{ param_name }}, ierr)
+      if (ierr /= CC_SUCCESS) this%{{ scheme.name }}_config%{{ param_name }} = {{ param_info.default }}
+{% endfor %}
+
+
+   end subroutine load_{{ scheme.name }}_config
+
+{% endfor %}
+
+   !> Validate unified process configuration
+   subroutine {{ config.name }}_process_validate(this, state_manager, error_handler)
+      class({{ config.class_name }}ProcessConfig), intent(inout) :: this
+      type(StateManagerType), intent(in) :: state_manager
+      type(ErrorManagerType), intent(inout) :: error_handler
+
+      ! Validate main config
+      call this%{{ config.name }}_config%validate(error_handler)
+      if (error_handler%has_error()) return
+
+      ! Validate scheme-specific config
+      select case (trim(this%{{ config.name }}_config%scheme))
+{% for scheme in config.schemes %}
+      case ('{{ scheme.name }}')
+         call this%{{ scheme.name }}_config%validate(error_handler)
+{% endfor %}
+      end select
+
+   end subroutine {{ config.name }}_process_validate
+
+   !> Finalize unified process configuration
+   subroutine {{ config.name }}_process_finalize(this)
+      class({{ config.class_name }}ProcessConfig), intent(inout) :: this
+
+      call this%{{ config.name }}_config%finalize()
+{% for scheme in config.schemes %}
+      call this%{{ scheme.name }}_config%finalize()
+{% endfor %}
+
+   end subroutine {{ config.name }}_process_finalize
+
+   !> Get active scheme configuration (polymorphic return)
+   function get_active_scheme_config(this) result(scheme_config)
+      class({{ config.class_name }}ProcessConfig), intent(in) :: this
+      class(*), allocatable :: scheme_config
+
+      select case (trim(this%{{ config.name }}_config%scheme))
+{% for scheme in config.schemes %}
+      case ('{{ scheme.name }}')
+         allocate(scheme_config, source=this%{{ scheme.name }}_config)
+{% endfor %}
+      case default
+         ! Return null
+      end select
+
+   end function get_active_scheme_config
 
 end module {{ config.class_name }}Common_Mod

@@ -93,6 +93,9 @@ class ProcessConfig:
     author: str
     version: str = "1.0.0"
     license: str = "Apache 2.0"
+    
+    # Column processing configuration
+    enable_column_processing: bool = True
 
     # Process behavior configuration (replaces hardcoded process_type)
     process_behavior: Optional[ProcessBehavior] = None
@@ -446,7 +449,12 @@ class ProcessGenerator:
         logger.info("Generating main process interface")
 
         template = self.env.get_template('process_interface.F90.j2')
-        content = template.render(config=config, timestamp=datetime.now().isoformat())
+        content = template.render(
+            config=config,
+            generation_date=datetime.now().isoformat(),
+            version=config.version,
+            timestamp=datetime.now().isoformat()
+        )
 
         filename = f"Process{config.class_name}Interface_Mod.F90"
         output_file = process_dir / filename
@@ -461,7 +469,12 @@ class ProcessGenerator:
         logger.info("Generating common module")
 
         template = self.env.get_template('process_common.F90.j2')
-        content = template.render(config=config, timestamp=datetime.now().isoformat())
+        content = template.render(
+            config=config,
+            generation_date=datetime.now().isoformat(),
+            version=config.version,
+            timestamp=datetime.now().isoformat()
+        )
 
         filename = f"{config.class_name}Common_Mod.F90"
         output_file = process_dir / filename
@@ -653,6 +666,7 @@ class ProcessGenerator:
                 "author": "Your Name",
                 "version": "1.0.0",
                 "process_type": "emission",
+                "enable_column_processing": True,
                 "is_multiphase": False,
                 "has_size_bins": False,
                 "species": ["species1", "species2"],
@@ -693,6 +707,7 @@ class ProcessGenerator:
                 "author": "Your Name",
                 "version": "1.0.0",
                 "process_type": "chemistry",
+                "enable_column_processing": True,
                 "is_multiphase": True,
                 "has_size_bins": False,
                 "species": ["O3", "NO", "NO2", "OH"],

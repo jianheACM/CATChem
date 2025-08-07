@@ -98,34 +98,6 @@ module ConfigManager_Mod
       character(len=255) :: Output_Directory = './'  !< Output data directory
    end type FilePathConfig
 
-   !> \brief Dust process configuration
-   type :: DustConfig
-      logical :: activate = .false.                  !< Enable dust emission process
-      integer :: scheme = 1                          !< Dust emission scheme selection
-      integer :: drag_opt = 1                        !< Fengsha drag parameterization option
-      integer :: moist_opt = 1                       !< Fengsha moisture parameterization option
-      integer :: horizflux_opt = 1                   !< Horizontal flux calculation option
-      real(fp) :: alpha = 1.0_fp                     !< Dust emission tuning parameter alpha
-      real(fp) :: beta = 1.0_fp                      !< Dust emission tuning parameter beta
-      real(fp) :: scale_factor = 1.0_fp              !< Overall dust emission scale factor
-   end type DustConfig
-
-   !> \brief Sea salt process configuration
-   type :: SeaSaltConfig
-      logical :: activate = .false.                  !< Enable sea salt emission process
-      integer :: scheme = 1                          !< Sea salt emission scheme selection
-      logical :: weibull = .false.                   !< Use Weibull distribution for sea salt
-      logical :: hoppel = .false.                    !< Use Hoppel parameterization
-      real(fp) :: scale_factor = 1.0_fp              !< Scale factor for sea salt emissions
-   end type SeaSaltConfig
-
-   !> \brief Dry deposition process configuration
-   type :: DryDepConfig
-      logical :: activate = .false.                  !< Enable dry deposition process
-      integer :: scheme = 1                          !< Dry deposition scheme selection
-      logical :: resuspension = .false.              !< Turn on resuspension
-      real(fp) :: scale_factor = 1.0_fp              !< Scale factor for dry deposition
-   end type DryDepConfig
 
    !> \brief External emissions configuration
    type :: ExternalEmisConfig
@@ -135,13 +107,6 @@ module ConfigManager_Mod
       logical :: dynamic_mapping = .true.             !< Enable dynamic species mapping
       real(fp) :: global_scale_factor = 1.0_fp        !< Global scaling factor
    end type ExternalEmisConfig
-
-   !> \brief Plume rise process configuration
-   type :: PlumeRiseConfig
-      logical :: activate = .false.                  !< Enable plume rise calculations
-      integer :: scheme = 1                          !< Plume rise scheme selection
-      real(fp) :: scale_factor = 1.0_fp              !< Scale factor for plume rise
-   end type PlumeRiseConfig
 
    !> \brief Modernized configuration data structure
    !!
@@ -160,11 +125,7 @@ module ConfigManager_Mod
       ! Configuration categories
       type(RuntimeConfig) :: runtime                    !< Runtime and MPI settings
       type(FilePathConfig) :: file_paths                !< File paths and data sources
-      type(DustConfig) :: dust                          !< Dust process configuration
-      type(SeaSaltConfig) :: seasalt                    !< Sea salt process configuration
-      type(DryDepConfig) :: drydep                      !< Dry deposition process configuration
       type(ExternalEmisConfig) :: external_emissions    !< External emissions configuration
-      type(PlumeRiseConfig) :: plumerise                !< Plume rise process configuration
 
       ! Metadata
       character(len=64) :: config_version = '2.0'       !< Configuration version
@@ -1225,10 +1186,7 @@ contains
       write(*, '(A,L1)') 'Validated: ', this%is_validated
       write(*, '(A,I0)') 'Number of CPUs: ', this%runtime%numCPUs
       write(*, '(A,A)') 'Simulation name: ', trim(this%runtime%SimulationName)
-      write(*, '(A,L1)') 'Dust activated: ', this%dust%activate
-      write(*, '(A,L1)') 'Sea salt activated: ', this%seasalt%activate
       write(*, '(A,L1)') 'External emissions activated: ', this%external_emissions%activate
-      write(*, '(A,L1)') 'Dry deposition activated: ', this%drydep%activate
       write(*, '(A)') '============================'
 
    end subroutine config_data_print_summary
@@ -1259,10 +1217,6 @@ contains
       ! Deep copy all components
       this%runtime = source%runtime
       this%file_paths = source%file_paths
-      this%dust = source%dust
-      this%seasalt = source%seasalt
-      this%drydep = source%drydep
-      this%plumerise = source%plumerise
       this%external_emissions = source%external_emissions
       this%config_version = source%config_version
       this%source_file = source%source_file
@@ -1289,29 +1243,9 @@ contains
       ! Parse file paths
       call yaml_get(this%yaml_data, 'output/directory', this%config_data%file_paths%Output_Directory, rc, './')
 
-      ! Parse dust configuration
-      if (yaml_has_key(this%yaml_data, 'processes/dust')) then
-         call yaml_get(this%yaml_data, 'processes/dust/scale_factor', this%config_data%dust%scale_factor, rc, 1.0_fp)
-      endif
-
-      ! Parse sea salt configuration
-      if (yaml_has_key(this%yaml_data, 'processes/sea_salt')) then
-         call yaml_get(this%yaml_data, 'processes/sea_salt/scale_factor', this%config_data%seasalt%scale_factor, rc, 1.0_fp)
-      endif
-
-      ! Parse dry deposition configuration
-      if (yaml_has_key(this%yaml_data, 'processes/dry_deposition')) then
-         call yaml_get(this%yaml_data, 'processes/dry_deposition/scale_factor', this%config_data%drydep%scale_factor, rc, 1.0_fp)
-      endif
-
       ! Parse external emissions configuration
       if (yaml_has_key(this%yaml_data, 'external_emissions')) then
          call yaml_get(this%yaml_data, 'external_emissions/global_scale_factor', this%config_data%external_emissions%global_scale_factor, rc, 1.0_fp)
-      endif
-
-      ! Parse plume rise configuration
-      if (yaml_has_key(this%yaml_data, 'processes/plume_rise')) then
-         call yaml_get(this%yaml_data, 'processes/plume_rise/scale_factor', this%config_data%plumerise%scale_factor, rc, 1.0_fp)
       endif
 
       ! Mark configuration as validated
@@ -1335,21 +1269,6 @@ contains
       character(len=256) :: key, temp_name, test_key
       character(len=64), allocatable :: candidate_species(:)
       integer :: n_candidates
-
-      ! Common chemical species patterns to look for
-      character(len=32), parameter :: species_patterns(30) = [ &
-          "so2   ", "so4   ", "dms   ", "msa   ", "bc1   ", "bc2   ", &
-          "oc1   ", "oc2   ", "dust1 ", "dust2 ", "dust3 ", "dust4 ", &
-          "dust5 ", "seas1 ", "seas2 ", "seas3 ", "seas4 ", "seas5 ", &
-          "nh3   ", "nh4   ", "nh4a  ", "no3an1", "no3an2", "no3an3", &
-          "co    ", "co2   ", "ch4   ", "h2o2  ", "hno3  ", "pan   " ]
-
-      ! Additional base names for extended search (uniform 8-char length)
-      character(len=8), parameter :: base_names(20) = [ &
-          "so      ", "bc      ", "oc      ", "dust    ", "seas    ", &
-          "no      ", "nh      ", "co      ", "o3      ", "hno     ", &
-          "pan     ", "h2o     ", "ch      ", "dms     ", "msa     ", &
-          "acetone ", "benzene ", "toluene ", "isoprene", "monoterp" ]
 
       rc = CC_SUCCESS
       num_species = 0
