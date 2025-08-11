@@ -17,7 +17,7 @@
 !! - Memory management and array allocation
 !! - Integration with host model time stepping
 !!
-!! Generated on: 2025-08-06T23:49:33.304486
+!! Generated on: 2025-08-11T15:55:19.598175
 !! Author: Barry Baker
 !! Reference: Jaeglé et al. [2011]
 module SeaSaltScheme_GEOS12_Mod
@@ -54,6 +54,9 @@ contains
    !! @param[in]  num_layers     Number of vertical layers
    !! @param[in]  num_species    Number of chemical species
    !! @param[in]  params         Scheme parameters (pre-validated by host)
+   !! @param[in]  frocean    FROCEAN field [appropriate units]
+   !! @param[in]  frseaice    FRSEAICE field [appropriate units]
+   !! @param[in]  sst    SST field [appropriate units]
    !! @param[in]  ustar    USTAR field [appropriate units]
    !! @param[in]  species_conc   Species concentrations [mol/mol] (num_layers, num_species)
    !! @param[out] emission_flux  Emission fluxes [kg/m²/s] (num_layers, num_species)
@@ -61,7 +64,7 @@ contains
       num_layers, &
       num_species, &
       params, &
-      ustar, &
+      frocean, &      frseaice, &      sst, &      ustar, &
       species_conc, &
       emission_flux &
    )
@@ -70,6 +73,9 @@ contains
       integer, intent(in) :: num_layers
       integer, intent(in) :: num_species
       type(geos12_params_t), intent(in) :: params
+      real(fp), intent(in) :: frocean(num_layers)
+      real(fp), intent(in) :: frseaice(num_layers)
+      real(fp), intent(in) :: sst(num_layers)
       real(fp), intent(in) :: ustar(num_layers)
       real(fp), intent(in) :: species_conc(num_layers, num_species)
       real(fp), intent(out) :: emission_flux(num_layers, num_species)
@@ -93,6 +99,15 @@ contains
          environmental_factor = 1.0_fp
 
          ! Apply scheme-specific environmental responses based on meteorological fields
+         ! Generic field usage (customize for your scheme)
+         ! TODO: Consider how FROCEAN affects your emissions
+         ! environmental_factor = environmental_factor * some_function(frocean(k))
+         ! Generic field usage (customize for your scheme)
+         ! TODO: Consider how FRSEAICE affects your emissions
+         ! environmental_factor = environmental_factor * some_function(frseaice(k))
+         ! Generic field usage (customize for your scheme)
+         ! TODO: Consider how SST affects your emissions
+         ! environmental_factor = environmental_factor * some_function(sst(k))
          ! Generic field usage (customize for your scheme)
          ! TODO: Consider how USTAR affects your emissions
          ! environmental_factor = environmental_factor * some_function(ustar(k))

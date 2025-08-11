@@ -4,7 +4,7 @@
 !! This module defines the configuration types used by the
 !! seasalt process and its schemes.
 !!
-!! Generated on: 2025-08-06T23:49:33.280423
+!! Generated on: 2025-08-11T15:55:19.489699
 !! Author: Barry Baker & Wei Li
 !! Version: 1.0.0
 
@@ -71,6 +71,14 @@ module SeaSaltCommon_Mod
       character(len=32), allocatable :: species_names(:)
       integer, allocatable :: species_indices(:)  ! Indices of seasalt species in ChemState
 
+
+
+      ! Species properties
+      real(fp), allocatable :: species_density(:)      ! density for each species
+      real(fp), allocatable :: species_lower_radius(:)      ! lower_radius for each species
+      real(fp), allocatable :: species_radius(:)      ! radius for each species
+      real(fp), allocatable :: species_upper_radius(:)      ! upper_radius for each species
+
       ! Diagnostic configuration
       logical :: output_diagnostics = .true.
       real(fp) :: diagnostic_frequency = 3600.0_fp  ! Output frequency (seconds)
@@ -95,8 +103,8 @@ module SeaSaltCommon_Mod
       logical :: weibull_flag = .false.  ! Apply Weibull distribution for particle size
 
       ! Required meteorological fields
-      integer :: n_required_met_fields = 2
-      character(len=32) :: required_met_fields(2)
+      integer :: n_required_met_fields = 5
+      character(len=32) :: required_met_fields(5)
 
    contains
       procedure, public :: validate => validate_gong97_config
@@ -119,8 +127,8 @@ module SeaSaltCommon_Mod
       logical :: weibull_flag = .false.  ! Apply Weibull distribution for particle size
 
       ! Required meteorological fields
-      integer :: n_required_met_fields = 2
-      character(len=32) :: required_met_fields(2)
+      integer :: n_required_met_fields = 5
+      character(len=32) :: required_met_fields(5)
 
    contains
       procedure, public :: validate => validate_gong03_config
@@ -142,8 +150,8 @@ module SeaSaltCommon_Mod
       real(fp) :: scale_factor = 1.0  ! Emission scale factor
 
       ! Required meteorological fields
-      integer :: n_required_met_fields = 1
-      character(len=32) :: required_met_fields(1)
+      integer :: n_required_met_fields = 4
+      character(len=32) :: required_met_fields(4)
 
    contains
       procedure, public :: validate => validate_geos12_config
@@ -213,6 +221,20 @@ contains
       ! Deallocate species indices array
       if (allocated(this%species_indices)) then
          deallocate(this%species_indices)
+      end if
+
+      ! Deallocate species properties arrays
+      if (allocated(this%species_density)) then
+         deallocate(this%species_density)
+      end if
+      if (allocated(this%species_lower_radius)) then
+         deallocate(this%species_lower_radius)
+      end if
+      if (allocated(this%species_radius)) then
+         deallocate(this%species_radius)
+      end if
+      if (allocated(this%species_upper_radius)) then
+         deallocate(this%species_upper_radius)
       end if
 
    end subroutine finalize_seasalt_config
@@ -387,6 +409,12 @@ contains
       allocate(this%seasalt_config%species_names(this%seasalt_config%n_species))
       allocate(this%seasalt_config%species_indices(this%seasalt_config%n_species))
       
+      ! Allocate species properties arrays
+      allocate(this%seasalt_config%species_density(this%seasalt_config%n_species))
+      allocate(this%seasalt_config%species_lower_radius(this%seasalt_config%n_species))
+      allocate(this%seasalt_config%species_radius(this%seasalt_config%n_species))
+      allocate(this%seasalt_config%species_upper_radius(this%seasalt_config%n_species))
+      
       ! Copy species indices directly from ChemState
       this%seasalt_config%species_indices(1:this%seasalt_config%n_species) = &
          chem_state%SeaSaltIndex(1:this%seasalt_config%n_species)
@@ -404,6 +432,16 @@ contains
          end if
       end do
       
+      ! Load species properties from ChemState
+      do i = 1, this%seasalt_config%n_species
+         integer :: species_idx
+         species_idx = this%seasalt_config%species_indices(i)
+         this%seasalt_config%species_density(i) = chem_state%ChemSpecies(species_idx)%density
+         this%seasalt_config%species_lower_radius(i) = chem_state%ChemSpecies(species_idx)%lower_radius
+         this%seasalt_config%species_radius(i) = chem_state%ChemSpecies(species_idx)%radius
+         this%seasalt_config%species_upper_radius(i) = chem_state%ChemSpecies(species_idx)%upper_radius
+      end do
+      
    end subroutine load_species_from_chem_state
 
    !> Load gong97 scheme configuration from master YAML
@@ -417,11 +455,9 @@ contains
       ! Load scheme parameters directly from processes/seasalt/gong97/* in master YAML
       call config_data%get_real("processes/seasalt/gong97/scale_factor", &
            this%gong97_config%scale_factor, ierr)
-      if (ierr /= CC_SUCCESS) this%gong97_config%scale_factor = 1.0
-      call config_data%get_logical("processes/seasalt/gong97/weibull_flag", &
+      if (ierr /= CC_SUCCESS) this%gong97_config%scale_factor = 1.0      call config_data%get_logical("processes/seasalt/gong97/weibull_flag", &
            this%gong97_config%weibull_flag, ierr)
       if (ierr /= CC_SUCCESS) this%gong97_config%weibull_flag = .false.
-
 
    end subroutine load_gong97_config
 
@@ -436,11 +472,9 @@ contains
       ! Load scheme parameters directly from processes/seasalt/gong03/* in master YAML
       call config_data%get_real("processes/seasalt/gong03/scale_factor", &
            this%gong03_config%scale_factor, ierr)
-      if (ierr /= CC_SUCCESS) this%gong03_config%scale_factor = 1.0
-      call config_data%get_logical("processes/seasalt/gong03/weibull_flag", &
+      if (ierr /= CC_SUCCESS) this%gong03_config%scale_factor = 1.0      call config_data%get_logical("processes/seasalt/gong03/weibull_flag", &
            this%gong03_config%weibull_flag, ierr)
       if (ierr /= CC_SUCCESS) this%gong03_config%weibull_flag = .false.
-
 
    end subroutine load_gong03_config
 
@@ -456,7 +490,6 @@ contains
       call config_data%get_real("processes/seasalt/geos12/scale_factor", &
            this%geos12_config%scale_factor, ierr)
       if (ierr /= CC_SUCCESS) this%geos12_config%scale_factor = 1.0
-
 
    end subroutine load_geos12_config
 

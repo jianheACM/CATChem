@@ -84,6 +84,13 @@ module {{ config.class_name }}Common_Mod
       character(len=16) :: phase_names({{ config.phases | length }})
 {% endif %}
 
+{% if all_required_species_properties %}
+      ! Species properties
+{% for prop in all_required_species_properties %}
+      real(fp), allocatable :: species_{{ prop }}(:)      ! {{ prop }} for each species
+{% endfor %}
+{% endif %}
+
       ! Diagnostic configuration
       logical :: output_diagnostics = .true.
       real(fp) :: diagnostic_frequency = 3600.0_fp  ! Output frequency (seconds)
@@ -201,6 +208,15 @@ contains
       if (allocated(this%species_indices)) then
          deallocate(this%species_indices)
       end if
+
+{% if all_required_species_properties %}
+      ! Deallocate species properties arrays
+{% for prop in all_required_species_properties %}
+      if (allocated(this%species_{{ prop }})) then
+         deallocate(this%species_{{ prop }})
+      end if
+{% endfor %}
+{% endif %}
 
    end subroutine finalize_{{ config.name }}_config
 
@@ -345,6 +361,13 @@ contains
       ! Allocate arrays
       allocate(this%{{ config.name }}_config%species_names(this%{{ config.name }}_config%n_species))
       allocate(this%{{ config.name }}_config%species_indices(this%{{ config.name }}_config%n_species))
+{% if all_required_species_properties %}
+      
+      ! Allocate species properties arrays
+{% for prop in all_required_species_properties %}
+      allocate(this%{{ config.name }}_config%species_{{ prop }}(this%{{ config.name }}_config%n_species))
+{% endfor %}
+{% endif %}
       
       ! Copy species indices directly from ChemState
       this%{{ config.name }}_config%species_indices(1:this%{{ config.name }}_config%n_species) = &
@@ -362,6 +385,17 @@ contains
             return
          end if
       end do
+      
+{% if all_required_species_properties %}
+      ! Load species properties from ChemState
+      do i = 1, this%{{ config.name }}_config%n_species
+         integer :: species_idx
+         species_idx = this%{{ config.name }}_config%species_indices(i)
+{% for prop in all_required_species_properties %}
+         this%{{ config.name }}_config%species_{{ prop }}(i) = chem_state%ChemSpecies(species_idx)%{{ prop }}
+{% endfor %}
+      end do
+{% endif %}
       
    end subroutine load_species_from_chem_state
 

@@ -68,20 +68,11 @@ class SchemeConfig:
     reference: str = ""
     parameters: Dict[str, Any] = field(default_factory=dict)
     required_met_fields: List[str] = field(default_factory=list)
+    required_species_properties: List[str] = field(default_factory=list)
     scheme_diagnostics: List[Dict[str, str]] = field(default_factory=list)
     algorithm_type: str = "explicit"
     scheme_type: str = ""  # Optional legacy field
     scheme_behavior: Optional[SchemeBehavior] = None
-    """Configuration for a process scheme."""
-    name: str
-    class_name: str
-    description: str
-    author: str = ""
-    reference: str = ""
-    parameters: Dict[str, Any] = field(default_factory=dict)
-    required_met_fields: List[str] = field(default_factory=list)
-    diagnostics: List[Dict[str, Any]] = field(default_factory=list)
-    algorithm_type: str = "explicit"  # explicit, implicit, mixed
 
 
 @dataclass
@@ -327,6 +318,23 @@ class ProcessGenerator:
 
         return config
 
+    def get_all_required_species_properties(self, config: ProcessConfig) -> List[str]:
+        """Collect all unique required species properties from all schemes.
+        
+        Args:
+            config: ProcessConfig object containing schemes
+            
+        Returns:
+            List of unique property names required by all schemes
+        """
+        all_properties = set()
+        for scheme in config.schemes:
+            if scheme.required_species_properties:
+                all_properties.update(scheme.required_species_properties)
+        
+        # Return sorted list for consistent ordering
+        return sorted(list(all_properties))
+
     def _load_filtered_species(self, species_filter: Dict[str, Any]) -> List[str]:
         """Load species based on filter criteria.
 
@@ -449,8 +457,13 @@ class ProcessGenerator:
         logger.info("Generating main process interface")
 
         template = self.env.get_template('process_interface.F90.j2')
+        
+        # Collect all unique required species properties from all schemes
+        all_required_species_properties = self.get_all_required_species_properties(config)
+        
         content = template.render(
             config=config,
+            all_required_species_properties=all_required_species_properties,
             generation_date=datetime.now().isoformat(),
             version=config.version,
             timestamp=datetime.now().isoformat()
@@ -469,8 +482,13 @@ class ProcessGenerator:
         logger.info("Generating common module")
 
         template = self.env.get_template('process_common.F90.j2')
+        
+        # Collect all unique required species properties from all schemes
+        all_required_species_properties = self.get_all_required_species_properties(config)
+        
         content = template.render(
             config=config,
+            all_required_species_properties=all_required_species_properties,
             generation_date=datetime.now().isoformat(),
             version=config.version,
             timestamp=datetime.now().isoformat()

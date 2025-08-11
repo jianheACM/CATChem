@@ -26,6 +26,12 @@ schemes:
       - U10M
       - V10M
 
+    required_species_properties:         
+      - density              
+      - radius               
+      - lower_radius       
+      - upper_radius          
+
     parameters:
       scale_factor:
         default: 1.0
@@ -59,6 +65,12 @@ schemes:
       - SST
       - U10M
       - V10M
+    
+    required_species_properties:         
+      - density              
+      - radius               
+      - lower_radius       
+      - upper_radius
 
     parameters:
       scale_factor:
@@ -91,6 +103,12 @@ schemes:
       - FRSEAICE
       - SST
       - USTAR
+
+    required_species_properties:         
+      - density              
+      - radius               
+      - lower_radius       
+      - upper_radius
 
     parameters:
       scale_factor:

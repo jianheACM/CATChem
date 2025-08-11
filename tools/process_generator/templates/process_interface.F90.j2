@@ -173,8 +173,10 @@ contains
    !> Run the {{ config.name }} process
    !!
 {% if config.enable_column_processing %}
-   !! This method implements the main ProcessInterface run method using column virtualization.
-   !! It handles the column iteration and calls run_column for each virtual column.
+   !! This method implements the main ProcessInterface run method.
+   !! For ColumnProcessInterface processes, the actual column iteration is handled
+   !! by ProcessManager, so this method serves as a placeholder for any 3D operations
+   !! that might be needed before or after column processing.
 {% else %}
    !! Simplified implementation leveraging base class 3D processing.
 {% endif %}
@@ -184,11 +186,6 @@ contains
       integer, intent(out) :: rc
 
 {% if config.enable_column_processing %}
-      integer :: n_columns, i_col, batch_size, batch_start, batch_end
-      integer :: nx, ny, nz, i, j
-      type(VirtualColumnType) :: virtual_column
-      type(GridManagerType), pointer :: grid_manager
-
       rc = CC_SUCCESS
 
       ! Check if process is active
@@ -196,41 +193,12 @@ contains
          return
       end if
 
-      ! Only proceed if column processing is enabled
-      if (.not. this%is_column_processing_enabled()) then
-         rc = CC_FAILURE
-         return
-      end if
-
-      ! Get grid manager and dimensions
-      grid_manager => state_manager%get_grid_manager()
-      call grid_manager%geometry%get_dimensions(nx, ny, nz)
-      n_columns = nx * ny
-      batch_size = this%get_column_batch_size()
-
-      ! Process columns in batches for optimal memory usage
-      do batch_start = 1, n_columns, batch_size
-         batch_end = min(batch_start + batch_size - 1, n_columns)
-         
-         ! Process each column in the current batch
-         do i_col = batch_start, batch_end
-            ! Convert linear column index to 2D indices
-            j = (i_col - 1) / nx + 1
-            i = i_col - (j - 1) * nx
-            
-            ! Create virtual column for this column index
-            call state_manager%create_virtual_column(i, j, virtual_column, rc)
-            if (rc /= CC_SUCCESS) return
-            
-            ! Process the virtual column using column processing
-            call this%run_column(virtual_column, rc)
-            if (rc /= CC_SUCCESS) return
-            
-            ! Apply results back to state manager
-            call state_manager%apply_virtual_column(virtual_column, rc)
-            if (rc /= CC_SUCCESS) return
-         end do
-      end do
+      ! For ColumnProcessInterface processes, the ProcessManager handles column iteration
+      ! and calls run_column() for each virtual column. This method is mainly a placeholder
+      ! for any global 3D operations that need to happen before/after column processing.
+      
+      ! Currently no global 3D operations needed for {{ config.name }} process
+      ! All processing happens in run_column() method
 {% else %}
       rc = CC_SUCCESS
       
@@ -397,6 +365,12 @@ contains
 {% endif %}
 {% endfor %}
 {% endif %}
+{% if scheme.required_species_properties %}
+      ! Species properties
+{% for prop in scheme.required_species_properties %}
+      real(fp), allocatable :: species_{{ prop }}(:)
+{% endfor %}
+{% endif %}
       real(fp), allocatable :: species_conc(:)
       real(fp), allocatable :: species_tendencies(:)
       integer :: n_species, n_levels
@@ -423,6 +397,9 @@ contains
 {% if scheme.required_met_fields %}
       allocate({% for field in scheme.required_met_fields %}{% if field is string %}{{ field | lower | replace('-', '_') | replace('.', '_') }}(1){% else %}{{ field.variable_name }}({% if field.dimensions == "scalar" %}1{% else %}1{% endif %}){% endif %}{% if not loop.last %}, {% endif %}{% endfor %})
 {% endif %}
+{% if scheme.required_species_properties %}
+      allocate({% for prop in scheme.required_species_properties %}species_{{ prop }}(n_species){% if not loop.last %}, {% endif %}{% endfor %})
+{% endif %}
       species_tendencies = 0.0_fp
 
 {% if scheme.required_met_fields %}
@@ -441,6 +418,14 @@ contains
       call column%get_species_concentrations(species_indices, species_conc, rc)
       if (rc /= CC_SUCCESS) return
 
+{% if scheme.required_species_properties %}
+      ! Get species properties from configuration (pre-loaded during initialization)
+{% for prop in scheme.required_species_properties %}
+      ! Use species properties from process configuration
+      species_{{ prop }}(1:n_species) = this%process_config%{{ config.name }}_config%species_{{ prop }}(1:n_species)
+{% endfor %}
+{% endif %}
+
       ! Call the science scheme
       call compute_{{ scheme.name }}( &
          n_levels, &
@@ -448,11 +433,14 @@ contains
          this%process_config%{{ scheme.name }}_config{% if scheme.required_met_fields and scheme.required_met_fields|length > 0 %}, &
 {% for field in scheme.required_met_fields %}
 {% if field is string %}
-         {{ field | lower | replace('-', '_') | replace('.', '_') }}{% if not loop.last %}, &{% endif %}
+         {{ field | lower | replace('-', '_') | replace('.', '_') }}, &
 {% else %}
-         {{ field.variable_name }}{% if not loop.last %}, &{% endif %}
+         {{ field.variable_name }}, &
 {% endif %}
-{% endfor %}{% endif %}, &
+{% endfor %}{% endif %}{% if scheme.required_species_properties and scheme.required_species_properties|length > 0 %}
+{% for prop in scheme.required_species_properties %}
+         species_{{ prop }}, &
+{% endfor %}{% endif %}
          species_conc, &
          species_tendencies &
       )
