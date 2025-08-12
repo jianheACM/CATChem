@@ -354,7 +354,7 @@ contains
    end subroutine manager_apply_virtual_column
 
    !> \brief Populate virtual column from 3D state
-   !! \details Extracts column data from MetState and ChemState arrays
+   !! \details Uses VirtualMetType with direct pointers to MetState fields
    subroutine populate_virtual_column(this, virtual_col, rc)
       class(StateManagerType), intent(inout) :: this
       type(VirtualColumnType), intent(inout) :: virtual_col
@@ -362,7 +362,10 @@ contains
 
       integer :: grid_i, grid_j, k, ispec
       integer :: nlev, nspec_chem, nspec_emis
-      real(fp) :: met_value, chem_value
+      real(fp), pointer :: column_ptr(:)
+      real(fp) :: scalar_val
+      real(fp) :: chem_value
+      integer :: field_rc
 
       rc = CC_SUCCESS
 
@@ -376,38 +379,18 @@ contains
       call virtual_col%get_position(grid_i, grid_j)
       call virtual_col%get_dimensions(nlev, nspec_chem, nspec_emis)
 
-      ! Extract primary meteorological data - try temperature first, then alternatives
-      do k = 1, nlev
-         met_value = 0.0_fp  ! Default if no fields available
+      ! Populate VirtualMetType using generated macro
+#include "virtualmet_populate.inc"
 
-         ! Try temperature first (most common primary met field)
-         if (allocated(this%met_state%T)) then
-            met_value = this%met_state%T(grid_i, grid_j, k)
-         ! If temperature not available, try potential temperature
-         else if (allocated(this%met_state%THETA)) then
-            met_value = this%met_state%THETA(grid_i, grid_j, k)
-         ! If neither available, try air density as fallback
-         else if (allocated(this%met_state%AIRDEN)) then
-            met_value = this%met_state%AIRDEN(grid_i, grid_j, k)
-         ! If no 3D met fields are allocated, use a diagnostic default
-         else
-            met_value = 273.15_fp + real(k, fp) * (-0.0065_fp)  ! Standard atmosphere lapse rate
-         endif
-
-         call virtual_col%set_met_field(k, met_value)
-      end do
-
-      ! Extract chemical species data
+      ! Extract chemical species data (unchanged)
       if (allocated(this%chem_state%ChemSpecies) .and. nspec_chem > 0) then
          do ispec = 1, min(nspec_chem, size(this%chem_state%ChemSpecies))
             if (associated(this%chem_state%ChemSpecies(ispec)%conc)) then
                do k = 1, nlev
-                  ! Extract concentration for this species and level
                   chem_value = this%chem_state%ChemSpecies(ispec)%conc(grid_i, grid_j, k)
                   call virtual_col%set_chem_field(k, ispec, chem_value)
                end do
             else
-               ! Set default values if concentration array not associated
                do k = 1, nlev
                   call virtual_col%set_chem_field(k, ispec, 0.0_fp)
                end do

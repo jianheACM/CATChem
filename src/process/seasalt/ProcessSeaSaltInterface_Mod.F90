@@ -20,7 +20,7 @@ module ProcessSeaSaltInterface_Mod
    use GridManager_Mod, only: GridManagerType
    use error_mod, only: CC_SUCCESS, CC_FAILURE, ErrorManagerType
    use DiagnosticManager_Mod, only: DiagnosticManagerType
-   use VirtualColumn_Mod, only: VirtualColumnType
+   use VirtualColumn_Mod, only: VirtualColumnType, VirtualMetType
 
    ! Core utilities (leverage existing infrastructure)
    use UnitConversion_Mod, only: UnitConverterType
@@ -324,13 +324,14 @@ contains
       real(fp), allocatable :: species_upper_radius(:)
       real(fp), allocatable :: species_conc(:)
       real(fp), allocatable :: species_tendencies(:)
-      integer :: n_species, n_levels
+      integer :: n_species, n_levels, n_emis, i
       integer, allocatable :: species_indices(:)
+      type(VirtualMetType), pointer :: met
 
       rc = CC_SUCCESS
 
       ! Get dimensions from virtual column
-      n_levels = column%get_n_levels()
+      call column%get_dimensions(n_levels, n_emis, n_emis)
       
       ! Get seasalt species information from process configuration
       n_species = this%process_config%seasalt_config%n_species
@@ -350,20 +351,18 @@ contains
       species_tendencies = 0.0_fp
 
       ! Get meteorological fields from virtual column
-      call column%get_met_field('FROCEAN', frocean, rc)
-      if (rc /= CC_SUCCESS) return
-      call column%get_met_field('FRSEAICE', frseaice, rc)
-      if (rc /= CC_SUCCESS) return
-      call column%get_met_field('SST', sst, rc)
-      if (rc /= CC_SUCCESS) return
-      call column%get_met_field('U10M', u10m, rc)
-      if (rc /= CC_SUCCESS) return
-      call column%get_met_field('V10M', v10m, rc)
-      if (rc /= CC_SUCCESS) return
+      met => column%get_met()
+      frocean(1) = met%FROCEAN
+      frseaice(1) = met%FRSEAICE
+      sst(1) = met%SST
+      u10m(1) = met%U10M
+      v10m(1) = met%V10M
 
       ! Get species concentrations from virtual column
-      call column%get_species_concentrations(species_indices, species_conc, rc)
-      if (rc /= CC_SUCCESS) return
+      do i = 1, n_species
+         ! For surface emissions, we only need surface level (k=1)  
+         species_conc(i) = column%get_chem_field(species_indices(i), 1)
+      end do
 
       ! Get species properties from configuration (pre-loaded during initialization)
       ! Use species properties from process configuration
@@ -394,7 +393,11 @@ contains
       )
 
       ! Apply tendencies back to virtual column
-      call column%apply_species_tendencies(species_indices, species_tendencies, this%get_timestep(), rc)
+      do i = 1, n_species
+         ! For surface emissions, we only need surface level (k=1)
+         call column%set_chem_field(1, species_indices(i), &
+                                   species_conc(i) + species_tendencies(i))
+      end do
 
    end subroutine run_gong97_scheme_column
 
@@ -418,13 +421,14 @@ contains
       real(fp), allocatable :: species_upper_radius(:)
       real(fp), allocatable :: species_conc(:)
       real(fp), allocatable :: species_tendencies(:)
-      integer :: n_species, n_levels
+      integer :: n_species, n_levels, n_emis, i
       integer, allocatable :: species_indices(:)
+      type(VirtualMetType), pointer :: met
 
       rc = CC_SUCCESS
 
       ! Get dimensions from virtual column
-      n_levels = column%get_n_levels()
+      call column%get_dimensions(n_levels, n_emis, n_emis)
       
       ! Get seasalt species information from process configuration
       n_species = this%process_config%seasalt_config%n_species
@@ -444,20 +448,18 @@ contains
       species_tendencies = 0.0_fp
 
       ! Get meteorological fields from virtual column
-      call column%get_met_field('FROCEAN', frocean, rc)
-      if (rc /= CC_SUCCESS) return
-      call column%get_met_field('FRSEAICE', frseaice, rc)
-      if (rc /= CC_SUCCESS) return
-      call column%get_met_field('SST', sst, rc)
-      if (rc /= CC_SUCCESS) return
-      call column%get_met_field('U10M', u10m, rc)
-      if (rc /= CC_SUCCESS) return
-      call column%get_met_field('V10M', v10m, rc)
-      if (rc /= CC_SUCCESS) return
+      met => column%get_met()
+      frocean(1) = met%FROCEAN
+      frseaice(1) = met%FRSEAICE
+      sst(1) = met%SST
+      u10m(1) = met%U10M
+      v10m(1) = met%V10M
 
       ! Get species concentrations from virtual column
-      call column%get_species_concentrations(species_indices, species_conc, rc)
-      if (rc /= CC_SUCCESS) return
+      do i = 1, n_species
+         ! For surface emissions, we only need surface level (k=1)  
+         species_conc(i) = column%get_chem_field(species_indices(i), 1)
+      end do
 
       ! Get species properties from configuration (pre-loaded during initialization)
       ! Use species properties from process configuration
@@ -488,7 +490,11 @@ contains
       )
 
       ! Apply tendencies back to virtual column
-      call column%apply_species_tendencies(species_indices, species_tendencies, this%get_timestep(), rc)
+      do i = 1, n_species
+         ! For surface emissions, we only need surface level (k=1)
+         call column%set_chem_field(1, species_indices(i), &
+                                   species_conc(i) + species_tendencies(i))
+      end do
 
    end subroutine run_gong03_scheme_column
 
@@ -511,13 +517,14 @@ contains
       real(fp), allocatable :: species_upper_radius(:)
       real(fp), allocatable :: species_conc(:)
       real(fp), allocatable :: species_tendencies(:)
-      integer :: n_species, n_levels
+      integer :: n_species, n_levels, n_emis, i
       integer, allocatable :: species_indices(:)
+      type(VirtualMetType), pointer :: met
 
       rc = CC_SUCCESS
 
       ! Get dimensions from virtual column
-      n_levels = column%get_n_levels()
+      call column%get_dimensions(n_levels, n_emis, n_emis)
       
       ! Get seasalt species information from process configuration
       n_species = this%process_config%seasalt_config%n_species
@@ -537,18 +544,17 @@ contains
       species_tendencies = 0.0_fp
 
       ! Get meteorological fields from virtual column
-      call column%get_met_field('FROCEAN', frocean, rc)
-      if (rc /= CC_SUCCESS) return
-      call column%get_met_field('FRSEAICE', frseaice, rc)
-      if (rc /= CC_SUCCESS) return
-      call column%get_met_field('SST', sst, rc)
-      if (rc /= CC_SUCCESS) return
-      call column%get_met_field('USTAR', ustar, rc)
-      if (rc /= CC_SUCCESS) return
+      met => column%get_met()
+      frocean(1) = met%FROCEAN
+      frseaice(1) = met%FRSEAICE
+      sst(1) = met%SST
+      ustar(1) = met%USTAR
 
       ! Get species concentrations from virtual column
-      call column%get_species_concentrations(species_indices, species_conc, rc)
-      if (rc /= CC_SUCCESS) return
+      do i = 1, n_species
+         ! For surface emissions, we only need surface level (k=1)  
+         species_conc(i) = column%get_chem_field(species_indices(i), 1)
+      end do
 
       ! Get species properties from configuration (pre-loaded during initialization)
       ! Use species properties from process configuration
@@ -578,7 +584,11 @@ contains
       )
 
       ! Apply tendencies back to virtual column
-      call column%apply_species_tendencies(species_indices, species_tendencies, this%get_timestep(), rc)
+      do i = 1, n_species
+         ! For surface emissions, we only need surface level (k=1)
+         call column%set_chem_field(1, species_indices(i), &
+                                   species_conc(i) + species_tendencies(i))
+      end do
 
    end subroutine run_geos12_scheme_column
 
