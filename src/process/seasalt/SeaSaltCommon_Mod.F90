@@ -4,7 +4,7 @@
 !! This module defines the configuration types used by the
 !! seasalt process and its schemes.
 !!
-!! Generated on: 2025-08-11T15:55:19.489699
+!! Generated on: 2025-08-13T21:36:09.642825
 !! Author: Barry Baker & Wei Li
 !! Version: 1.0.0
 
@@ -98,6 +98,9 @@ module SeaSaltCommon_Mod
       character(len=64) :: author = 'Barry Baker'
       character(len=16) :: algorithm_type = 'explicit'
 
+      ! Process configuration
+      logical :: affects_full_column = .false.  ! Surface-only processing
+
       ! Scheme parameters
       real(fp) :: scale_factor = 1.0  ! Emission scale factor
       logical :: weibull_flag = .false.  ! Apply Weibull distribution for particle size
@@ -122,6 +125,9 @@ module SeaSaltCommon_Mod
       character(len=64) :: author = 'Barry Baker'
       character(len=16) :: algorithm_type = 'explicit'
 
+      ! Process configuration
+      logical :: affects_full_column = .false.  ! Surface-only processing
+
       ! Scheme parameters
       real(fp) :: scale_factor = 1.0  ! Emission scale factor
       logical :: weibull_flag = .false.  ! Apply Weibull distribution for particle size
@@ -145,6 +151,9 @@ module SeaSaltCommon_Mod
       character(len=256) :: description = 'GEOS-Chem 2012 sea salt emission scheme with observational constraints'
       character(len=64) :: author = 'Barry Baker'
       character(len=16) :: algorithm_type = 'explicit'
+
+      ! Process configuration
+      logical :: affects_full_column = .false.  ! Surface-only processing
 
       ! Scheme parameters
       real(fp) :: scale_factor = 1.0  ! Emission scale factor

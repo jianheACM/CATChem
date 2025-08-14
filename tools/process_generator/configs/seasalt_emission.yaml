@@ -16,6 +16,7 @@ schemes:
     class_name: "GONG97"
     description: "Gong 1997 sea salt emission scheme"
     algorithm_type: "explicit"
+    affects_full_column: false
     reference: "Gong et al. [1997]"
     author: "Barry Baker"
 
@@ -56,6 +57,7 @@ schemes:
     class_name: "GONG03"
     description: "Gong 2003 sea salt emission scheme with improved sub- and super-micron treatment"
     algorithm_type: "explicit"
+    affects_full_column: false
     reference: "Gong [2003]"
     author: "Barry Baker"
 
@@ -95,6 +97,7 @@ schemes:
     class_name: "GEOS12"
     description: "GEOS-Chem 2012 sea salt emission scheme with observational constraints"
     algorithm_type: "explicit"
+    affects_full_column: false
     reference: "Jaeglé et al. [2011]"
     author: "Barry Baker"
 

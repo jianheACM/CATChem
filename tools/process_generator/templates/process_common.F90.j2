@@ -111,6 +111,9 @@ module {{ config.class_name }}Common_Mod
       character(len=64) :: author = '{{ scheme.author }}'
       character(len=16) :: algorithm_type = '{{ scheme.algorithm_type }}'
 
+      ! Process configuration
+      logical :: affects_full_column = {% if scheme.affects_full_column %}.true.{% else %}.false.{% endif %}  ! {% if scheme.affects_full_column %}Full column{% else %}Surface-only{% endif %} processing
+
       ! Scheme parameters
 {% for param_name, param_info in scheme.parameters.items() %}
 {% set param_type = param_info.type | default('auto') %}

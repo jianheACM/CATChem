@@ -20,7 +20,7 @@ module Process{{ config.class_name }}Interface_Mod
    use GridManager_Mod, only: GridManagerType
    use error_mod, only: CC_SUCCESS, CC_FAILURE, ErrorManagerType
    use DiagnosticManager_Mod, only: DiagnosticManagerType
-   use VirtualColumn_Mod, only: VirtualColumnType
+   use VirtualColumn_Mod, only: VirtualColumnType, VirtualMetType
 
    ! Core utilities (leverage existing infrastructure)
    use UnitConversion_Mod, only: UnitConverterType
@@ -352,6 +352,7 @@ contains
 
       ! Local variables for scheme calculation
 {% if scheme.required_met_fields %}
+      type(VirtualMetType), pointer :: met => null()  ! Pointer to meteorological data
       ! Meteorological fields
 {% for field in scheme.required_met_fields %}
 {% if field is string %}
@@ -371,15 +372,19 @@ contains
       real(fp), allocatable :: species_{{ prop }}(:)
 {% endfor %}
 {% endif %}
-      real(fp), allocatable :: species_conc(:)
-      real(fp), allocatable :: species_tendencies(:)
-      integer :: n_species, n_levels
+      real(fp), allocatable :: species_conc(:,:)
+      real(fp), allocatable :: species_tendencies(:,:)
+      integer :: n_species, n_levels, n_chem, n_emis, i, k
       integer, allocatable :: species_indices(:)
 
       rc = CC_SUCCESS
 
       ! Get dimensions from virtual column
-      n_levels = column%get_n_levels()
+      {% if scheme.affects_full_column %}
+      call column%get_dimensions(n_levels, n_chem, n_emis)  ! Full column processing
+      {% else %}
+      n_levels = 1  ! Surface-only processing
+      {% endif %}
       
       ! Get {{ config.name }} species information from process configuration
       n_species = this%process_config%{{ config.name }}_config%n_species
@@ -392,10 +397,37 @@ contains
       species_indices(1:n_species) = this%process_config%{{ config.name }}_config%species_indices(1:n_species)
 
       ! Allocate arrays
-      allocate(species_conc(n_species))
-      allocate(species_tendencies(n_species))
+      {% if scheme.affects_full_column %}
+      allocate(species_conc(n_levels, n_species))
+      allocate(species_tendencies(n_levels, n_species))
+      {% else %}
+      allocate(species_conc(1, n_species))
+      allocate(species_tendencies(1, n_species))
+      {% endif %}
 {% if scheme.required_met_fields %}
-      allocate({% for field in scheme.required_met_fields %}{% if field is string %}{{ field | lower | replace('-', '_') | replace('.', '_') }}(1){% else %}{{ field.variable_name }}({% if field.dimensions == "scalar" %}1{% else %}1{% endif %}){% endif %}{% if not loop.last %}, {% endif %}{% endfor %})
+      ! Allocate meteorological field arrays based on field type and process configuration
+{% for field in scheme.required_met_fields %}
+{% if field is string %}
+{% set field_name = field %}
+{% set var_name = field | lower | replace('-', '_') | replace('.', '_') %}
+{% else %}
+{% set field_name = field.name %}
+{% set var_name = field.variable_name %}
+{% endif %}
+{% if field_classifier.get_field_type(field_name) == '2d_surface' %}
+      allocate({{ var_name }}(1))  ! Surface field - always scalar
+{% elif field_classifier.get_field_type(field_name) == '3d_atmospheric' %}
+{% if scheme.affects_full_column %}
+      allocate({{ var_name }}(n_levels))  ! Full column atmospheric field
+{% else %}
+      allocate({{ var_name }}(1))  ! Surface level only
+{% endif %}
+{% elif field_classifier.get_field_type(field_name) == 'categorical' %}
+      allocate({{ var_name }}(1))  ! Categorical field - surface value
+{% else %}
+      allocate({{ var_name }}(1))  ! Default to scalar for unknown field types
+{% endif %}
+{% endfor %}
 {% endif %}
 {% if scheme.required_species_properties %}
       allocate({% for prop in scheme.required_species_properties %}species_{{ prop }}(n_species){% if not loop.last %}, {% endif %}{% endfor %})
@@ -403,20 +435,48 @@ contains
       species_tendencies = 0.0_fp
 
 {% if scheme.required_met_fields %}
-      ! Get meteorological fields from virtual column
+      ! Get meteorological data pointer from virtual column (VirtualMet pattern)
+      met => column%get_met()
+
+      ! Extract required fields from met pointer based on field type and processing mode
 {% for field in scheme.required_met_fields %}
 {% if field is string %}
-      call column%get_met_field('{{ field }}', {{ field | lower | replace('-', '_') | replace('.', '_') }}, rc)
+{% set field_name = field %}
+{% set var_name = field | lower | replace('-', '_') | replace('.', '_') %}
 {% else %}
-      call column%get_met_field('{{ field.name }}', {{ field.variable_name }}, rc)
+{% set field_name = field.name %}
+{% set var_name = field.variable_name %}
 {% endif %}
-      if (rc /= CC_SUCCESS) return
+{% if field_classifier.get_field_type(field_name) == '2d_surface' %}
+      {{ var_name }}(1) = met%{{ field_name }}  ! Surface field - scalar access
+{% elif field_classifier.get_field_type(field_name) == '3d_atmospheric' %}
+{% if scheme.affects_full_column %}
+      {{ var_name }}(1:n_levels) = met%{{ field_name }}(1:n_levels)  ! Full column atmospheric field
+{% else %}
+      {{ var_name }}(1) = met%{{ field_name }}(1)  ! Surface level only
+{% endif %}
+{% elif field_classifier.get_field_type(field_name) == 'categorical' %}
+      {{ var_name }}(1) = met%{{ field_name }}(1)  ! Categorical field - surface value
+{% else %}
+      {{ var_name }}(1) = met%{{ field_name }}  ! Default to scalar access for unknown field types
+{% endif %}
 {% endfor %}
 {% endif %}
 
       ! Get species concentrations from virtual column
-      call column%get_species_concentrations(species_indices, species_conc, rc)
-      if (rc /= CC_SUCCESS) return
+      {% if scheme.affects_full_column %}
+      ! Full column processing - get concentrations for all levels
+      do k = 1, n_levels
+         do i = 1, n_species
+            species_conc(k, i) = column%get_chem_field(species_indices(i), k)
+         end do
+      end do
+      {% else %}
+      ! Surface-only processing - get surface level concentrations
+      do i = 1, n_species
+         species_conc(1, i) = column%get_chem_field(species_indices(i), 1)
+      end do
+      {% endif %}
 
 {% if scheme.required_species_properties %}
       ! Get species properties from configuration (pre-loaded during initialization)
@@ -446,7 +506,21 @@ contains
       )
 
       ! Apply tendencies back to virtual column
-      call column%apply_species_tendencies(species_indices, species_tendencies, this%get_timestep(), rc)
+      {% if scheme.affects_full_column %}
+      ! Full column processing - apply tendencies to all levels
+      do k = 1, n_levels
+         do i = 1, n_species
+            call column%set_chem_field(k, species_indices(i), &
+                                      species_conc(k, i) + species_tendencies(k, i))
+         end do
+      end do
+      {% else %}
+      ! Surface-only processing - apply tendencies to surface level only
+      do i = 1, n_species
+         call column%set_chem_field(1, species_indices(i), &
+                                   species_conc(1, i) + species_tendencies(1, i))
+      end do
+      {% endif %}
 
    end subroutine run_{{ scheme.name }}_scheme_column
 

@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 import json
 from datetime import datetime
+import re
 
 # Configure logging
 logging.basicConfig(
@@ -59,6 +60,181 @@ class SchemeBehavior:
 
 
 @dataclass
+class MetFieldClassification:
+    """Classification for meteorological field types based on MetState definition."""
+    
+    def __init__(self, metstate_file: Optional[str] = None):
+        """Initialize with optional MetState file path for automatic field discovery."""
+        self.metstate_file = metstate_file
+        self._fields_cache = None
+        
+        # Fallback hardcoded lists for when MetState file is not available
+        self._fallback_2d_surface = [
+            'FROCEAN', 'FRSEAICE', 'FRLAKE', 'FRLAND', 'SST', 'TSK', 'SKINTEMP',
+            'U10M', 'V10M', 'T2M', 'Q2M', 'PS', 'SLP', 'USTAR', 'PBLH',
+            'SNOWH', 'ALBEDO', 'EMISS', 'HFX', 'QFX', 'LH', 'MOL', 'TS', 'TSKIN',
+            'QV2M', 'PHIS', 'SUNCOS', 'SWGDN', 'HFLUX', 'EFLUX', 'PRECCON',
+            'PRECLSC', 'PRECANV', 'TO3', 'TROPP', 'TropHt', 'Z0', 'LAI', 'AREA_M2'
+        ]
+        self._fallback_3d_atmospheric = [
+            'T', 'QV', 'P', 'PLE', 'DELP', 'U', 'V', 'OMEGA', 'W',
+            'RH', 'CLOUD', 'QC', 'QR', 'QI', 'QS', 'QG', 'PMID', 'AIRDEN', 
+            'THETA', 'SPHU', 'AIRNUMDEN', 'MAIRDEN', 'AVGW', 'DELP_DRY',
+            'DAIRMASS', 'AIRVOL', 'PEDGE_DRY', 'PEDGE', 'PMID_DRY', 'Z',
+            'ZMID', 'BXHEIGHT', 'TV', 'CLDF', 'CMFMC', 'DQRCU', 'DQRLSAN',
+            'DTRAIN', 'QL', 'PFICU', 'PFILSAN', 'PFLCU', 'PFLLSAN',
+            'TAUCLI', 'TAUCLW', 'F_OF_PBL', 'F_UNDER_PBLTOP'
+        ]
+        self._fallback_categorical = [
+            'SOILM', 'FRLANDUSE', 'FRSOIL', 'FRLAI', 'FRZ0', 'LU_INDEX', 
+            'VEGFRA', 'SOILTYP', 'SLOPETYP', 'XLAND', 'IVGTYP', 'ISLTYP', 
+            'VEGETATION_TYPE'
+        ]
+
+    def _parse_metstate_fields(self) -> Dict[str, tuple]:
+        """Parse MetState file to extract field definitions."""
+        if self._fields_cache is not None:
+            return self._fields_cache
+            
+        if not self.metstate_file or not Path(self.metstate_file).exists():
+            logger.warning(f"MetState file not found: {self.metstate_file}, using fallback classifications")
+            self._fields_cache = {}
+            return self._fields_cache
+            
+        try:
+            # Use the same parsing logic as generate_metstate_macros.py
+            fields_cache = {}
+            
+            with open(self.metstate_file, 'r') as f:
+                lines = f.readlines()
+
+            in_type = False
+            for line in lines:
+                if 'TYPE, PUBLIC :: MetStateType' in line:
+                    in_type = True
+                elif in_type and 'end type' in line.lower():
+                    break
+                elif in_type:
+                    # Match real(fp), allocatable :: name(dimensions)
+                    import re
+                    m = re.match(r'\s*REAL\(fp\),\s*ALLOCATABLE\s*::\s*(\w+)\s*\(([^)]*)\)', line, re.IGNORECASE)
+                    if m:
+                        name = m.group(1)
+                        dims = m.group(2)
+                        rank = dims.count(',') + 1
+                        fields_cache[name] = (rank, dims)
+                        
+            self._fields_cache = fields_cache
+            logger.info(f"Parsed {len(fields_cache)} fields from MetState file")
+            return self._fields_cache
+            
+        except Exception as e:
+            logger.warning(f"Error parsing MetState file {self.metstate_file}: {e}, using fallback classifications")
+            self._fields_cache = {}
+            return self._fields_cache
+
+    def get_field_type(self, field_name: str) -> str:
+        """Get the type of a meteorological field."""
+        fields = self._parse_metstate_fields()
+        
+        if field_name in fields:
+            rank, dims = fields[field_name]
+            
+            # Categorize based on rank and known categorical fields
+            if rank == 2:
+                return '2d_surface'
+            elif rank == 3:
+                # Check if it's a categorical 3D field (special dimensions)
+                if field_name in ['SOILM', 'FRLANDUSE', 'FRSOIL', 'FRLAI', 'FRZ0']:
+                    return 'categorical'
+                else:
+                    return '3d_atmospheric'
+            else:
+                # Scalar or other rank
+                return '2d_surface'  # Default
+        else:
+            # Use fallback classification
+            if field_name in self._fallback_2d_surface:
+                return '2d_surface'
+            elif field_name in self._fallback_3d_atmospheric:
+                return '3d_atmospheric'
+            elif field_name in self._fallback_categorical:
+                return 'categorical'
+            else:
+                # Default to 2d_surface for unknown fields
+                return '2d_surface'
+
+    def get_array_size(self, field_name: str, affects_full_column: bool) -> str:
+        """Get the array size specification for a field based on affects_full_column."""
+        field_type = self.get_field_type(field_name)
+        
+        if field_type == 'categorical':
+            return '(:)'  # Always 1D array for categorical
+        elif field_type == '2d_surface':
+            return ''  # Always scalar for 2D surface fields
+        elif field_type == '3d_atmospheric':
+            if affects_full_column:
+                return '(:)'  # 1D array for full column
+            else:
+                return ''  # Scalar for surface only
+        else:
+            return ''  # Default to scalar
+            
+    def get_all_2d_fields(self) -> List[str]:
+        """Get all 2D surface fields."""
+        fields = self._parse_metstate_fields()
+        result = []
+        
+        # From parsed fields
+        for field_name, (rank, dims) in fields.items():
+            if rank == 2:
+                result.append(field_name)
+                
+        # Add fallback fields not found in parsed file
+        for field_name in self._fallback_2d_surface:
+            if field_name not in result:
+                result.append(field_name)
+                
+        return sorted(result)
+        
+    def get_all_3d_atmospheric_fields(self) -> List[str]:
+        """Get all 3D atmospheric fields (excluding categorical)."""
+        fields = self._parse_metstate_fields()
+        result = []
+        
+        # From parsed fields
+        categorical_3d = {'SOILM', 'FRLANDUSE', 'FRSOIL', 'FRLAI', 'FRZ0'}
+        for field_name, (rank, dims) in fields.items():
+            if rank == 3 and field_name not in categorical_3d:
+                result.append(field_name)
+                
+        # Add fallback fields not found in parsed file
+        for field_name in self._fallback_3d_atmospheric:
+            if field_name not in result:
+                result.append(field_name)
+                
+        return sorted(result)
+        
+    def get_all_categorical_fields(self) -> List[str]:
+        """Get all categorical fields."""
+        fields = self._parse_metstate_fields()
+        result = []
+        
+        # From parsed fields
+        categorical_3d = {'SOILM', 'FRLANDUSE', 'FRSOIL', 'FRLAI', 'FRZ0'}
+        for field_name, (rank, dims) in fields.items():
+            if field_name in categorical_3d:
+                result.append(field_name)
+                
+        # Add fallback fields not found in parsed file
+        for field_name in self._fallback_categorical:
+            if field_name not in result:
+                result.append(field_name)
+                
+        return sorted(result)
+
+
+@dataclass
 class SchemeConfig:
     """Configuration for a process scheme."""
     name: str
@@ -71,6 +247,7 @@ class SchemeConfig:
     required_species_properties: List[str] = field(default_factory=list)
     scheme_diagnostics: List[Dict[str, str]] = field(default_factory=list)
     algorithm_type: str = "explicit"
+    affects_full_column: bool = False  # Whether scheme affects full atmospheric column
     scheme_type: str = ""  # Optional legacy field
     scheme_behavior: Optional[SchemeBehavior] = None
 
@@ -124,17 +301,38 @@ class ProcessValidationError(Exception):
 class ProcessGenerator:
     """Main process generator class."""
 
-    def __init__(self, template_dir: Optional[str] = None):
+    def __init__(self, template_dir: Optional[str] = None, metstate_file: Optional[str] = None):
         """Initialize the process generator.
 
         Args:
             template_dir: Directory containing Jinja2 templates. If None,
                          uses default templates in same directory as this script.
+            metstate_file: Path to MetState file for automatic field discovery. If None,
+                          tries to find it automatically relative to the script location.
         """
         if template_dir is None:
             template_dir = str(Path(__file__).parent / "templates")
 
         self.template_dir = Path(template_dir)
+        
+        # Try to find MetState file automatically if not provided
+        if metstate_file is None:
+            script_dir = Path(__file__).resolve().parent
+            # Look for metstate_mod.F90 relative to process generator
+            potential_paths = [
+                script_dir.parent.parent / "src" / "core" / "metstate_mod.F90",  # From tools/process_generator
+                script_dir / "../../src/core/metstate_mod.F90",  # Alternative relative path
+            ]
+            for path in potential_paths:
+                if path.exists():
+                    metstate_file = str(path)
+                    logger.info(f"Found MetState file automatically: {metstate_file}")
+                    break
+        
+        self.metstate_file = metstate_file
+        if metstate_file and not Path(metstate_file).exists():
+            logger.warning(f"MetState file not found: {metstate_file}")
+        
         self.env = Environment(
             loader=FileSystemLoader(str(self.template_dir)),
             autoescape=select_autoescape(['html', 'xml']),
@@ -461,9 +659,13 @@ class ProcessGenerator:
         # Collect all unique required species properties from all schemes
         all_required_species_properties = self.get_all_required_species_properties(config)
         
+        # Initialize field classification helper with MetState file
+        field_classifier = MetFieldClassification(self.metstate_file)
+        
         content = template.render(
             config=config,
             all_required_species_properties=all_required_species_properties,
+            field_classifier=field_classifier,
             generation_date=datetime.now().isoformat(),
             version=config.version,
             timestamp=datetime.now().isoformat()
@@ -486,9 +688,13 @@ class ProcessGenerator:
         # Collect all unique required species properties from all schemes
         all_required_species_properties = self.get_all_required_species_properties(config)
         
+        # Initialize field classification helper with MetState file
+        field_classifier = MetFieldClassification(self.metstate_file)
+        
         content = template.render(
             config=config,
             all_required_species_properties=all_required_species_properties,
+            field_classifier=field_classifier,
             generation_date=datetime.now().isoformat(),
             version=config.version,
             timestamp=datetime.now().isoformat()
@@ -770,6 +976,9 @@ Examples:
   # Generate a process from configuration
   python process_generator.py generate --config my_process.yaml
 
+  # Generate with automatic MetState field discovery
+  python process_generator.py generate --config my_process.yaml --metstate src/core/metstate_mod.F90
+
   # Validate a configuration file
   python process_generator.py validate --config my_process.yaml
 
@@ -778,26 +987,56 @@ Examples:
 
   # Generate with custom template directory
   python process_generator.py generate --config my_process.yaml --templates ./my_templates
+
+  # Inspect discovered meteorological fields
+  python process_generator.py fields --type all --verbose
+
+  # Show specific field types
+  python process_generator.py fields --type 2d --verbose
+  python process_generator.py fields --type 3d --verbose
+
+Features:
+  # Automatic MetState Field Discovery
+  The generator automatically discovers meteorological fields from the MetState definition file.
+  This ensures that field classifications (2D surface, 3D atmospheric, categorical) are always
+  up-to-date with the actual MetState implementation. The generator will attempt to find the
+  MetState file automatically, or you can specify it explicitly with --metstate.
+
+  Field Types:
+  - 2D Surface: FROCEAN, SST, USTAR, PBLH (scalar access)
+  - 3D Atmospheric: T, QV, P, U, V (array access when affects_full_column=true)
+  - Categorical: SOILM, FRLANDUSE (special dimension arrays)
         """
     )
 
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
 
     # Generate command
-    generate_parser = subparsers.add_parser('generate', help='Generate process implementation')
+    generate_parser = subparsers.add_parser('generate', 
+                                           help='Generate process implementation',
+                                           description='Generate complete process implementation from YAML configuration. '
+                                                     'Automatically discovers meteorological fields from MetState definition '
+                                                     'and generates proper VirtualMet pattern code.')
     generate_parser.add_argument('--config', '-c', required=True,
                                help='Path to YAML configuration file')
     generate_parser.add_argument('--output', '-o',
                                help='Output directory for generated files (overrides config file setting)')
     generate_parser.add_argument('--templates', '-t',
                                help='Path to template directory')
+    generate_parser.add_argument('--metstate', '-m',
+                               help='Path to MetState file for automatic field discovery')
     generate_parser.add_argument('--verbose', '-v', action='store_true',
                                help='Enable verbose output')
 
     # Validate command
-    validate_parser = subparsers.add_parser('validate', help='Validate configuration file')
+    validate_parser = subparsers.add_parser('validate', 
+                                           help='Validate configuration file',
+                                           description='Validate YAML configuration file syntax and check field compatibility '
+                                                     'with discovered MetState fields. Ensures configuration is ready for generation.')
     validate_parser.add_argument('--config', '-c', required=True,
                                help='Path to YAML configuration file')
+    validate_parser.add_argument('--metstate', '-m',
+                               help='Path to MetState file for automatic field discovery')
     validate_parser.add_argument('--verbose', '-v', action='store_true',
                                help='Enable verbose output')
 
@@ -807,6 +1046,19 @@ Examples:
                                default='emission', help='Type of process template')
     template_parser.add_argument('--output', '-o', required=True,
                                help='Output file for template')
+
+    # Fields command - show discovered MetState fields
+    fields_parser = subparsers.add_parser('fields', 
+                                         help='Show discovered MetState fields',
+                                         description='Display meteorological fields discovered from MetState definition. '
+                                                   'Fields are automatically classified into 2D surface, 3D atmospheric, '
+                                                   'and categorical types for proper code generation.')
+    fields_parser.add_argument('--metstate', '-m',
+                               help='Path to MetState file for field discovery')
+    fields_parser.add_argument('--type', '-t', choices=['2d', '3d', 'categorical', 'all'],
+                               default='all', help='Type of fields to show')
+    fields_parser.add_argument('--verbose', '-v', action='store_true',
+                               help='Enable verbose output')
 
     args = parser.parse_args()
 
@@ -820,7 +1072,7 @@ Examples:
 
     try:
         if args.command == 'generate':
-            generator = ProcessGenerator(args.templates)
+            generator = ProcessGenerator(args.templates, getattr(args, 'metstate', None))
             config = generator.load_config(args.config)
 
             # Override output directory if specified on command line
@@ -830,7 +1082,7 @@ Examples:
             generator.generate_process(config)
 
         elif args.command == 'validate':
-            generator = ProcessGenerator()
+            generator = ProcessGenerator(metstate_file=getattr(args, 'metstate', None))
             config = generator.load_config(args.config)
             logger.info(f"Configuration is valid: {args.config}")
 
@@ -842,6 +1094,38 @@ Examples:
                 yaml.dump(template_config, f, default_flow_style=False, sort_keys=False)
 
             logger.info(f"Template configuration written to: {args.output}")
+
+        elif args.command == 'fields':
+            generator = ProcessGenerator(metstate_file=getattr(args, 'metstate', None))
+            classifier = MetFieldClassification(generator.metstate_file)
+            
+            if args.type in ['2d', 'all']:
+                fields_2d = classifier.get_all_2d_fields()
+                logger.info(f"2D Surface fields ({len(fields_2d)}): {', '.join(fields_2d[:10])}{'...' if len(fields_2d) > 10 else ''}")
+                
+            if args.type in ['3d', 'all']:
+                fields_3d = classifier.get_all_3d_atmospheric_fields()
+                logger.info(f"3D Atmospheric fields ({len(fields_3d)}): {', '.join(fields_3d[:10])}{'...' if len(fields_3d) > 10 else ''}")
+                
+            if args.type in ['categorical', 'all']:
+                fields_cat = classifier.get_all_categorical_fields()
+                logger.info(f"Categorical fields ({len(fields_cat)}): {', '.join(fields_cat)}")
+            
+            if args.verbose:
+                if args.type in ['2d', 'all']:
+                    print(f"\nAll 2D Surface fields ({len(fields_2d)}):")
+                    for i, field in enumerate(fields_2d, 1):
+                        print(f"  {i:3d}. {field}")
+                        
+                if args.type in ['3d', 'all']:
+                    print(f"\nAll 3D Atmospheric fields ({len(fields_3d)}):")
+                    for i, field in enumerate(fields_3d, 1):
+                        print(f"  {i:3d}. {field}")
+                        
+                if args.type in ['categorical', 'all']:
+                    print(f"\nAll Categorical fields ({len(fields_cat)}):")
+                    for i, field in enumerate(fields_cat, 1):
+                        print(f"  {i:3d}. {field}")
 
     except ProcessValidationError as e:
         logger.error(f"Configuration validation failed: {e}")
