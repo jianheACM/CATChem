@@ -4,7 +4,7 @@
 !! This module defines the configuration types used by the
 !! seasalt process and its schemes.
 !!
-!! Generated on: 2025-08-13T21:36:09.642825
+!! Generated on: 2025-08-22T23:57:10.733946
 !! Author: Barry Baker & Wei Li
 !! Version: 1.0.0
 
@@ -63,6 +63,7 @@ module SeaSaltCommon_Mod
       ! Process settings
       character(len=32) :: scheme = 'gong97'
       logical :: is_active = .true.
+      logical :: diagnostics = .false.  ! Diagnostic switch
       real(fp) :: dt_min = 1.0_fp     ! Minimum time step (seconds)
       real(fp) :: dt_max = 3600.0_fp  ! Maximum time step (seconds)
 
@@ -344,6 +345,10 @@ contains
             "Missing required 'scheme' in processes/seasalt configuration")
          return
       end if
+
+      ! Load diagnostic switch
+      call config_data%get_logical("processes/seasalt/diagnostics", this%seasalt_config%diagnostics, ierr)
+      if (ierr /= CC_SUCCESS) this%seasalt_config%diagnostics = .false.  ! Default
 
       ! Species configuration is loaded from ChemState in load_species_from_chem_state
       ! The species come from the master species YAML file (CATChem_species.yml)

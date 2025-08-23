@@ -17,7 +17,7 @@
 !! - Memory management and array allocation
 !! - Integration with host model time stepping
 !!
-!! Generated on: 2025-08-13T21:36:09.733633
+!! Generated on: 2025-08-22T23:57:10.854042
 !! Author: Barry Baker
 !! Reference: Jaeglé et al. [2011]
 module SeaSaltScheme_GEOS12_Mod
@@ -59,14 +59,29 @@ contains
    !! @param[in]  sst    SST field [appropriate units]
    !! @param[in]  ustar    USTAR field [appropriate units]
    !! @param[in]  species_conc   Species concentrations [mol/mol] (num_layers, num_species)
-   !! @param[out] emission_flux  Emission fluxes [kg/m²/s] (num_layers, num_species)
+   !! @param[inout] species_tendencies  Species tendency terms [mol/mol/s] (num_layers, num_species)
+   !! @param[inout] diag_mass_emission_total    Total mass emission diagnostic [ug/m2/s]
+   !! @param[inout] diag_number_emission_total  Total number emission diagnostic [#/m2/s]
+   !! @param[inout] diag_mass_emission_per_bin   Mass emission per bin diagnostic [kg/m2/s] (num_species)
+   !! @param[inout] diag_number_emission_per_bin Number emission per bin diagnostic [#/m2/s] (num_species)
    pure subroutine compute_geos12( &
       num_layers, &
       num_species, &
       params, &
-      frocean, &      frseaice, &      sst, &      ustar, &
+      frocean, &
+      frseaice, &
+      sst, &
+      ustar, &
+      species_density, &
+      species_radius, &
+      species_lower_radius, &
+      species_upper_radius, &
       species_conc, &
-      emission_flux &
+      species_tendencies, &
+      diag_mass_emission_total, &
+      diag_number_emission_total, &
+      diag_mass_emission_per_bin, &
+      diag_number_emission_per_bin &
    )
 
       ! Arguments
@@ -77,8 +92,16 @@ contains
       real(fp), intent(in) :: frseaice(num_layers)
       real(fp), intent(in) :: sst(num_layers)
       real(fp), intent(in) :: ustar(num_layers)
+      real(fp), intent(in) :: species_density(num_species)  ! Species density property
+      real(fp), intent(in) :: species_radius(num_species)  ! Species radius property
+      real(fp), intent(in) :: species_lower_radius(num_species)  ! Species lower_radius property
+      real(fp), intent(in) :: species_upper_radius(num_species)  ! Species upper_radius property
       real(fp), intent(in) :: species_conc(num_layers, num_species)
-      real(fp), intent(out) :: emission_flux(num_layers, num_species)
+      real(fp), intent(inout) :: species_tendencies(num_layers, num_species)
+      real(fp), intent(inout), optional :: diag_mass_emission_total
+      real(fp), intent(inout), optional :: diag_number_emission_total  
+      real(fp), intent(inout), optional :: diag_mass_emission_per_bin(num_species)
+      real(fp), intent(inout), optional :: diag_number_emission_per_bin(num_species)
 
       ! Local variables
       integer :: k, species_idx
@@ -86,8 +109,9 @@ contains
       real(fp) :: environmental_factor
       real(fp) :: species_factor
 
-      ! Initialize output (pure subroutines must initialize all outputs)
-      emission_flux = 0.0_fp
+      ! Note: species_tendencies and diagnostic arrays are already initialized
+      ! by the host ProcessInterface before calling this subroutine.
+      ! Do not re-initialize them here.
 
       ! Main computation loop - CUSTOMIZE THIS SECTION FOR YOUR SCHEME
       do k = 1, num_layers
@@ -122,13 +146,29 @@ contains
 
             ! Compute emission flux using your scheme's formula
             ! This is a simple example - replace with your actual algorithm
-            emission_flux(k, species_idx) = base_emission_factor * &
+            species_tendencies(k, species_idx) = base_emission_factor * &
                                           environmental_factor * &
                                           species_factor * &
                                           (1.0_fp + species_conc(k, species_idx))
 
             ! Ensure non-negative emissions
-            emission_flux(k, species_idx) = max(0.0_fp, emission_flux(k, species_idx))
+            species_tendencies(k, species_idx) = max(0.0_fp, species_tendencies(k, species_idx))
+            
+            ! TODO: Update diagnostic fields here based on your scheme's requirements
+            ! Each process should implement custom diagnostic calculations
+            ! Example patterns:
+            if (present(diag_mass_emission_total)) then
+               ! Add your custom mass emission total calculation
+            end if
+            if (present(diag_number_emission_total)) then
+               ! Add your custom number emission total calculation  
+            end if
+            if (present(diag_mass_emission_per_bin)) then
+               ! Add your custom per-bin mass emission calculation
+            end if
+            if (present(diag_number_emission_per_bin)) then
+               ! Add your custom per-bin number emission calculation
+            end if
          end do
 
       end do
@@ -142,7 +182,7 @@ contains
    ! Examples: environmental response functions, species-specific calculations, etc.
 
    !> Example helper function for environmental response
-   pure function compute_geos12(met_value, reference_value) result(factor)
+   pure function compute_environmental_response_geos12(met_value, reference_value) result(factor)
       real(fp), intent(in) :: met_value       ! Meteorological value
       real(fp), intent(in) :: reference_value ! Reference value
       real(fp) :: factor
@@ -150,7 +190,7 @@ contains
       ! Simple exponential response - customize for your scheme
       factor = exp((met_value - reference_value) / reference_value)
       factor = max(0.0_fp, min(10.0_fp, factor))  ! Reasonable bounds
-   end function compute_geos12
+   end function compute_environmental_response_geos12
 
    !> Example helper function for species-specific scaling
    pure function compute_species_scaling_geos12(species_idx, params) result(scaling)

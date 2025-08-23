@@ -21,6 +21,7 @@ module StateManager_Mod
    use MetState_Mod, only: MetStateType
    use ChemState_Mod, only: ChemStateType
    use GridManager_Mod, only: GridManagerType
+   use DiagnosticManager_Mod, only: DiagnosticManagerType
    use VirtualColumn_Mod, only: VirtualColumnType
 
    implicit none
@@ -72,6 +73,7 @@ module StateManager_Mod
       type(MetStateType),   allocatable :: met_state   !< Meteorological fields
       type(ChemStateType),  allocatable :: chem_state  !< Chemical species concentrations
       type(ErrorManagerType)            :: error_mgr   !< Error manager
+      type(DiagnosticManagerType)       :: diag_mgr    !< Diagnostic manager
 
       ! Grid manager pointer (for column virtualization)
       type(GridManagerType), pointer :: grid_mgr => null()  !< Grid manager
@@ -92,6 +94,7 @@ module StateManager_Mod
       procedure :: get_met_state_ptr => manager_get_met_state_ptr
       procedure :: get_chem_state_ptr => manager_get_chem_state_ptr
       procedure :: get_error_manager => manager_get_error_manager
+      procedure :: get_diagnostic_manager => manager_get_diagnostic_manager
       procedure :: get_grid_manager => manager_get_grid_manager
       procedure :: create_virtual_column => manager_create_virtual_column
       procedure :: apply_virtual_column => manager_apply_virtual_column
@@ -221,6 +224,14 @@ contains
 
       error_mgr_ptr => this%error_mgr
    end function manager_get_error_manager
+
+   !> \brief Get pointer to diagnostic manager
+   function manager_get_diagnostic_manager(this) result(diag_mgr_ptr)
+      class(StateManagerType), intent(inout), target :: this
+      type(DiagnosticManagerType), pointer :: diag_mgr_ptr
+
+      diag_mgr_ptr => this%diag_mgr
+   end function manager_get_diagnostic_manager
 
    !> \brief Get pointer to grid manager
    function manager_get_grid_manager(this) result(grid_mgr_ptr)

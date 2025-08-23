@@ -347,6 +347,9 @@ class ProcessGenerator:
         self.env.filters['camel_case'] = self._camel_case
         self.env.filters['fortran_string'] = self._fortran_string
         self.env.filters['fortran_boolean'] = self._fortran_boolean
+        self.env.filters['infer_diagnostic_type'] = self._infer_diagnostic_type
+        self.env.filters['infer_diagnostic_properties'] = self._infer_diagnostic_properties
+        self.env.filters['analyze_required_dimensions'] = self._analyze_required_dimensions
 
     @staticmethod
     def _upper_snake_case(s: str) -> str:
@@ -378,6 +381,350 @@ class ProcessGenerator:
     def _fortran_boolean(b: bool) -> str:
         """Convert boolean to Fortran logical."""
         return ".true." if b else ".false."
+
+    def _infer_diagnostic_type(self, diagnostic: Dict[str, Any], config: ProcessConfig, scheme_config: SchemeConfig = None) -> str:
+        """Infer diagnostic data type from configuration and context."""
+        result = self._infer_diagnostic_properties(diagnostic, config, scheme_config)
+        return result['data_type']
+
+    def _infer_diagnostic_properties(self, diagnostic: Dict[str, Any], config: ProcessConfig, scheme_config: SchemeConfig = None) -> Dict[str, Any]:
+        """Infer diagnostic data type and dimensions from configuration and context."""
+        name = diagnostic.get('name', '')
+        units = diagnostic.get('units', '')
+        description = diagnostic.get('description', '')
+        
+        # Default result structure
+        result = {
+            'data_type': 'DIAG_REAL_2D',
+            'dimensions': ['nx', 'ny'],
+            'dimension_vars': ['dims_2d'],
+            'fortran_dims': 'dims_2d',
+            'dimension_source': 'grid_manager',  # How to get the dimensions
+            'dimension_type': 'scalar',  # 'scalar', '1d', '2d', '3d'
+            'dimension_name': None       # Primary dimension name for 1D arrays
+        }
+        
+        # 1. Check for explicit specifications
+        if 'data_type' in diagnostic:
+            result['data_type'] = diagnostic['data_type']
+        if 'dimensions' in diagnostic:
+            result['dimensions'] = diagnostic['dimensions']
+            result['fortran_dims'] = self._format_fortran_dims(diagnostic['dimensions'])
+            # Update dimension type based on number of dimensions
+            if len(diagnostic['dimensions']) == 0:
+                result['dimension_type'] = 'scalar'
+            elif len(diagnostic['dimensions']) == 1:
+                result['dimension_type'] = '1d'
+                result['dimension_name'] = diagnostic['dimensions'][0]
+            elif len(diagnostic['dimensions']) == 2:
+                result['dimension_type'] = '2d'
+            else:
+                result['dimension_type'] = '3d'
+            return result
+        
+        # 2. Infer from field name and description patterns (continuous variables)
+        name_lower = name.lower()
+        desc_lower = description.lower()
+        
+        # Check for species/bin/distribution patterns in name or description
+        if ('_per_bin' in name or '_per_species' in name or '_per_mode' in name or '_distribution' in name or
+            'per bin' in desc_lower or 'per species' in desc_lower or 'per mode' in desc_lower or 
+            'distribution' in desc_lower or 'size resolved' in desc_lower):
+            result.update({
+                'data_type': 'DIAG_REAL_3D',
+                'dimensions': ['nx', 'ny', 'n_species'],
+                'dimension_vars': ['dims_3d_species'],
+                'fortran_dims': 'dims_3d_species',
+                'dimension_source': 'process_config',
+                'dimension_type': '1d',
+                'dimension_name': 'n_species'
+            })
+        
+        # Check for level/vertical patterns in name or description
+        elif (('_per_level' in name or '_profile' in name or '_vertical' in name or 
+               '_column' in name or '_layer' in name) or
+              ('level' in desc_lower or 'levels' in desc_lower or 'vertical' in desc_lower or
+               'profile' in desc_lower or 'column' in desc_lower or 'layer' in desc_lower or
+               'atmospheric' in desc_lower)):
+            result.update({
+                'data_type': 'DIAG_REAL_3D',
+                'dimensions': ['nx', 'ny', 'nz'],
+                'dimension_vars': ['dims_3d_levels'],
+                'fortran_dims': 'dims_3d_levels',
+                'dimension_source': 'grid_manager',
+                'dimension_type': '1d',
+                'dimension_name': 'n_levels'
+            })
+        
+        elif '_per_soil_layer' in name or '_soil_profile' in name:
+            result.update({
+                'data_type': 'DIAG_REAL_3D',
+                'dimensions': ['nx', 'ny', 'n_soil_layers'],
+                'dimension_vars': ['dims_soil'],
+                'fortran_dims': 'dims_soil',
+                'dimension_source': 'process_config',
+                'dimension_type': '1d',
+                'dimension_name': 'n_soil_layers'
+            })
+        
+        # Check for column integrated patterns in name or description
+        elif (('_column_integrated' in name or '_vertically_integrated' in name) or
+              ('column integrated' in desc_lower or 'vertically integrated' in desc_lower or
+               'integrated' in desc_lower)):
+            # Column-integrated quantity - still 2D but from 3D process
+            result.update({
+                'data_type': 'DIAG_REAL_2D',
+                'dimensions': ['nx', 'ny'],
+                'dimension_vars': ['dims_2d'],
+                'fortran_dims': 'dims_2d',
+                'dimension_source': 'grid_manager',
+                'dimension_type': 'scalar',
+                'dimension_name': None
+            })
+        
+        # Check for flux/total patterns in name or description  
+        elif (('_total' in name or '_integrated' in name or 'flux' in name) or
+              ('total' in desc_lower or 'integrated' in desc_lower or 'flux' in desc_lower or
+               'surface' in desc_lower or 'emission' in desc_lower)):
+            # Check if it's a surface flux or column-integrated quantity
+            if scheme_config and getattr(scheme_config, 'affects_full_column', False):
+                # 3D process producing 2D output (column-integrated)
+                result.update({
+                    'data_type': 'DIAG_REAL_2D',
+                    'dimensions': ['nx', 'ny'],
+                    'dimension_vars': ['dims_2d'],
+                    'fortran_dims': 'dims_2d',
+                    'dimension_source': 'grid_manager',
+                    'dimension_type': 'scalar',
+                    'dimension_name': None
+                })
+            else:
+                # Surface process producing 2D output
+                result.update({
+                    'data_type': 'DIAG_REAL_2D',
+                    'dimensions': ['nx', 'ny'],
+                    'dimension_vars': ['dims_2d'],
+                    'fortran_dims': 'dims_2d',
+                    'dimension_source': 'grid_manager',
+                    'dimension_type': 'scalar',
+                    'dimension_name': None
+                })
+        
+        # 4. Infer from units
+        elif units in ['unitless', 'dimensionless', 'index', 'category', '1', '-']:
+            # Likely categorical or index data
+            if 'probability' in name.lower() or 'fraction' in name.lower():
+                result.update({
+                    'data_type': 'DIAG_REAL_2D',
+                    'dimensions': ['nx', 'ny'],
+                    'dimension_vars': ['dims_2d'],
+                    'fortran_dims': 'dims_2d',
+                    'dimension_source': 'grid_manager',
+                    'dimension_type': 'scalar',
+                    'dimension_name': None
+                })
+            else:
+                result.update({
+                    'data_type': 'DIAG_INTEGER_2D',
+                    'dimensions': ['nx', 'ny'],
+                    'dimension_vars': ['dims_2d'],
+                    'fortran_dims': 'dims_2d',
+                    'dimension_source': 'grid_manager',
+                    'dimension_type': 'scalar',
+                    'dimension_name': None
+                })
+        
+        # 5. Infer from process characteristics
+        elif hasattr(config, 'process_type'):
+            if config.process_type in ['emission', 'deposition']:
+                # Most emissions/deposition are surface processes
+                if scheme_config and getattr(scheme_config, 'affects_full_column', False):
+                    # Full column emissions (rare)
+                    result.update({
+                        'data_type': 'DIAG_REAL_3D',
+                        'dimensions': ['nx', 'ny', 'nz'],
+                        'dimension_vars': ['dims_3d_levels'],
+                        'fortran_dims': 'dims_3d_levels',
+                        'dimension_source': 'grid_manager',
+                        'dimension_type': '1d',
+                        'dimension_name': 'n_levels'
+                    })
+                else:
+                    # Surface emissions (common)
+                    if config.has_size_bins or (hasattr(config, 'species') and len(config.species) > 1):
+                        # Multi-species or size-resolved emissions
+                        result.update({
+                            'data_type': 'DIAG_REAL_3D',
+                            'dimensions': ['nx', 'ny', 'n_species'],
+                            'dimension_vars': ['dims_3d'],
+                            'fortran_dims': 'dims_3d',
+                            'dimension_source': 'process_config',
+                            'dimension_type': '1d',
+                            'dimension_name': 'n_species'
+                        })
+            elif config.process_type in ['chemistry', 'transport']:
+                # Usually affect full column
+                result.update({
+                    'data_type': 'DIAG_REAL_3D',
+                    'dimensions': ['nx', 'ny', 'nz'],
+                    'dimension_vars': ['dims_3d_levels'],
+                    'fortran_dims': 'dims_3d_levels',
+                    'dimension_source': 'grid_manager',
+                    'dimension_type': '1d',
+                    'dimension_name': 'n_levels'
+                })
+        
+        # 6. Infer from standard units
+        elif '/m2/' in units:  # Surface flux units (per square meter)
+            # Keep 2D inference (already set as default) - scalar per grid cell
+            result.update({
+                'dimension_type': 'scalar',
+                'dimension_name': None
+            })
+        elif '/m3/' in units:  # Volume concentration units (per cubic meter)
+            result.update({
+                'data_type': 'DIAG_REAL_3D',
+                'dimensions': ['nx', 'ny', 'nz'],
+                'dimension_vars': ['dims_3d_levels'],
+                'fortran_dims': 'dims_3d_levels',
+                'dimension_source': 'grid_manager',
+                'dimension_type': '1d',
+                'dimension_name': 'n_levels'
+            })
+        
+        # 7. Check diagnostic location (process vs scheme level)
+        elif scheme_config:  # Scheme-specific diagnostic
+            # Often more detailed (per-bin, per-level)
+            if result['data_type'] == 'DIAG_REAL_2D':  # Upgrade to 3D if still 2D
+                if config.has_size_bins or (hasattr(config, 'species') and len(config.species) > 1):
+                    result.update({
+                        'data_type': 'DIAG_REAL_3D',
+                        'dimensions': ['nx', 'ny', 'n_species'],
+                        'dimension_vars': ['dims_3d'],
+                        'fortran_dims': 'dims_3d',
+                        'dimension_source': 'process_config',
+                        'dimension_type': '1d',
+                        'dimension_name': 'n_species'
+                    })
+        
+        return result
+
+    def _analyze_required_dimensions(self, config: ProcessConfig) -> Dict[str, bool]:
+        """Analyze which dimension arrays are actually needed for a process configuration."""
+        required_dims = {
+            'dims_2d': False,
+            'dims_3d_species': False,
+            'dims_3d_levels': False,
+            'dims_soil': False,
+            'dims_landuse': False,
+            'dims_vegetation': False
+        }
+        
+        # Always need 2D for most surface diagnostics
+        required_dims['dims_2d'] = True
+        
+        # Check common diagnostics
+        if hasattr(config, 'diagnostics') and config.diagnostics:
+            for diagnostic in config.diagnostics:
+                diag_props = self._infer_diagnostic_properties(diagnostic, config)
+                fortran_dims = diag_props.get('fortran_dims', 'dims_2d')
+                if fortran_dims in required_dims:
+                    required_dims[fortran_dims] = True
+        
+        # Check scheme-specific diagnostics
+        if hasattr(config, 'schemes') and config.schemes:
+            for scheme in config.schemes:
+                if hasattr(scheme, 'scheme_diagnostics') and scheme.scheme_diagnostics:
+                    for diagnostic in scheme.scheme_diagnostics:
+                        diag_props = self._infer_diagnostic_properties(diagnostic, config, scheme)
+                        fortran_dims = diag_props.get('fortran_dims', 'dims_2d')
+                        if fortran_dims in required_dims:
+                            required_dims[fortran_dims] = True
+        
+        return required_dims
+
+    def _format_fortran_dims(self, dimensions: List[str]) -> str:
+        """Format dimension list for Fortran array declaration."""
+        if len(dimensions) == 1:
+            return 'dims_1d'
+        elif len(dimensions) == 2:
+            return 'dims_2d'
+        elif len(dimensions) == 3:
+            # Determine specific 3D dimension type based on third dimension
+            third_dim = dimensions[2].lower()
+            if 'nz' in third_dim or 'n_levels' in third_dim:
+                return 'dims_3d_levels'
+            elif 'n_soil' in third_dim:
+                return 'dims_soil'
+            elif 'n_landuse' in third_dim or 'n_veg' in third_dim:
+                return 'dims_landuse'
+            elif 'n_categories' in third_dim or 'n_types' in third_dim:
+                return 'dims_3d'  # Default for species/bins
+            else:
+                return 'dims_3d'  # Default for species/bins
+        elif len(dimensions) == 4:
+            return 'dims_4d'
+        else:
+            return f"[{', '.join(dimensions)}]"
+
+    def _get_dimension_source_and_access(self, dim_name: str) -> tuple:
+        """
+        Get the source manager and access pattern for a given dimension.
+        
+        Returns:
+            tuple: (source_manager, access_pattern, variable_declaration)
+        """
+        
+        # All dimensions come from GridManager for consistency
+        grid_mapping = {
+            'nx': ('grid_manager', 'nx', 'integer :: nx, ny, nz'),
+            'ny': ('grid_manager', 'ny', 'integer :: nx, ny, nz'),  
+            'nz': ('grid_manager', 'nz', 'integer :: nx, ny, nz'),
+            'nlev': ('grid_manager', 'nz', 'integer :: nx, ny, nz'),
+        }
+        
+        if dim_name in grid_mapping:
+            return grid_mapping[dim_name]
+        else:
+            # Default to process config for unknown dimensions
+            return ('process_config', f'process_config%{dim_name}', 
+                   f'integer :: {dim_name}')
+        
+    def _generate_dimension_access_code(self, diagnostics: List[Dict], template_vars: Dict) -> str:
+        """Generate code for accessing dimensional information."""
+        
+        required_dims = set()
+        grid_needed = False
+        
+        # Collect all required dimensions
+        for diag in diagnostics:
+            if 'dimensions' in diag:
+                for dim in diag['dimensions']:
+                    if dim not in ['nx', 'ny']:  # Skip basic grid dims
+                        required_dims.add(dim)
+                        source, _, _ = self._get_dimension_source_and_access(dim)
+                        if source == 'grid_manager':
+                            grid_needed = True
+        
+        code_lines = []
+        
+        if grid_needed:
+            code_lines.extend([
+                "      ! Get grid manager pointer for dimension access",
+                "      type(GridManagerType), pointer :: grid_mgr",
+                "      grid_mgr => state_manager%get_grid_manager()",
+                ""
+            ])
+            
+            # Get basic grid dimensions
+            code_lines.extend([
+                "      ! Get basic grid dimensions", 
+                "      integer :: nx, ny, nz",
+                "      call grid_mgr%get_dimensions(nx, ny, nz)",
+                ""
+            ])
+        
+        return '\n'.join(code_lines)
 
     def validate_config(self, config: ProcessConfig) -> None:
         """Validate process configuration.

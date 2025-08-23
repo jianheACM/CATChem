@@ -63,6 +63,9 @@ module {{ config.class_name }}Common_Mod
       ! Process settings
       character(len=32) :: scheme = '{{ config.default_scheme if config.default_scheme else config.schemes[0].name if config.schemes else "default" }}'
       logical :: is_active = .true.
+{% if config.diagnostics %}
+      logical :: diagnostics = .false.  ! Diagnostic switch
+{% endif %}
       real(fp) :: dt_min = 1.0_fp     ! Minimum time step (seconds)
       real(fp) :: dt_max = 3600.0_fp  ! Maximum time step (seconds)
 
@@ -285,6 +288,12 @@ contains
             "Missing required 'scheme' in processes/{{ config.name }} configuration")
          return
       end if
+
+{% if config.diagnostics %}
+      ! Load diagnostic switch
+      call config_data%get_logical("processes/{{ config.name }}/diagnostics", this%{{ config.name }}_config%diagnostics, ierr)
+      if (ierr /= CC_SUCCESS) this%{{ config.name }}_config%diagnostics = .false.  ! Default
+{% endif %}
 
       ! Species configuration is loaded from ChemState in load_species_from_chem_state
       ! The species come from the master species YAML file (CATChem_species.yml)
