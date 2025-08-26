@@ -262,9 +262,6 @@ class ProcessConfig:
     version: str = "1.0.0"
     license: str = "Apache 2.0"
     
-    # Column processing configuration
-    enable_column_processing: bool = True
-
     # Process behavior configuration (replaces hardcoded process_type)
     process_behavior: Optional[ProcessBehavior] = None
 
@@ -291,6 +288,13 @@ class ProcessConfig:
     generate_examples: bool = True
     output_dir: str = ""
     src_base_dir: str = "src/process"
+
+    @property
+    def enable_column_processing(self) -> bool:
+        """Determine if column processing is enabled based on parallelization strategy."""
+        if self.process_behavior and self.process_behavior.parallelization:
+            return self.process_behavior.parallelization == "column"
+        return True  # Default to column processing if not specified
 
 
 class ProcessValidationError(Exception):
@@ -1237,7 +1241,13 @@ class ProcessGenerator:
                 "author": "Your Name",
                 "version": "1.0.0",
                 "process_type": "emission",
-                "enable_column_processing": True,
+                "process_behavior": {
+                    "type": "source",
+                    "tendency_mode": "additive",
+                    "parallelization": "column",
+                    "spatial_scope": "column",
+                    "timestep_dependency": "independent"
+                },
                 "is_multiphase": False,
                 "has_size_bins": False,
                 "species": ["species1", "species2"],
@@ -1278,7 +1288,13 @@ class ProcessGenerator:
                 "author": "Your Name",
                 "version": "1.0.0",
                 "process_type": "chemistry",
-                "enable_column_processing": True,
+                "process_behavior": {
+                    "type": "transformation",
+                    "tendency_mode": "replacement",
+                    "parallelization": "column",
+                    "spatial_scope": "column",
+                    "timestep_dependency": "dependent"
+                },
                 "is_multiphase": True,
                 "has_size_bins": False,
                 "species": ["O3", "NO", "NO2", "OH"],

@@ -2,7 +2,7 @@
 !! \brief Unit tests for seasalt process
 !!
 !! This file contains unit tests for the seasalt process implementation
-!! Generated on: 2025-08-22T23:57:10.906282
+!! Generated on: 2025-08-26T11:29:44.349424
 
 program test_seasalt_unit
 
@@ -335,9 +335,6 @@ contains
 
 
       ! Add required meteorological fields
-      call state_manager%add_met_field('FROCEAN', error_handler)
-      call state_manager%add_met_field('FRSEAICE', error_handler)
-      call state_manager%add_met_field('SST', error_handler)
 
       ! Set dummy values for testing
       call state_manager%set_test_values(error_handler)

@@ -17,7 +17,7 @@
 !! - Memory management and array allocation
 !! - Integration with host model time stepping
 !!
-!! Generated on: 2025-08-22T23:57:10.854042
+!! Generated on: 2025-08-26T11:29:44.293149
 !! Author: Barry Baker
 !! Reference: Jaeglé et al. [2011]
 module SeaSaltScheme_GEOS12_Mod

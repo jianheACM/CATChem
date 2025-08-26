@@ -2,13 +2,28 @@ name: "seasalt1"
 description: "Process for computing sea salt aerosol emissions over ocean surfaces"
 class_name: "SeaSalt"
 process_type: "emission"
-enable_column_processing : true
 author: "Barry Baker & Wei Li"
 
-required_met_fields:
-  - "FROCEAN"
-  - "FRSEAICE"
-  - "SST"
+# Explicit process behavior configuration with species filtering
+process_behavior:
+  type: "source" #is not doing anything now
+  tendency_mode: "additive" #is not doing anything now
+  species_filter:
+    #type: "all_species"
+    type: "by_metadata"
+    metadata_flags:
+      - "is_seasalt"  # Filter for species with is_aero=true property
+    #type: "by_list"
+    #species_list:
+    #  - "SEASALT_FINE"      # Fine mode sea salt (< 1 μm)
+    #  - "SEASALT_COARSE"    # Coarse mode sea salt (1-10 μm)
+    #  - "SEASALT_SUPER"     # Super-coarse mode sea salt (> 10 μm)
+  tendency_calculation: "rates" #is not doing anything now
+  timestep_dependency: "independent" #is not doing anything now
+  spatial_scope: "column" #is not doing anything now
+  #only 'column' is supported for now
+  parallelization: "column"  #column: (extends(ColumnProcessInterface); use VirtualColumnType ) or global: (extends(ProcessInterface))  
+  memory_requirements: "low" #is not doing anything now
 
 schemes:
   gong97:

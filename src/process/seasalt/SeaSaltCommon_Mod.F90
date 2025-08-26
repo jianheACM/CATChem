@@ -4,7 +4,7 @@
 !! This module defines the configuration types used by the
 !! seasalt process and its schemes.
 !!
-!! Generated on: 2025-08-22T23:57:10.733946
+!! Generated on: 2025-08-26T11:29:44.161772
 !! Author: Barry Baker & Wei Li
 !! Version: 1.0.0
 
@@ -372,8 +372,11 @@ contains
 
    end subroutine seasalt_process_load_config
 
-   !> Load species from ChemState based on SeaSaltIndex
-   !! This should be called after process configuration is loaded and ChemState is available
+
+   !> Load species from ChemState 
+   !! This function is used for dynamic species discovery (by_metadata or all_species)
+   !! For 'all_species' mode: loads all species using nSpecies and SpeciesIndex
+   !! For 'by_metadata' mode: loads species by type using nSpeciesSeaSalt and SeaSaltIndex
    subroutine load_species_from_chem_state(this, chem_state, error_handler)
       use ChemState_Mod, only: ChemStateType
       
@@ -389,7 +392,8 @@ contains
          return
       end if
       
-      ! Get the count of seasalt species from ChemState
+      ! by_metadata mode: Load species by type from ChemState using dynamic metadata flag mapping
+      ! Dynamic mapping: is_seasalt -> nSpeciesSeaSalt and SeaSaltIndex
       this%seasalt_config%n_species = chem_state%nSpeciesSeaSalt
       
       if (this%seasalt_config%n_species <= 0) then
@@ -429,7 +433,8 @@ contains
       allocate(this%seasalt_config%species_radius(this%seasalt_config%n_species))
       allocate(this%seasalt_config%species_upper_radius(this%seasalt_config%n_species))
       
-      ! Copy species indices directly from ChemState
+      ! by_metadata mode: Copy indices from metadata-specific index array using dynamic mapping
+      ! Dynamic mapping: is_seasalt -> SeaSaltIndex
       this%seasalt_config%species_indices(1:this%seasalt_config%n_species) = &
          chem_state%SeaSaltIndex(1:this%seasalt_config%n_species)
       
@@ -441,7 +446,7 @@ contains
                trim(chem_state%SpeciesNames(this%seasalt_config%species_indices(i)))
          else
             call error_handler%set_error(CC_FAILURE, &
-               "Invalid species index in SeaSaltIndex")
+               "Invalid species index in species index array")
             return
          end if
       end do

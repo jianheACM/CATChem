@@ -48,7 +48,11 @@ module {{ config.class_name }}Common_Mod
       
    contains
       procedure, public :: load_from_config => {{ config.name }}_process_load_config
+{% if config.species %}
+      procedure, public :: load_species_from_list => load_species_from_list
+{% else %}
       procedure, public :: load_species_from_chem_state => load_species_from_chem_state
+{% endif %}
       procedure, public :: validate => {{ config.name }}_process_validate
       procedure, public :: finalize => {{ config.name }}_process_finalize
       procedure, public :: get_active_scheme_config => get_active_scheme_config
@@ -323,8 +327,101 @@ contains
 
    end subroutine {{ config.name }}_process_load_config
 
-   !> Load species from ChemState based on {{ config.class_name }}Index
-   !! This should be called after process configuration is loaded and ChemState is available
+{% if config.species %}
+   !> Load species from explicit list (from species_filter)
+   !! This function is used when explicit species are provided via species_filter
+   subroutine load_species_from_list(this, chem_state, error_handler)
+      use ChemState_Mod, only: ChemStateType
+      
+      class({{ config.class_name }}ProcessConfig), intent(inout) :: this
+      type(ChemStateType), pointer, intent(in) :: chem_state
+      type(ErrorManagerType), intent(inout) :: error_handler
+      
+      integer :: i, species_idx
+      character(len=32) :: species_name
+      logical :: found
+      
+      ! Explicit species list from configuration
+      character(len=32), parameter :: EXPLICIT_SPECIES({{ config.species|length }}) = [ &
+{% for species in config.species %}
+         "{{ species }}"{{ ", &" if not loop.last else " ]" }}
+{% endfor %}
+      
+      if (.not. associated(chem_state)) then
+         call error_handler%set_error(CC_FAILURE, &
+            "ChemState not associated in load_species_from_list")
+         return
+      end if
+      
+      ! Set number of species from explicit list
+      this%{{ config.name }}_config%n_species = {{ config.species|length }}
+      
+      ! Deallocate existing arrays if allocated
+      if (allocated(this%{{ config.name }}_config%species_names)) then
+         deallocate(this%{{ config.name }}_config%species_names)
+      end if
+      if (allocated(this%{{ config.name }}_config%species_indices)) then
+         deallocate(this%{{ config.name }}_config%species_indices)
+      end if
+{% if all_required_species_properties %}
+{% for prop in all_required_species_properties %}
+      if (allocated(this%{{ config.name }}_config%species_{{ prop }})) then
+         deallocate(this%{{ config.name }}_config%species_{{ prop }})
+      end if
+{% endfor %}
+{% endif %}
+      
+      ! Allocate arrays
+      allocate(this%{{ config.name }}_config%species_names(this%{{ config.name }}_config%n_species))
+      allocate(this%{{ config.name }}_config%species_indices(this%{{ config.name }}_config%n_species))
+{% if all_required_species_properties %}
+      
+      ! Allocate species properties arrays
+{% for prop in all_required_species_properties %}
+      allocate(this%{{ config.name }}_config%species_{{ prop }}(this%{{ config.name }}_config%n_species))
+{% endfor %}
+{% endif %}
+      
+      ! Find indices for each explicit species
+      do i = 1, this%{{ config.name }}_config%n_species
+         species_name = trim(EXPLICIT_SPECIES(i))
+         found = .false.
+         
+         ! Search for species in ChemState
+         do species_idx = 1, size(chem_state%SpeciesNames)
+            if (trim(chem_state%SpeciesNames(species_idx)) == species_name) then
+               this%{{ config.name }}_config%species_names(i) = species_name
+               this%{{ config.name }}_config%species_indices(i) = species_idx
+               found = .true.
+               exit
+            end if
+         end do
+         
+         if (.not. found) then
+            call error_handler%set_error(CC_FAILURE, &
+               "Species not found in ChemState: " // trim(species_name))
+            return
+         end if
+      end do
+      
+{% if all_required_species_properties %}
+      ! Load species properties from ChemState using found indices
+      do i = 1, this%{{ config.name }}_config%n_species
+         species_idx = this%{{ config.name }}_config%species_indices(i)
+{% for prop in all_required_species_properties %}
+         this%{{ config.name }}_config%species_{{ prop }}(i) = chem_state%ChemSpecies(species_idx)%{{ prop }}
+{% endfor %}
+      end do
+{% endif %}
+      
+   end subroutine load_species_from_list
+{% endif %}
+
+{% if not config.species %}
+   !> Load species from ChemState 
+   !! This function is used for dynamic species discovery (by_metadata or all_species)
+   !! For 'all_species' mode: loads all species using nSpecies and SpeciesIndex
+   !! For 'by_metadata' mode: loads species by type using nSpecies{{ config.class_name }} and {{ config.class_name }}Index
    subroutine load_species_from_chem_state(this, chem_state, error_handler)
       use ChemState_Mod, only: ChemStateType
       
@@ -340,7 +437,75 @@ contains
          return
       end if
       
-      ! Get the count of {{ config.name }} species from ChemState
+{% if config.process_behavior and config.process_behavior.species_filter and config.process_behavior.species_filter.type == "all_species" %}
+      ! all_species mode: Load all species from ChemState
+      this%{{ config.name }}_config%n_species = chem_state%nSpecies
+      
+      if (this%{{ config.name }}_config%n_species <= 0) then
+         call error_handler%set_error(CC_FAILURE, &
+            "No species found in ChemState")
+         return
+      end if
+      
+      ! Check if SpeciesIndex is allocated and has correct size
+      if (.not. allocated(chem_state%SpeciesIndex)) then
+         call error_handler%set_error(CC_FAILURE, &
+            "SpeciesIndex not allocated in ChemState")
+         return
+      end if
+      
+      if (size(chem_state%SpeciesIndex) < this%{{ config.name }}_config%n_species) then
+         call error_handler%set_error(CC_FAILURE, &
+            "SpeciesIndex size inconsistent with nSpecies")
+         return
+      end if
+{% else %}
+      ! by_metadata mode: Load species by type from ChemState using dynamic metadata flag mapping
+{% if config.process_behavior and config.process_behavior.species_filter and config.process_behavior.species_filter.metadata_flags %}
+{% set metadata_flag = config.process_behavior.species_filter.metadata_flags[0] %}
+{% if metadata_flag.startswith('is_') %}
+{% set flag_base = metadata_flag[3:] %}
+{% else %}
+{% set flag_base = metadata_flag %}
+{% endif %}
+{% if flag_base == 'seasalt' or flag_base == 'seaSalt' or flag_base == 'SeaSalt' %}
+{% set species_type = 'SeaSalt' %}
+{% elif flag_base == 'dust' or flag_base == 'Dust' %}
+{% set species_type = 'Dust' %}
+{% elif flag_base == 'gas' or flag_base == 'Gas' %}
+{% set species_type = 'Gas' %}
+{% elif flag_base == 'tracer' or flag_base == 'Tracer' %}
+{% set species_type = 'Tracer' %}
+{% elif flag_base == 'aerodrydep' or flag_base == 'aeroDryDep' or flag_base == 'AeroDryDep' %}
+{% set species_type = 'AeroDryDep' %}
+{% elif flag_base == 'drydep' or flag_base == 'dryDep' or flag_base == 'DryDep' %}
+{% set species_type = 'DryDep' %}
+{% else %}
+{% set species_type = flag_base | capitalize %}
+{% endif %}
+      ! Dynamic mapping: {{ metadata_flag }} -> nSpecies{{ species_type }} and {{ species_type }}Index
+      this%{{ config.name }}_config%n_species = chem_state%nSpecies{{ species_type }}
+      
+      if (this%{{ config.name }}_config%n_species <= 0) then
+         call error_handler%set_error(CC_FAILURE, &
+            "No {{ flag_base }} species found in ChemState")
+         return
+      end if
+      
+      ! Check if {{ species_type }}Index is allocated and has correct size
+      if (.not. allocated(chem_state%{{ species_type }}Index)) then
+         call error_handler%set_error(CC_FAILURE, &
+            "{{ species_type }}Index not allocated in ChemState")
+         return
+      end if
+      
+      if (size(chem_state%{{ species_type }}Index) < this%{{ config.name }}_config%n_species) then
+         call error_handler%set_error(CC_FAILURE, &
+            "{{ species_type }}Index size inconsistent with nSpecies{{ species_type }}")
+         return
+      end if
+{% else %}
+      ! No metadata flags specified, use class-based indexing
       this%{{ config.name }}_config%n_species = chem_state%nSpecies{{ config.class_name }}
       
       if (this%{{ config.name }}_config%n_species <= 0) then
@@ -361,6 +526,8 @@ contains
             "{{ config.class_name }}Index size inconsistent with nSpecies{{ config.class_name }}")
          return
       end if
+{% endif %}
+{% endif %}
       
       ! Deallocate existing arrays if allocated
       if (allocated(this%{{ config.name }}_config%species_names)) then
@@ -381,9 +548,43 @@ contains
 {% endfor %}
 {% endif %}
       
-      ! Copy species indices directly from ChemState
+{% if config.process_behavior and config.process_behavior.species_filter and config.process_behavior.species_filter.type == "all_species" %}
+      ! all_species mode: Copy all indices from SpeciesIndex
+      this%{{ config.name }}_config%species_indices(1:this%{{ config.name }}_config%n_species) = &
+         chem_state%SpeciesIndex(1:this%{{ config.name }}_config%n_species)
+{% else %}
+      ! by_metadata mode: Copy indices from metadata-specific index array using dynamic mapping
+{% if config.process_behavior and config.process_behavior.species_filter and config.process_behavior.species_filter.metadata_flags %}
+{% set metadata_flag = config.process_behavior.species_filter.metadata_flags[0] %}
+{% if metadata_flag.startswith('is_') %}
+{% set flag_base = metadata_flag[3:] %}
+{% else %}
+{% set flag_base = metadata_flag %}
+{% endif %}
+{% if flag_base == 'seasalt' or flag_base == 'seaSalt' or flag_base == 'SeaSalt' %}
+{% set species_type = 'SeaSalt' %}
+{% elif flag_base == 'dust' or flag_base == 'Dust' %}
+{% set species_type = 'Dust' %}
+{% elif flag_base == 'gas' or flag_base == 'Gas' %}
+{% set species_type = 'Gas' %}
+{% elif flag_base == 'tracer' or flag_base == 'Tracer' %}
+{% set species_type = 'Tracer' %}
+{% elif flag_base == 'aerodrydep' or flag_base == 'aeroDryDep' or flag_base == 'AeroDryDep' %}
+{% set species_type = 'AeroDryDep' %}
+{% elif flag_base == 'drydep' or flag_base == 'dryDep' or flag_base == 'DryDep' %}
+{% set species_type = 'DryDep' %}
+{% else %}
+{% set species_type = flag_base | capitalize %}
+{% endif %}
+      ! Dynamic mapping: {{ metadata_flag }} -> {{ species_type }}Index
+      this%{{ config.name }}_config%species_indices(1:this%{{ config.name }}_config%n_species) = &
+         chem_state%{{ species_type }}Index(1:this%{{ config.name }}_config%n_species)
+{% else %}
+      ! No metadata flags specified, use class-based indexing
       this%{{ config.name }}_config%species_indices(1:this%{{ config.name }}_config%n_species) = &
          chem_state%{{ config.class_name }}Index(1:this%{{ config.name }}_config%n_species)
+{% endif %}
+{% endif %}
       
       ! Get species names using the indices
       do i = 1, this%{{ config.name }}_config%n_species
@@ -393,7 +594,7 @@ contains
                trim(chem_state%SpeciesNames(this%{{ config.name }}_config%species_indices(i)))
          else
             call error_handler%set_error(CC_FAILURE, &
-               "Invalid species index in {{ config.class_name }}Index")
+               "Invalid species index in species index array")
             return
          end if
       end do
@@ -410,6 +611,7 @@ contains
 {% endif %}
       
    end subroutine load_species_from_chem_state
+{% endif %}
 
 {% for scheme in config.schemes %}
    !> Load {{ scheme.name }} scheme configuration from master YAML

@@ -207,8 +207,13 @@ contains
       this%met_state => state_manager%get_met_state_ptr()
       this%state_manager => state_manager
 
+{% if config.species %}
+      ! Load species from explicit list (from species_filter)
+      call this%process_config%load_species_from_list(this%chem_state, error_manager)
+{% else %}
       ! Load species from ChemState based on is_{{ config.name }} property
       call this%process_config%load_species_from_chem_state(this%chem_state, error_manager)
+{% endif %}
       if (error_manager%has_error()) then
          rc = CC_FAILURE
          return
@@ -779,57 +784,26 @@ contains
       class(Process{{ config.class_name }}Interface), intent(in) :: this
       character(len=64), allocatable :: field_names(:)
 
-      ! Combine common fields with scheme-specific fields
-      integer :: n_common, n_scheme, n_total
-      character(len=64), allocatable :: common_fields(:), scheme_fields(:)
-
-      ! Common fields for all schemes
-{% if config.required_met_fields %}
-      n_common = {{ config.required_met_fields | length }}
-      allocate(common_fields(n_common))
-{% for field in config.required_met_fields %}
-      common_fields({{ loop.index }}) = '{{ field }}'
-{% endfor %}
-{% else %}
-      n_common = 6
-      allocate(common_fields(n_common))
-      common_fields(1) = 'FROCEAN'
-      common_fields(2) = 'FRSEAICE'
-      common_fields(3) = 'U10M'
-      common_fields(4) = 'V10M'
-      common_fields(5) = 'SST'
-      common_fields(6) = 'USTAR'
-{% endif %}
-
-      ! Scheme-specific fields
+      ! Get scheme-specific fields based on selected scheme
       select case (trim(this%process_config%{{ config.name }}_config%scheme))
 {% for scheme in config.schemes %}
       case ('{{ scheme.name }}')
 {% if scheme.required_met_fields %}
-         n_scheme = {{ scheme.required_met_fields | length }}
-         allocate(scheme_fields(n_scheme))
+         allocate(field_names({{ scheme.required_met_fields | length }}))
 {% for field in scheme.required_met_fields %}
 {% if field is string %}
-         scheme_fields({{ loop.index }}) = '{{ field }}'
+         field_names({{ loop.index }}) = '{{ field }}'
 {% else %}
-         scheme_fields({{ loop.index }}) = '{{ field.name }}'
+         field_names({{ loop.index }}) = '{{ field.name }}'
 {% endif %}
 {% endfor %}
 {% else %}
-         n_scheme = 0
-         allocate(scheme_fields(0))
+         allocate(field_names(0))
 {% endif %}
 {% endfor %}
       case default
-         n_scheme = 0
-         allocate(scheme_fields(0))
+         allocate(field_names(0))
       end select
-
-      ! Combine fields
-      n_total = n_common + n_scheme
-      allocate(field_names(n_total))
-      if (n_common > 0) field_names(1:n_common) = common_fields
-      if (n_scheme > 0) field_names(n_common+1:n_total) = scheme_fields
 
    end function get_required_met_fields
 
