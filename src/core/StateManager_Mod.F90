@@ -73,10 +73,10 @@ module StateManager_Mod
       type(MetStateType),   allocatable :: met_state   !< Meteorological fields
       type(ChemStateType),  allocatable :: chem_state  !< Chemical species concentrations
       type(ErrorManagerType)            :: error_mgr   !< Error manager
-      type(DiagnosticManagerType)       :: diag_mgr    !< Diagnostic manager
 
-      ! Grid manager pointer (for column virtualization)
+      ! Manager pointers (owned by CATChemCore)
       type(GridManagerType), pointer :: grid_mgr => null()  !< Grid manager
+      type(DiagnosticManagerType), pointer :: diag_mgr => null()  !< Diagnostic manager
 
       ! Simple metadata
       logical :: is_initialized = .false.              !< Initialization status
@@ -94,8 +94,9 @@ module StateManager_Mod
       procedure :: get_met_state_ptr => manager_get_met_state_ptr
       procedure :: get_chem_state_ptr => manager_get_chem_state_ptr
       procedure :: get_error_manager => manager_get_error_manager
-      procedure :: get_diagnostic_manager => manager_get_diagnostic_manager
       procedure :: get_grid_manager => manager_get_grid_manager
+      procedure :: get_diagnostic_manager => manager_get_diagnostic_manager
+      procedure :: set_diagnostic_manager => manager_set_diagnostic_manager
       procedure :: create_virtual_column => manager_create_virtual_column
       procedure :: apply_virtual_column => manager_apply_virtual_column
       procedure :: populate_virtual_column => populate_virtual_column
@@ -225,14 +226,6 @@ contains
       error_mgr_ptr => this%error_mgr
    end function manager_get_error_manager
 
-   !> \brief Get pointer to diagnostic manager
-   function manager_get_diagnostic_manager(this) result(diag_mgr_ptr)
-      class(StateManagerType), intent(inout), target :: this
-      type(DiagnosticManagerType), pointer :: diag_mgr_ptr
-
-      diag_mgr_ptr => this%diag_mgr
-   end function manager_get_diagnostic_manager
-
    !> \brief Get pointer to grid manager
    function manager_get_grid_manager(this) result(grid_mgr_ptr)
       class(StateManagerType), intent(in), target :: this
@@ -244,6 +237,26 @@ contains
          nullify(grid_mgr_ptr)
       endif
    end function manager_get_grid_manager
+
+   !> \brief Get pointer to diagnostic manager
+   function manager_get_diagnostic_manager(this) result(diag_mgr_ptr)
+      class(StateManagerType), intent(inout), target :: this
+      type(DiagnosticManagerType), pointer :: diag_mgr_ptr
+
+      if (associated(this%diag_mgr)) then
+         diag_mgr_ptr => this%diag_mgr
+      else
+         nullify(diag_mgr_ptr)
+      endif
+   end function manager_get_diagnostic_manager
+
+   !> \brief Set pointer to diagnostic manager (called by CATChemCore)
+   subroutine manager_set_diagnostic_manager(this, diag_mgr_ptr)
+      class(StateManagerType), intent(inout) :: this
+      type(DiagnosticManagerType), intent(in), target :: diag_mgr_ptr
+
+      this%diag_mgr => diag_mgr_ptr
+   end subroutine manager_set_diagnostic_manager
 
    !> \brief Create virtual column for grid position (i,j)
    !! \details Creates a virtual column data container and populates it
@@ -331,22 +344,8 @@ contains
       call virtual_col%get_position(grid_i, grid_j)
       call virtual_col%get_dimensions(nlev, nspec_chem, nspec_emis)
 
-      ! Apply meteorological data back to 3D arrays
-      ! Update the primary meteorological field if available
-      do k = 1, nlev
-         met_value = virtual_col%get_met_field(k)
-
-         ! Apply to temperature if allocated (most common primary met field)
-         if (allocated(this%met_state%T)) then
-            this%met_state%T(grid_i, grid_j, k) = met_value
-         ! If temperature not available but potential temperature is, update that
-         else if (allocated(this%met_state%THETA)) then
-            this%met_state%THETA(grid_i, grid_j, k) = met_value
-         ! If air density is the primary field, update that
-         else if (allocated(this%met_state%AIRDEN)) then
-            this%met_state%AIRDEN(grid_i, grid_j, k) = met_value
-         endif
-      end do
+      ! NOTE: Meteorological data copy-back is not needed because VirtualMetType
+      ! uses pointers directly to the 3D arrays. Changes are automatically reflected.
 
       ! Apply chemical species data back to 3D arrays
       if (allocated(this%chem_state%ChemSpecies) .and. nspec_chem > 0) then

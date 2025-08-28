@@ -1,4 +1,4 @@
-name: "seasalt1"
+name: "seasalt"
 description: "Process for computing sea salt aerosol emissions over ocean surfaces"
 class_name: "SeaSalt"
 process_type: "emission"

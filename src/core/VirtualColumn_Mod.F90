@@ -29,8 +29,6 @@ module VirtualColumn_Mod
    !> \brief Virtual column data container for process-level column virtualization
    !! \details Enhanced virtual column with VirtualMetType for efficient meteorological field access
    type :: VirtualColumnType
-      private
-
       ! Meteorological data (pointers managed by VirtualMetType)
       type(VirtualMetType) :: met                            !< Meteorological fields
 

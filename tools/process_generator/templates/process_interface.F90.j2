@@ -24,14 +24,14 @@ module Process{{ config.class_name }}Interface_Mod
    use ProcessInterface_Mod, only: ProcessInterface, ColumnProcessInterface
    use StateManager_Mod, only: StateManagerType
    use GridManager_Mod, only: GridManagerType
-   use error_mod, only: CC_SUCCESS, CC_FAILURE, ErrorManagerType
+   use error_mod, only: CC_SUCCESS, CC_FAILURE, CC_Error, CC_Warning
    use DiagnosticManager_Mod, only: DiagnosticManagerType
    use DiagnosticInterface_Mod, only: DiagnosticRegistryType, DiagnosticFieldType, DiagnosticDataType
    use VirtualColumn_Mod, only: VirtualColumnType, VirtualMetType
 
    ! Core utilities (leverage existing infrastructure)
    use UnitConversion_Mod, only: UnitConverterType
-   use ConfigManager_Mod, only: ConfigDataType
+   use ConfigManager_Mod, only: ConfigManagerType
    use ChemState_Mod, only: ChemStateType
    use MetState_Mod, only: MetStateType
 
@@ -147,7 +147,8 @@ module Process{{ config.class_name }}Interface_Mod
 {% endif %}
 
 {% if config.diagnostics %}
-      ! Diagnostic procedures
+      ! Diagnostic procedures (override base class method)
+      procedure :: register_diagnostics => register_process_diagnostics
       procedure, private :: register_process_diagnostics
       procedure, private :: calculate_and_update_diagnostics
 {% endif %}
@@ -235,7 +236,7 @@ contains
 
 {% if config.diagnostics %}
       ! Register diagnostics for this process (only if diagnostics enabled)
-      call this%register_process_diagnostics(state_manager, rc)
+      call this%register_diagnostics(state_manager, rc)
       if (rc /= CC_SUCCESS) then
          return
       end if
@@ -405,14 +406,16 @@ contains
       type(StateManagerType), intent(in) :: state_manager
       type(ErrorManagerType), intent(inout) :: error_manager
 
-      type(ConfigDataType), pointer :: config_data
+      type(ConfigManagerType), pointer :: config_manager
 
-      ! Get configuration data from state manager
-      config_data => state_manager%get_config_data()
+      ! Get configuration manager from state manager
+      ! TODO: StateManager needs to provide ConfigManagerType access
+      ! For now, this will need to be updated when StateManager interface is enhanced
+      ! config_manager => state_manager%get_config_manager()
 
       ! Use the unified configuration loader from {{ config.class_name }}Common_Mod
       ! This handles the complexity of parsing hierarchical YAML into process-specific types
-      call this%process_config%load_from_config(config_data, error_manager)
+      call this%process_config%load_from_config(config_manager, error_manager)
       if (error_manager%has_error()) then
          call error_manager%add_context("Process{{ config.class_name }}Interface", &
             "Failed to parse {{ config.name }} process configuration")
@@ -826,17 +829,16 @@ contains
 {% if config.diagnostics %}
    !> Register diagnostic fields with the DiagnosticManager
 
-   subroutine register_process_diagnostics(this, state_manager, rc)
-      use DiagnosticInterface_Mod, only: DiagnosticFieldType, DiagnosticRegistryType, DIAG_REAL_2D, DIAG_REAL_3D
+   subroutine register_process_diagnostics(this, container, rc)
+      use DiagnosticInterface_Mod, only: DiagnosticRegistryType, DIAG_REAL_2D, DIAG_REAL_3D
       
       class(Process{{ config.class_name }}Interface), intent(inout) :: this
-      type(StateManagerType), intent(inout) :: state_manager
+      type(StateManagerType), intent(inout) :: container
       integer, intent(out) :: rc
       
       type(DiagnosticManagerType), pointer :: diag_mgr
       type(DiagnosticRegistryType), pointer :: registry
       type(GridManagerType), pointer :: grid_mgr
-      type(DiagnosticFieldType) :: diag_field
       character(len=32) :: selected_scheme
 {% set required_dims = config | analyze_required_dimensions %}
       integer :: nx, ny{% if required_dims.dims_3d_species %}, n_species{% endif %}{% if required_dims.dims_3d_levels %}, nz{% endif %}
@@ -858,11 +860,11 @@ contains
       endif
       
       ! Get managers
-      diag_mgr => state_manager%get_diagnostic_manager()
-      grid_mgr => state_manager%get_grid_manager()
+      diag_mgr => container%get_diagnostic_manager()
+      grid_mgr => container%get_grid_manager()
       
       ! Register this process with diagnostic manager (only once per process)
-      call diag_mgr%register_process('{{ config.name }}', state_manager, rc)
+      call diag_mgr%register_process('{{ config.name }}', container, rc)
       if (rc /= CC_SUCCESS) return
       
       ! Get the process registry for registering individual diagnostics
@@ -891,16 +893,10 @@ contains
 {% for diagnostic in config.diagnostics %}
       ! Register {{ diagnostic.name }}
 {% set diag_props = diagnostic | infer_diagnostic_properties(config) %}
-      call diag_field%create('{{ diagnostic.name }}', &
-                            '{{ diagnostic.description }}', &
-                            '{{ diagnostic.units }}', {{ diag_props.data_type }}, '{{ config.name }}', rc)
-      if (rc /= CC_SUCCESS) return
-      
-      ! Initialize data storage for field
-      call diag_field%initialize_data({{ diag_props.fortran_dims }}, rc)
-      if (rc /= CC_SUCCESS) return
-      
-      call registry%register_field(diag_field, rc)
+      call this%register_diagnostic_field(registry, '{{ diagnostic.name }}', &
+                                          '{{ diagnostic.description }}', &
+                                          '{{ diagnostic.units }}', {{ diag_props.data_type }}, &
+                                          '{{ config.name }}', {{ diag_props.fortran_dims }}, rc)
       if (rc /= CC_SUCCESS) return
       
 {% endfor %}
@@ -915,16 +911,10 @@ contains
          ! Register {{ scheme.name }}-specific diagnostics
 {% for diagnostic in scheme.scheme_diagnostics %}
 {% set diag_props = diagnostic | infer_diagnostic_properties(config, scheme) %}
-         call diag_field%create('{{ diagnostic.name }}', &
-                               '{{ diagnostic.description }}', &
-                               '{{ diagnostic.units }}', {{ diag_props.data_type }}, '{{ config.name }}', rc)
-         if (rc /= CC_SUCCESS) return
-         
-         ! Initialize data storage for field
-         call diag_field%initialize_data({{ diag_props.fortran_dims }}, rc)
-         if (rc /= CC_SUCCESS) return
-         
-         call registry%register_field(diag_field, rc)
+         call this%register_diagnostic_field(registry, '{{ diagnostic.name }}', &
+                                             '{{ diagnostic.description }}', &
+                                             '{{ diagnostic.units }}', {{ diag_props.data_type }}, &
+                                             '{{ config.name }}', {{ diag_props.fortran_dims }}, rc)
          if (rc /= CC_SUCCESS) return
          
 {% endfor %}
@@ -966,21 +956,21 @@ contains
 {% for diagnostic in config.diagnostics %}
 {% if ('per_level' in diagnostic.name or 'level' in diagnostic.name) and ('per_bin' in diagnostic.name or 'bin' in diagnostic.name) %}
       ! 2D diagnostic field
-      call this%update_diagnostics('{{ diagnostic.name }}', &
-                                    this%column_{{ diagnostic.name }}, &
-                                    i_col, j_col, rc)
+      call this%update_column_diagnostics('{{ diagnostic.name }}', &
+                                          this%column_{{ diagnostic.name }}, &
+                                          i_col, j_col, rc)
       if (rc /= CC_SUCCESS) return
 {% elif 'per_level' in diagnostic.name or 'level' in diagnostic.name or 'per_bin' in diagnostic.name or 'bin' in diagnostic.name %}
       ! 1D diagnostic field
-      call this%update_diagnostics('{{ diagnostic.name }}', &
-                                    this%column_{{ diagnostic.name }}, &
-                                    i_col, j_col, rc)
+      call this%update_column_diagnostics('{{ diagnostic.name }}', &
+                                          this%column_{{ diagnostic.name }}, &
+                                          i_col, j_col, rc)
       if (rc /= CC_SUCCESS) return
 {% else %}
       ! Scalar diagnostic field
-      call this%update_diagnostics('{{ diagnostic.name }}', &
-                                       this%column_{{ diagnostic.name }}, &
-                                       i_col, j_col, rc)
+      call this%update_column_diagnostics('{{ diagnostic.name }}', &
+                                          this%column_{{ diagnostic.name }}, &
+                                          i_col, j_col, rc)
       if (rc /= CC_SUCCESS) return
 {% endif %}
       
@@ -998,25 +988,25 @@ contains
 {% if ('per_level' in diagnostic.name or 'level' in diagnostic.name) and ('per_bin' in diagnostic.name or 'bin' in diagnostic.name) %}
          ! Update 2D level-species diagnostics (map to 4D global fields)
          if (allocated(this%column_{{ diagnostic.name }})) then
-            call this%update_diagnostics('{{ diagnostic.name }}', &
-                                          this%column_{{ diagnostic.name }}, &
-                                          i_col, j_col, rc)
+            call this%update_column_diagnostics('{{ diagnostic.name }}', &
+                                                this%column_{{ diagnostic.name }}, &
+                                                i_col, j_col, rc)
             if (rc /= CC_SUCCESS) return
          end if
 {% elif 'per_level' in diagnostic.name or 'level' in diagnostic.name or 'per_bin' in diagnostic.name or 'bin' in diagnostic.name %}
          ! Update 1D diagnostics (map to 3D global fields)
          if (allocated(this%column_{{ diagnostic.name }})) then
-            call this%update_diagnostics('{{ diagnostic.name }}', &
-                                          this%column_{{ diagnostic.name }}, &
-                                          i_col, j_col, rc)
+            call this%update_column_diagnostics('{{ diagnostic.name }}', &
+                                                this%column_{{ diagnostic.name }}, &
+                                                i_col, j_col, rc)
             if (rc /= CC_SUCCESS) return
          end if
 {% else %}
          ! Update scalar diagnostics (map to 2D global fields)
          if (allocated(this%column_{{ diagnostic.name }})) then
-            call this%update_diagnostics('{{ diagnostic.name }}', &
-                                          this%column_{{ diagnostic.name }}, &
-                                          i_col, j_col, rc)
+            call this%update_column_diagnostics('{{ diagnostic.name }}', &
+                                                this%column_{{ diagnostic.name }}, &
+                                                i_col, j_col, rc)
             if (rc /= CC_SUCCESS) return
          end if
 {% endif %}

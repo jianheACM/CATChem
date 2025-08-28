@@ -191,7 +191,7 @@ CONTAINS
             ChemState%nSpeciesAeroDryDep = ChemState%nSpeciesAeroDryDep + 1
             ChemState%nSpeciesDryDep = ChemState%nSpeciesDryDep + 1
          endif
-         if (ChemState%ChemSpecies(i)%is_drydep .eqv. .true. .and. 
+         if (ChemState%ChemSpecies(i)%is_drydep .eqv. .true. .and. &
              ChemState%ChemSpecies(i)%is_aerosol .eqv. .true.) then
             ChemState%nSpeciesAeroDryDep = ChemState%nSpeciesAeroDryDep + 1
          endif

@@ -12,8 +12,9 @@ module {{ config.class_name }}Common_Mod
 
    use iso_fortran_env, only: fp => real64
    use precision_mod, only: fp
-   use Error_Mod, only: CC_SUCCESS, CC_FAILURE, ErrorManagerType
-   use ConfigManager_Mod, only: ConfigDataType  ! Add ConfigManager integration
+   use error_mod, only: CC_SUCCESS, CC_FAILURE, CC_Error, CC_Warning, ErrorManagerType, &
+                        ERROR_INVALID_CONFIG, ERROR_INVALID_STATE, ERROR_NOT_FOUND
+   use ConfigManager_Mod, only: ConfigManagerType  ! ConfigManager integration
    use StateManager_Mod, only: StateManagerType  ! Add StateManager integration
 
    implicit none
@@ -28,38 +29,6 @@ module {{ config.class_name }}Common_Mod
 
    ! Export utility functions
    public :: int_to_string
-
-   !> Unified process configuration type that bridges ConfigManager and process-specific configs
-   !! This is the main configuration type that ProcessInterface should use
-   type :: {{ config.class_name }}ProcessConfig
-      
-      ! Process metadata
-      character(len=64) :: process_name = '{{ config.name }}'
-      character(len=16) :: process_version = '1.0.0'
-      logical :: is_active = .true.
-      
-      ! Process-specific configuration (delegate to {{ config.class_name }}Config)
-      type({{ config.class_name }}Config) :: {{ config.name }}_config
-      
-      ! Scheme configurations
-{% for scheme in config.schemes %}
-      type({{ config.class_name }}Scheme{{ scheme.class_name }}Config) :: {{ scheme.name }}_config
-{% endfor %}
-      
-   contains
-      procedure, public :: load_from_config => {{ config.name }}_process_load_config
-{% if config.species %}
-      procedure, public :: load_species_from_list => load_species_from_list
-{% else %}
-      procedure, public :: load_species_from_chem_state => load_species_from_chem_state
-{% endif %}
-      procedure, public :: validate => {{ config.name }}_process_validate
-      procedure, public :: finalize => {{ config.name }}_process_finalize
-      procedure, public :: get_active_scheme_config => get_active_scheme_config
-{% for scheme in config.schemes %}
-      procedure, private :: load_{{ scheme.name }}_config
-{% endfor %}
-   end type {{ config.class_name }}ProcessConfig
 
    !> Main configuration type for {{ config.name }} process
    type :: {{ config.class_name }}Config
@@ -147,25 +116,58 @@ module {{ config.class_name }}Common_Mod
 
 {% endfor %}
 
+   !> Unified process configuration type that bridges ConfigManager and process-specific configs
+   !! This is the main configuration type that ProcessInterface should use
+   type :: {{ config.class_name }}ProcessConfig
+      
+      ! Process metadata
+      character(len=64) :: process_name = '{{ config.name }}'
+      character(len=16) :: process_version = '1.0.0'
+      logical :: is_active = .true.
+      
+      ! Process-specific configuration (delegate to {{ config.class_name }}Config)
+      type({{ config.class_name }}Config) :: {{ config.name }}_config
+      
+      ! Scheme configurations
+{% for scheme in config.schemes %}
+      type({{ config.class_name }}Scheme{{ scheme.class_name }}Config) :: {{ scheme.name }}_config
+{% endfor %}
+      
+   contains
+      procedure, public :: load_from_config => {{ config.name }}_process_load_config
+{% if config.species %}
+      procedure, public :: load_species_from_list => load_species_from_list
+{% else %}
+      procedure, public :: load_species_from_chem_state => load_species_from_chem_state
+{% endif %}
+      procedure, public :: validate => {{ config.name }}_process_validate
+      procedure, public :: finalize => {{ config.name }}_process_finalize
+      procedure, public :: get_active_scheme_config => get_active_scheme_config
+{% for scheme in config.schemes %}
+      procedure, private :: load_{{ scheme.name }}_config
+{% endfor %}
+   end type {{ config.class_name }}ProcessConfig
+
 contains
 
    !> Validate {{ config.name }} configuration
    subroutine validate_{{ config.name }}_config(this, error_handler)
       class({{ config.class_name }}Config), intent(inout) :: this
-      type(ErrorHandler), intent(inout) :: error_handler
+      type(ErrorManagerType), intent(inout) :: error_handler
 
       character(len=256) :: error_msg
+      integer :: rc
 
       ! Validate time step bounds
       if (this%dt_min <= 0.0_fp) then
-         call error_handler%set_error(ERROR_CONFIG, &
-            "Minimum time step must be positive")
+         call error_handler%report_error(ERROR_INVALID_CONFIG, &
+            "Minimum time step must be positive", rc)
          return
       end if
 
       if (this%dt_max < this%dt_min) then
-         call error_handler%set_error(ERROR_CONFIG, &
-            "Maximum time step must be >= minimum time step")
+         call error_handler%report_error(ERROR_INVALID_CONFIG, &
+            "Maximum time step must be >= minimum time step", rc)
          return
       end if
 
@@ -181,7 +183,7 @@ contains
 {% endif %}
 {% endfor %}
          write(error_msg, '(A)') "Invalid scheme: " // trim(this%scheme)
-         call error_handler%set_error(ERROR_CONFIG, error_msg)
+         call error_handler%report_error(ERROR_INVALID_CONFIG, error_msg, rc)
          return
       end if
 
@@ -234,7 +236,7 @@ contains
    !> Validate {{ scheme.name }} scheme configuration
    subroutine validate_{{ scheme.name }}_config(this, error_handler)
       class({{ config.class_name }}Scheme{{ scheme.class_name }}Config), intent(inout) :: this
-      type(ErrorHandler), intent(inout) :: error_handler
+      type(ErrorManagerType), intent(inout) :: error_handler
 
       ! TODO: Add scheme-specific validation
 
@@ -264,39 +266,39 @@ contains
    !> Load unified process configuration from ConfigManager
    !! This is the main function that ProcessInterface.parse_process_config should call
    !! Process reads its configuration directly from the master YAML via ConfigManager
-   subroutine {{ config.name }}_process_load_config(this, config_data, error_handler)
+   subroutine {{ config.name }}_process_load_config(this, config_manager, error_handler)
       class({{ config.class_name }}ProcessConfig), intent(inout) :: this
-      type(ConfigDataType), intent(in) :: config_data
+      type(ConfigManagerType), intent(inout) :: config_manager
       type(ErrorManagerType), intent(inout) :: error_handler
 
       character(len=256) :: scheme_name
-      integer :: ierr
+      integer :: ierr, rc
 
       ! Process reads directly from master YAML structure: processes.{{ config.name }}.*
       ! ConfigManager provides generic YAML access, process handles its own configuration
       
       ! Load process metadata
-      call config_data%get_string("processes/{{ config.name }}/name", this%process_name, ierr)
-      if (ierr /= CC_SUCCESS) this%process_name = "{{ config.name }}"  ! default
+      call config_manager%get_string("processes/{{ config.name }}/name", this%process_name, rc, "{{ config.name }}")
+      if (rc /= CC_SUCCESS) this%process_name = "{{ config.name }}"  ! default
 
-      call config_data%get_string("processes/{{ config.name }}/version", this%process_version, ierr)
-      if (ierr /= CC_SUCCESS) this%process_version = "1.0.0"  ! default
+      call config_manager%get_string("processes/{{ config.name }}/version", this%process_version, rc, "1.0.0")
+      if (rc /= CC_SUCCESS) this%process_version = "1.0.0"  ! default
 
-      call config_data%get_logical("processes/{{ config.name }}/activate", this%is_active, ierr)
-      if (ierr /= CC_SUCCESS) this%is_active = .true.  ! default
+      call config_manager%get_logical("processes/{{ config.name }}/activate", this%is_active, rc, .true.)
+      if (rc /= CC_SUCCESS) this%is_active = .true.  ! default
 
       ! Load process-specific configuration directly from master YAML
-      call config_data%get_string("processes/{{ config.name }}/scheme", this%{{ config.name }}_config%scheme, ierr)
-      if (ierr /= CC_SUCCESS) then
-         call error_handler%set_error(CC_FAILURE, &
-            "Missing required 'scheme' in processes/{{ config.name }} configuration")
+      call config_manager%get_string("processes/{{ config.name }}/scheme", this%{{ config.name }}_config%scheme, rc, "{{ config.schemes[0].name if config.schemes else 'default' }}")
+      if (rc /= CC_SUCCESS) then
+         call error_handler%report_error(ERROR_INVALID_CONFIG, &
+            "Missing required 'scheme' in processes/{{ config.name }} configuration", rc)
          return
       end if
 
 {% if config.diagnostics %}
       ! Load diagnostic switch
-      call config_data%get_logical("processes/{{ config.name }}/diagnostics", this%{{ config.name }}_config%diagnostics, ierr)
-      if (ierr /= CC_SUCCESS) this%{{ config.name }}_config%diagnostics = .false.  ! Default
+      call config_manager%get_logical("processes/{{ config.name }}/diagnostics", this%{{ config.name }}_config%diagnostics, rc, .false.)
+      if (rc /= CC_SUCCESS) this%{{ config.name }}_config%diagnostics = .false.  ! Default
 {% endif %}
 
       ! Species configuration is loaded from ChemState in load_species_from_chem_state
@@ -306,9 +308,8 @@ contains
 {% if config.process_specific_params %}
       ! Load process-specific parameters from master YAML
 {% for param_name, param_info in config.process_specific_params.items() %}
-      call config_data%get_{{ param_info.yaml_type | default('real') }}("processes/{{ config.name }}/{{ param_name }}", &
-           this%{{ config.name }}_config%{{ param_name }}, ierr)
-      if (ierr /= CC_SUCCESS) this%{{ config.name }}_config%{{ param_name }} = {{ param_info.default }}
+      call config_manager%get_{{ param_info.yaml_type | default('real') }}("processes/{{ config.name }}/{{ param_name }}", &
+           this%{{ config.name }}_config%{{ param_name }}, ierr, {{ param_info.default }})
 {% endfor %}
 {% endif %}
 
@@ -317,10 +318,10 @@ contains
       select case (scheme_name)
 {% for scheme in config.schemes %}
       case ('{{ scheme.name }}')
-         call this%load_{{ scheme.name }}_config(config_data, error_handler)
+         call this%load_{{ scheme.name }}_config(config_manager, error_handler)
 {% endfor %}
       case default
-         call error_handler%set_error(CC_FAILURE, &
+         call error_handler%report_error(ERROR_INVALID_STATE, &
             "Unknown {{ config.name }} scheme: " // trim(scheme_name))
          return
       end select
@@ -348,8 +349,8 @@ contains
 {% endfor %}
       
       if (.not. associated(chem_state)) then
-         call error_handler%set_error(CC_FAILURE, &
-            "ChemState not associated in load_species_from_list")
+         call error_handler%report_error(ERROR_INVALID_STATE, &
+            "ChemState not associated in load_species_from_list", rc)
          return
       end if
       
@@ -398,7 +399,7 @@ contains
          end do
          
          if (.not. found) then
-            call error_handler%set_error(CC_FAILURE, &
+            call error_handler%report_error(ERROR_INVALID_STATE, &
                "Species not found in ChemState: " // trim(species_name))
             return
          end if
@@ -432,8 +433,8 @@ contains
       integer :: i
       
       if (.not. associated(chem_state)) then
-         call error_handler%set_error(CC_FAILURE, &
-            "ChemState not associated in load_species_from_chem_state")
+         call error_handler%report_error(ERROR_INVALID_STATE, &
+            "ChemState not associated in load_species_from_chem_state", rc)
          return
       end if
       
@@ -442,21 +443,21 @@ contains
       this%{{ config.name }}_config%n_species = chem_state%nSpecies
       
       if (this%{{ config.name }}_config%n_species <= 0) then
-         call error_handler%set_error(CC_FAILURE, &
-            "No species found in ChemState")
+         call error_handler%report_error(ERROR_INVALID_STATE, &
+            "No species found in ChemState", rc)
          return
       end if
       
       ! Check if SpeciesIndex is allocated and has correct size
       if (.not. allocated(chem_state%SpeciesIndex)) then
-         call error_handler%set_error(CC_FAILURE, &
-            "SpeciesIndex not allocated in ChemState")
+         call error_handler%report_error(ERROR_INVALID_STATE, &
+            "SpeciesIndex not allocated in ChemState", rc)
          return
       end if
       
       if (size(chem_state%SpeciesIndex) < this%{{ config.name }}_config%n_species) then
-         call error_handler%set_error(CC_FAILURE, &
-            "SpeciesIndex size inconsistent with nSpecies")
+         call error_handler%report_error(ERROR_INVALID_STATE, &
+            "SpeciesIndex size inconsistent with nSpecies", rc)
          return
       end if
 {% else %}
@@ -487,21 +488,21 @@ contains
       this%{{ config.name }}_config%n_species = chem_state%nSpecies{{ species_type }}
       
       if (this%{{ config.name }}_config%n_species <= 0) then
-         call error_handler%set_error(CC_FAILURE, &
-            "No {{ flag_base }} species found in ChemState")
+         call error_handler%report_error(ERROR_INVALID_STATE, &
+            "No {{ flag_base }} species found in ChemState", rc)
          return
       end if
       
       ! Check if {{ species_type }}Index is allocated and has correct size
       if (.not. allocated(chem_state%{{ species_type }}Index)) then
-         call error_handler%set_error(CC_FAILURE, &
-            "{{ species_type }}Index not allocated in ChemState")
+         call error_handler%report_error(ERROR_INVALID_STATE, &
+            "{{ species_type }}Index not allocated in ChemState", rc)
          return
       end if
       
       if (size(chem_state%{{ species_type }}Index) < this%{{ config.name }}_config%n_species) then
-         call error_handler%set_error(CC_FAILURE, &
-            "{{ species_type }}Index size inconsistent with nSpecies{{ species_type }}")
+         call error_handler%report_error(ERROR_INVALID_STATE, &
+            "{{ species_type }}Index size inconsistent with nSpecies{{ species_type }}", rc)
          return
       end if
 {% else %}
@@ -509,21 +510,21 @@ contains
       this%{{ config.name }}_config%n_species = chem_state%nSpecies{{ config.class_name }}
       
       if (this%{{ config.name }}_config%n_species <= 0) then
-         call error_handler%set_error(CC_FAILURE, &
-            "No {{ config.name }} species found in ChemState")
+         call error_handler%report_error(ERROR_INVALID_STATE, &
+            "No {{ config.name }} species found in ChemState", rc)
          return
       end if
       
       ! Check if {{ config.class_name }}Index is allocated and has correct size
       if (.not. allocated(chem_state%{{ config.class_name }}Index)) then
-         call error_handler%set_error(CC_FAILURE, &
-            "{{ config.class_name }}Index not allocated in ChemState")
+         call error_handler%report_error(ERROR_INVALID_STATE, &
+            "{{ config.class_name }}Index not allocated in ChemState", rc)
          return
       end if
       
       if (size(chem_state%{{ config.class_name }}Index) < this%{{ config.name }}_config%n_species) then
-         call error_handler%set_error(CC_FAILURE, &
-            "{{ config.class_name }}Index size inconsistent with nSpecies{{ config.class_name }}")
+         call error_handler%report_error(ERROR_INVALID_STATE, &
+            "{{ config.class_name }}Index size inconsistent with nSpecies{{ config.class_name }}", rc)
          return
       end if
 {% endif %}
@@ -593,8 +594,8 @@ contains
             this%{{ config.name }}_config%species_names(i) = &
                trim(chem_state%SpeciesNames(this%{{ config.name }}_config%species_indices(i)))
          else
-            call error_handler%set_error(CC_FAILURE, &
-               "Invalid species index in species index array")
+            call error_handler%report_error(ERROR_INVALID_STATE, &
+               "Invalid species index in species index array", rc)
             return
          end if
       end do
@@ -615,12 +616,12 @@ contains
 
 {% for scheme in config.schemes %}
    !> Load {{ scheme.name }} scheme configuration from master YAML
-   subroutine load_{{ scheme.name }}_config(this, config_data, error_handler)
+   subroutine load_{{ scheme.name }}_config(this, config_manager, error_handler)
       class({{ config.class_name }}ProcessConfig), intent(inout) :: this
-      type(ConfigDataType), intent(in) :: config_data
+      type(ConfigManagerType), intent(inout) :: config_manager
       type(ErrorManagerType), intent(inout) :: error_handler
 
-      integer :: ierr
+      integer :: ierr, rc
 
       ! Load scheme parameters directly from processes/{{ config.name }}/{{ scheme.name }}/* in master YAML
 {% for param_name, param_info in scheme.parameters.items() %}
@@ -637,9 +638,9 @@ contains
 {% set yaml_type = 'logical' %}
 {% endif %}
 {% endif %}
-      call config_data%get_{{ yaml_type }}("processes/{{ config.name }}/{{ scheme.name }}/{{ param_name }}", &
-           this%{{ scheme.name }}_config%{{ param_name }}, ierr)
-      if (ierr /= CC_SUCCESS) this%{{ scheme.name }}_config%{{ param_name }} = {% if yaml_type == 'logical' %}{% if param_info.default %}{% if param_info.default is sameas true %}.true.{% else %}.false.{% endif %}{% else %}.false.{% endif %}{% else %}{{ param_info.default }}{% endif %}
+      call config_manager%get_{{ yaml_type }}("processes/{{ config.name }}/{{ scheme.name }}/{{ param_name }}", &
+           this%{{ scheme.name }}_config%{{ param_name }}, rc, {% if yaml_type == 'logical' %}{% if param_info.default %}{% if param_info.default is sameas true %}.true.{% else %}.false.{% endif %}{% else %}.false.{% endif %}{% else %}{{ param_info.default }}_fp{% endif %})
+      if (rc /= CC_SUCCESS) this%{{ scheme.name }}_config%{{ param_name }} = {% if yaml_type == 'logical' %}{% if param_info.default %}{% if param_info.default is sameas true %}.true.{% else %}.false.{% endif %}{% else %}.false.{% endif %}{% else %}{{ param_info.default }}_fp{% endif %}
 {% endfor %}
 
 

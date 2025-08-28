@@ -17,7 +17,7 @@
 !! - Memory management and array allocation
 !! - Integration with host model time stepping
 !!
-!! Generated on: 2025-08-26T11:29:44.262428
+!! Generated on: 2025-08-28T14:16:31.729381
 !! Author: Barry Baker
 !! Reference: Gong et al. [1997]
 module SeaSaltScheme_GONG97_Mod

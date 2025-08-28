@@ -4,7 +4,7 @@
 !! This module defines the configuration types used by the
 !! seasalt process and its schemes.
 !!
-!! Generated on: 2025-08-26T11:29:44.161772
+!! Generated on: 2025-08-28T14:05:52.432554
 !! Author: Barry Baker & Wei Li
 !! Version: 1.0.0
 
@@ -12,8 +12,9 @@ module SeaSaltCommon_Mod
 
    use iso_fortran_env, only: fp => real64
    use precision_mod, only: fp
-   use Error_Mod, only: CC_SUCCESS, CC_FAILURE, ErrorManagerType
-   use ConfigManager_Mod, only: ConfigDataType  ! Add ConfigManager integration
+   use error_mod, only: CC_SUCCESS, CC_FAILURE, CC_Error, CC_Warning, ErrorManagerType, &
+                        ERROR_INVALID_CONFIG, ERROR_INVALID_STATE, ERROR_NOT_FOUND
+   use ConfigManager_Mod, only: ConfigManagerType  ! ConfigManager integration
    use StateManager_Mod, only: StateManagerType  ! Add StateManager integration
 
    implicit none
@@ -28,34 +29,6 @@ module SeaSaltCommon_Mod
 
    ! Export utility functions
    public :: int_to_string
-
-   !> Unified process configuration type that bridges ConfigManager and process-specific configs
-   !! This is the main configuration type that ProcessInterface should use
-   type :: SeaSaltProcessConfig
-      
-      ! Process metadata
-      character(len=64) :: process_name = 'seasalt'
-      character(len=16) :: process_version = '1.0.0'
-      logical :: is_active = .true.
-      
-      ! Process-specific configuration (delegate to SeaSaltConfig)
-      type(SeaSaltConfig) :: seasalt_config
-      
-      ! Scheme configurations
-      type(SeaSaltSchemeGONG97Config) :: gong97_config
-      type(SeaSaltSchemeGONG03Config) :: gong03_config
-      type(SeaSaltSchemeGEOS12Config) :: geos12_config
-      
-   contains
-      procedure, public :: load_from_config => seasalt_process_load_config
-      procedure, public :: load_species_from_chem_state => load_species_from_chem_state
-      procedure, public :: validate => seasalt_process_validate
-      procedure, public :: finalize => seasalt_process_finalize
-      procedure, public :: get_active_scheme_config => get_active_scheme_config
-      procedure, private :: load_gong97_config
-      procedure, private :: load_gong03_config
-      procedure, private :: load_geos12_config
-   end type SeaSaltProcessConfig
 
    !> Main configuration type for seasalt process
    type :: SeaSaltConfig
@@ -171,25 +144,54 @@ module SeaSaltCommon_Mod
    ! geos12 scheme uses local variables only - no persistent state type needed
 
 
+   !> Unified process configuration type that bridges ConfigManager and process-specific configs
+   !! This is the main configuration type that ProcessInterface should use
+   type :: SeaSaltProcessConfig
+      
+      ! Process metadata
+      character(len=64) :: process_name = 'seasalt'
+      character(len=16) :: process_version = '1.0.0'
+      logical :: is_active = .true.
+      
+      ! Process-specific configuration (delegate to SeaSaltConfig)
+      type(SeaSaltConfig) :: seasalt_config
+      
+      ! Scheme configurations
+      type(SeaSaltSchemeGONG97Config) :: gong97_config
+      type(SeaSaltSchemeGONG03Config) :: gong03_config
+      type(SeaSaltSchemeGEOS12Config) :: geos12_config
+      
+   contains
+      procedure, public :: load_from_config => seasalt_process_load_config
+      procedure, public :: load_species_from_chem_state => load_species_from_chem_state
+      procedure, public :: validate => seasalt_process_validate
+      procedure, public :: finalize => seasalt_process_finalize
+      procedure, public :: get_active_scheme_config => get_active_scheme_config
+      procedure, private :: load_gong97_config
+      procedure, private :: load_gong03_config
+      procedure, private :: load_geos12_config
+   end type SeaSaltProcessConfig
+
 contains
 
    !> Validate seasalt configuration
    subroutine validate_seasalt_config(this, error_handler)
       class(SeaSaltConfig), intent(inout) :: this
-      type(ErrorHandler), intent(inout) :: error_handler
+      type(ErrorManagerType), intent(inout) :: error_handler
 
       character(len=256) :: error_msg
+      integer :: rc
 
       ! Validate time step bounds
       if (this%dt_min <= 0.0_fp) then
-         call error_handler%set_error(ERROR_CONFIG, &
-            "Minimum time step must be positive")
+         call error_handler%report_error(ERROR_INVALID_CONFIG, &
+            "Minimum time step must be positive", rc)
          return
       end if
 
       if (this%dt_max < this%dt_min) then
-         call error_handler%set_error(ERROR_CONFIG, &
-            "Maximum time step must be >= minimum time step")
+         call error_handler%report_error(ERROR_INVALID_CONFIG, &
+            "Maximum time step must be >= minimum time step", rc)
          return
       end if
 
@@ -199,7 +201,7 @@ contains
           trim(this%scheme) /= 'geos12' .and. &
           .true.) then
          write(error_msg, '(A)') "Invalid scheme: " // trim(this%scheme)
-         call error_handler%set_error(ERROR_CONFIG, error_msg)
+         call error_handler%report_error(ERROR_INVALID_CONFIG, error_msg, rc)
          return
       end if
 
@@ -317,13 +319,13 @@ contains
    !> Load unified process configuration from ConfigManager
    !! This is the main function that ProcessInterface.parse_process_config should call
    !! Process reads its configuration directly from the master YAML via ConfigManager
-   subroutine seasalt_process_load_config(this, config_data, error_handler)
+   subroutine seasalt_process_load_config(this, config_manager, error_handler)
       class(SeaSaltProcessConfig), intent(inout) :: this
-      type(ConfigDataType), intent(in) :: config_data
+      type(ConfigManagerType), intent(inout) :: config_manager
       type(ErrorManagerType), intent(inout) :: error_handler
 
       character(len=256) :: scheme_name
-      integer :: ierr
+      integer :: ierr, rc
 
       ! Process reads directly from master YAML structure: processes.seasalt.*
       ! ConfigManager provides generic YAML access, process handles its own configuration
@@ -341,8 +343,8 @@ contains
       ! Load process-specific configuration directly from master YAML
       call config_data%get_string("processes/seasalt/scheme", this%seasalt_config%scheme, ierr)
       if (ierr /= CC_SUCCESS) then
-         call error_handler%set_error(CC_FAILURE, &
-            "Missing required 'scheme' in processes/seasalt configuration")
+         call error_handler%report_error(ERROR_INVALID_CONFIG, &
+            "Missing required 'scheme' in processes/seasalt configuration", rc)
          return
       end if
 
@@ -365,7 +367,7 @@ contains
       case ('geos12')
          call this%load_geos12_config(config_data, error_handler)
       case default
-         call error_handler%set_error(CC_FAILURE, &
+         call error_handler%report_error(ERROR_INVALID_STATE, &
             "Unknown seasalt scheme: " // trim(scheme_name))
          return
       end select
@@ -387,8 +389,8 @@ contains
       integer :: i
       
       if (.not. associated(chem_state)) then
-         call error_handler%set_error(CC_FAILURE, &
-            "ChemState not associated in load_species_from_chem_state")
+         call error_handler%report_error(ERROR_INVALID_STATE, &
+            "ChemState not associated in load_species_from_chem_state", rc)
          return
       end if
       
@@ -397,21 +399,21 @@ contains
       this%seasalt_config%n_species = chem_state%nSpeciesSeaSalt
       
       if (this%seasalt_config%n_species <= 0) then
-         call error_handler%set_error(CC_FAILURE, &
-            "No seasalt species found in ChemState")
+         call error_handler%report_error(ERROR_INVALID_STATE, &
+            "No seasalt species found in ChemState", rc)
          return
       end if
       
       ! Check if SeaSaltIndex is allocated and has correct size
       if (.not. allocated(chem_state%SeaSaltIndex)) then
-         call error_handler%set_error(CC_FAILURE, &
-            "SeaSaltIndex not allocated in ChemState")
+         call error_handler%report_error(ERROR_INVALID_STATE, &
+            "SeaSaltIndex not allocated in ChemState", rc)
          return
       end if
       
       if (size(chem_state%SeaSaltIndex) < this%seasalt_config%n_species) then
-         call error_handler%set_error(CC_FAILURE, &
-            "SeaSaltIndex size inconsistent with nSpeciesSeaSalt")
+         call error_handler%report_error(ERROR_INVALID_STATE, &
+            "SeaSaltIndex size inconsistent with nSpeciesSeaSalt", rc)
          return
       end if
       
@@ -445,8 +447,8 @@ contains
             this%seasalt_config%species_names(i) = &
                trim(chem_state%SpeciesNames(this%seasalt_config%species_indices(i)))
          else
-            call error_handler%set_error(CC_FAILURE, &
-               "Invalid species index in species index array")
+            call error_handler%report_error(ERROR_INVALID_STATE, &
+               "Invalid species index in species index array", rc)
             return
          end if
       end do
@@ -464,51 +466,55 @@ contains
    end subroutine load_species_from_chem_state
 
    !> Load gong97 scheme configuration from master YAML
-   subroutine load_gong97_config(this, config_data, error_handler)
+   subroutine load_gong97_config(this, config_manager, error_handler)
       class(SeaSaltProcessConfig), intent(inout) :: this
-      type(ConfigDataType), intent(in) :: config_data
+      type(ConfigManagerType), intent(inout) :: config_manager
       type(ErrorManagerType), intent(inout) :: error_handler
 
-      integer :: ierr
+      integer :: ierr, rc
 
       ! Load scheme parameters directly from processes/seasalt/gong97/* in master YAML
-      call config_data%get_real("processes/seasalt/gong97/scale_factor", &
-           this%gong97_config%scale_factor, ierr)
-      if (ierr /= CC_SUCCESS) this%gong97_config%scale_factor = 1.0      call config_data%get_logical("processes/seasalt/gong97/weibull_flag", &
-           this%gong97_config%weibull_flag, ierr)
-      if (ierr /= CC_SUCCESS) this%gong97_config%weibull_flag = .false.
+    call config_manager%get_real("processes/seasalt/gong97/scale_factor", &
+       this%gong97_config%scale_factor, rc, 1.0_fp)
+    if (rc /= CC_SUCCESS) this%gong97_config%scale_factor = 1.0_fp
+
+    call config_manager%get_logical("processes/seasalt/gong97/weibull_flag", &
+       this%gong97_config%weibull_flag, rc, .false.)
+    if (rc /= CC_SUCCESS) this%gong97_config%weibull_flag = .false.
 
    end subroutine load_gong97_config
 
    !> Load gong03 scheme configuration from master YAML
-   subroutine load_gong03_config(this, config_data, error_handler)
+   subroutine load_gong03_config(this, config_manager, error_handler)
       class(SeaSaltProcessConfig), intent(inout) :: this
-      type(ConfigDataType), intent(in) :: config_data
+      type(ConfigManagerType), intent(inout) :: config_manager
       type(ErrorManagerType), intent(inout) :: error_handler
 
-      integer :: ierr
+      integer :: ierr, rc
 
       ! Load scheme parameters directly from processes/seasalt/gong03/* in master YAML
-      call config_data%get_real("processes/seasalt/gong03/scale_factor", &
-           this%gong03_config%scale_factor, ierr)
-      if (ierr /= CC_SUCCESS) this%gong03_config%scale_factor = 1.0      call config_data%get_logical("processes/seasalt/gong03/weibull_flag", &
-           this%gong03_config%weibull_flag, ierr)
-      if (ierr /= CC_SUCCESS) this%gong03_config%weibull_flag = .false.
+    call config_manager%get_real("processes/seasalt/gong03/scale_factor", &
+       this%gong03_config%scale_factor, rc, 1.0_fp)
+    if (rc /= CC_SUCCESS) this%gong03_config%scale_factor = 1.0_fp
+
+    call config_manager%get_logical("processes/seasalt/gong03/weibull_flag", &
+       this%gong03_config%weibull_flag, rc, .false.)
+    if (rc /= CC_SUCCESS) this%gong03_config%weibull_flag = .false.
 
    end subroutine load_gong03_config
 
    !> Load geos12 scheme configuration from master YAML
-   subroutine load_geos12_config(this, config_data, error_handler)
+   subroutine load_geos12_config(this, config_manager, error_handler)
       class(SeaSaltProcessConfig), intent(inout) :: this
-      type(ConfigDataType), intent(in) :: config_data
+      type(ConfigManagerType), intent(inout) :: config_manager
       type(ErrorManagerType), intent(inout) :: error_handler
 
-      integer :: ierr
+      integer :: ierr, rc
 
       ! Load scheme parameters directly from processes/seasalt/geos12/* in master YAML
-      call config_data%get_real("processes/seasalt/geos12/scale_factor", &
-           this%geos12_config%scale_factor, ierr)
-      if (ierr /= CC_SUCCESS) this%geos12_config%scale_factor = 1.0
+      call config_manager%get_real("processes/seasalt/geos12/scale_factor", &
+           this%geos12_config%scale_factor, rc, 1.0_fp)
+      if (rc /= CC_SUCCESS) this%geos12_config%scale_factor = 1.0_fp
 
    end subroutine load_geos12_config
 

@@ -63,6 +63,7 @@ module ProcessInterface_Mod
       ! Diagnostic support
       procedure :: register_diagnostics => process_register_diagnostics
       procedure :: update_diagnostics => process_update_diagnostics
+      procedure :: register_diagnostic_field => process_register_diagnostic_field
 
       ! Common atmospheric process utilities
       procedure :: apply_emission_scaling => process_apply_emission_scaling
@@ -107,10 +108,10 @@ module ProcessInterface_Mod
       procedure :: disable_column_processing => column_process_disable
       procedure :: is_column_processing_enabled => column_process_is_enabled
 
-      ! Generic diagnostic update interface - automatically dispatches based on argument types
-      generic :: update_diagnostics => update_scalar_diagnostic_column, &
-                                       update_1d_diagnostic_column, &
-                                       update_2d_diagnostic_column
+      ! Generic column diagnostic update interface - automatically dispatches based on argument types
+      generic :: update_column_diagnostics => update_scalar_diagnostic_column, &
+                                              update_1d_diagnostic_column, &
+                                              update_2d_diagnostic_column
       procedure :: update_scalar_diagnostic_column => column_update_scalar_diagnostic
       procedure :: update_1d_diagnostic_column => column_update_1d_diagnostic
       procedure :: update_2d_diagnostic_column => column_update_2d_diagnostic
@@ -321,6 +322,53 @@ contains
       ! Default implementation does nothing
       ! Concrete processes should override this method to update their diagnostic values
    end subroutine process_update_diagnostics
+
+   !> \brief Utility to register a single diagnostic field with create, initialize, and register steps
+   !!
+   !! This utility method encapsulates the common pattern of creating a diagnostic field,
+   !! initializing its data storage, and registering it with the diagnostic registry.
+   !! This eliminates code duplication in process-specific diagnostic registration routines.
+   !!
+   !! \param[in] this ProcessInterface instance
+   !! \param[inout] registry Diagnostic registry to register the field with
+   !! \param[in] field_name Name of the diagnostic field
+   !! \param[in] description Human-readable description of the field
+   !! \param[in] units Physical units of the field (e.g., 'kg/m2/s', 'ppbv')
+   !! \param[in] field_type Field data type (DIAG_REAL_2D, DIAG_REAL_3D, etc.)
+   !! \param[in] process_name Name of the process registering the field
+   !! \param[in] dimensions Array dimensions for data storage [nx, ny] or [nx, ny, nz]
+   !! \param[out] rc Return code
+   subroutine process_register_diagnostic_field(this, registry, field_name, description, &
+                                                units, field_type, process_name, dimensions, rc)
+      use DiagnosticInterface_Mod, only: DiagnosticFieldType, DiagnosticRegistryType
+      
+      class(ProcessInterface), intent(in) :: this
+      type(DiagnosticRegistryType), intent(inout) :: registry
+      character(len=*), intent(in) :: field_name
+      character(len=*), intent(in) :: description
+      character(len=*), intent(in) :: units
+      integer, intent(in) :: field_type
+      character(len=*), intent(in) :: process_name
+      integer, intent(in) :: dimensions(:)
+      integer, intent(out) :: rc
+      
+      type(DiagnosticFieldType) :: diag_field
+      
+      rc = CC_SUCCESS
+      
+      ! Create the diagnostic field
+      call diag_field%create(field_name, description, units, field_type, process_name, rc)
+      if (rc /= CC_SUCCESS) return
+      
+      ! Initialize data storage for field
+      call diag_field%initialize_data(dimensions, rc)
+      if (rc /= CC_SUCCESS) return
+      
+      ! Register the field with the registry
+      call registry%register_field(diag_field, rc)
+      if (rc /= CC_SUCCESS) return
+      
+   end subroutine process_register_diagnostic_field
 
    !========================================================================
    ! Common Atmospheric Process Utilities
