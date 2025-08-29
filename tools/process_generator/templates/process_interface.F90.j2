@@ -24,13 +24,12 @@ module Process{{ config.class_name }}Interface_Mod
    use ProcessInterface_Mod, only: ProcessInterface, ColumnProcessInterface
    use StateManager_Mod, only: StateManagerType
    use GridManager_Mod, only: GridManagerType
-   use error_mod, only: CC_SUCCESS, CC_FAILURE, CC_Error, CC_Warning
+   use error_mod, only: CC_SUCCESS, CC_FAILURE, CC_Error, CC_Warning, ErrorManagerType
    use DiagnosticManager_Mod, only: DiagnosticManagerType
    use DiagnosticInterface_Mod, only: DiagnosticRegistryType, DiagnosticFieldType, DiagnosticDataType
    use VirtualColumn_Mod, only: VirtualColumnType, VirtualMetType
 
    ! Core utilities (leverage existing infrastructure)
-   use UnitConversion_Mod, only: UnitConverterType
    use ConfigManager_Mod, only: ConfigManagerType
    use ChemState_Mod, only: ChemStateType
    use MetState_Mod, only: MetStateType
@@ -40,7 +39,7 @@ module Process{{ config.class_name }}Interface_Mod
 
    ! Scheme modules
 {% for scheme in config.schemes %}
-   use {{ scheme.name }}_scheme_mod, only: compute_{{ scheme.name }}
+   use {{ config.class_name }}Scheme_{{ scheme.class_name }}_Mod, only: compute_{{ scheme.name }}
 {% endfor %}
 
    implicit none
@@ -66,10 +65,9 @@ module Process{{ config.class_name }}Interface_Mod
       type({{ config.class_name }}ProcessConfig) :: process_config
 
       ! Process utilities (leverage core infrastructure)
-      type(UnitConverterType) :: unit_converter
       type(ChemStateType), pointer :: chem_state => null()
       type(MetStateType), pointer :: met_state => null()
-      type(StateManagerType), pointer :: state_manager => null()
+      ! Note: state_manager pointer removed as it was never used
 
 {% if config.diagnostics %}
       ! Process-specific diagnostic indices (base class handles storage)
@@ -126,7 +124,6 @@ module Process{{ config.class_name }}Interface_Mod
       procedure :: init_column_processing => init_column_processing
       procedure :: run_column => run_column
       procedure :: finalize_column_processing => finalize_column_processing
-      procedure :: get_state_manager => get_state_manager_impl
 {% endif %}
 
       ! ProcessInterface capability registration
@@ -134,6 +131,7 @@ module Process{{ config.class_name }}Interface_Mod
       procedure :: get_required_diagnostic_fields => get_required_diagnostic_fields
 
       ! Process-specific implementations{% if config.enable_column_processing %} (column virtualization){% endif %}
+
 {% if config.enable_column_processing %}
       procedure, private :: run_active_scheme_column
 {% for scheme in config.schemes %}
@@ -161,9 +159,9 @@ contains
    !!
    !! Leverages ProcessInterface base class for common initialization tasks.
    !! Only handles process-specific configuration and scheme setup.
-   subroutine process_init(this, state_manager, rc)
+   subroutine process_init(this, container, rc)
       class(Process{{ config.class_name }}Interface), intent(inout) :: this
-      type(StateManagerType), intent(inout) :: state_manager
+      type(StateManagerType), intent(inout) :: container
       integer, intent(out) :: rc
 
       type(ErrorManagerType), pointer :: error_manager
@@ -174,69 +172,52 @@ contains
       rc = CC_SUCCESS
 
       ! Get error manager
-      error_manager => state_manager%get_error_manager()
+      error_manager => container%get_error_manager()
 
 {% if config.diagnostics %}
       ! Get grid manager for diagnostic allocation
-      grid_mgr => state_manager%get_grid_manager()
+      grid_mgr => container%get_grid_manager()
 {% endif %}
-
-      ! Call base class initialization (handles common infrastructure)
-      call this%{% if config.enable_column_processing %}ColumnProcessInterface{% else %}ProcessInterface{% endif %}%init(state_manager, rc)
-      if (rc /= CC_SUCCESS) return
 
 {% if config.enable_column_processing %}
       ! Initialize column processing capabilities
-      call this%init_column_processing(state_manager, rc)
+      call this%init_column_processing(container, rc)
       if (rc /= CC_SUCCESS) return
 {% endif %}
 
       ! Set process-specific name and info
-      call this%set_name('{{ config.name }}')
-      call this%set_version('{{ version }}')
-      call this%set_description('{{ config.description }}')
+      this%name = '{{ config.name }}'
+      this%version = '{{ version }}'
+      this%description = '{{ config.description }}'
 
       ! Parse process-specific configuration using unified approach
-      call this%parse_process_config(state_manager, error_manager)
-      if (error_manager%has_error()) then
-         rc = CC_FAILURE
+      call this%parse_process_config(container, error_manager, rc)
+      if (rc /= CC_SUCCESS) then
          return
       end if
 
-      ! Get state pointers from state_manager (needed for species loading)
-      this%chem_state => state_manager%get_chem_state_ptr()
-      this%met_state => state_manager%get_met_state_ptr()
-      this%state_manager => state_manager
+      ! Get state pointers from container (needed for species loading)
+      this%chem_state => container%get_chem_state_ptr()
+      this%met_state => container%get_met_state_ptr()
 
 {% if config.species %}
       ! Load species from explicit list (from species_filter)
-      call this%process_config%load_species_from_list(this%chem_state, error_manager)
+      call this%process_config%load_species_from_list(this%chem_state, error_manager, rc)
 {% else %}
       ! Load species from ChemState based on is_{{ config.name }} property
-      call this%process_config%load_species_from_chem_state(this%chem_state, error_manager)
+      call this%process_config%load_species_from_chem_state(this%chem_state, error_manager, rc)
 {% endif %}
-      if (error_manager%has_error()) then
-         rc = CC_FAILURE
+      if (rc /= CC_SUCCESS) then
          return
       end if
 
       ! Validate the configuration with StateManager
-      call this%process_config%validate(state_manager, error_manager)
-      if (error_manager%has_error()) then
-         rc = CC_FAILURE
-         return
-      end if
-
-      ! Initialize utility helpers
-      call this%unit_converter%init(error_manager)
-      if (error_manager%has_error()) then
-         rc = CC_FAILURE
-         return
-      end if
+      call this%process_config%validate(container, error_manager)
+      ! Note: validate doesn't return rc, but error_manager tracks errors
 
 {% if config.diagnostics %}
       ! Register diagnostics for this process (only if diagnostics enabled)
-      call this%register_diagnostics(state_manager, rc)
+      call this%register_diagnostics(container, rc)
       if (rc /= CC_SUCCESS) then
          return
       end if
@@ -276,7 +257,7 @@ contains
 {% endfor %}
          
          ! Allocate and initialize scheme-specific diagnostic fields based on selected scheme
-         select case (this%process_config%{{ config.name }}_config%scheme_name)
+         select case (this%process_config%{{ config.name }}_config%scheme)
 {% for scheme in config.schemes %}
          case ("{{ scheme.name }}")
             ! Scheme-specific diagnostics for {{ scheme.name }}
@@ -326,9 +307,9 @@ contains
 {% else %}
    !! Simplified implementation leveraging base class 3D processing.
 {% endif %}
-   subroutine process_run(this, state_manager, rc)
+   subroutine process_run(this, container, rc)
       class(Process{{ config.class_name }}Interface), intent(inout) :: this
-      type(StateManagerType), intent(inout) :: state_manager
+      type(StateManagerType), intent(inout) :: container
       integer, intent(out) :: rc
 
 {% if config.enable_column_processing %}
@@ -354,7 +335,7 @@ contains
       end if
       
       ! Use standard 3D processing
-      call this%run_3d_processing(state_manager, rc)
+      call this%run_3d_processing(container, rc)
 {% endif %}
 
    end subroutine process_run
@@ -394,19 +375,19 @@ contains
       ! Finalize unified configuration
       call this%process_config%finalize()
 
-      ! Call base class finalization (handles common cleanup)
-      call this%{% if config.enable_column_processing %}ColumnProcessInterface{% else %}ProcessInterface{% endif %}%finalize(rc)
-
    end subroutine process_finalize
 
    !> Parse process configuration using unified approach
    !! This function bridges the ConfigManager YAML structure to process-specific configuration
-   subroutine parse_{{ config.name }}_config(this, state_manager, error_manager)
+   subroutine parse_{{ config.name }}_config(this, state_manager, error_manager, rc)
       class(Process{{ config.class_name }}Interface), intent(inout) :: this
       type(StateManagerType), intent(in) :: state_manager
       type(ErrorManagerType), intent(inout) :: error_manager
+      integer, intent(out) :: rc
 
       type(ConfigManagerType), pointer :: config_manager
+
+      rc = CC_SUCCESS
 
       ! Get configuration manager from state manager
       ! TODO: StateManager needs to provide ConfigManagerType access
@@ -415,10 +396,9 @@ contains
 
       ! Use the unified configuration loader from {{ config.class_name }}Common_Mod
       ! This handles the complexity of parsing hierarchical YAML into process-specific types
-      call this%process_config%load_from_config(config_manager, error_manager)
-      if (error_manager%has_error()) then
-         call error_manager%add_context("Process{{ config.class_name }}Interface", &
-            "Failed to parse {{ config.name }} process configuration")
+      call this%process_config%load_from_config(config_manager, error_manager, rc)
+      if (rc /= CC_SUCCESS) then
+         call error_manager%push_context("Process{{ config.class_name }}Interface: Failed to parse {{ config.name }} process configuration")
          return
       end if
 
@@ -435,9 +415,9 @@ contains
    !!
    !! This method sets up the column processing infrastructure for the process.
    !! The base class ColumnProcessInterface handles the actual column virtualization.
-   subroutine init_column_processing(this, state_manager, rc)
+   subroutine init_column_processing(this, container, rc)
       class(Process{{ config.class_name }}Interface), intent(inout) :: this
-      type(StateManagerType), intent(inout) :: state_manager
+      type(StateManagerType), intent(inout) :: container
       integer, intent(out) :: rc
 
       rc = CC_SUCCESS
@@ -456,9 +436,10 @@ contains
    !! This is the core column processing method where the actual atmospheric process
    !! calculations happen for a single column. The base class handles column
    !! virtualization and calls this method for each virtual column.
-   subroutine run_column(this, column, rc)
+   subroutine run_column(this, column, container, rc)
       class(Process{{ config.class_name }}Interface), intent(inout) :: this
       type(VirtualColumnType), intent(inout) :: column
+      type(StateManagerType), intent(inout) :: container
       integer, intent(out) :: rc
 
       rc = CC_SUCCESS
@@ -472,7 +453,7 @@ contains
 {% if config.diagnostics %}
       ! Calculate and update diagnostics if enabled
       if (this%process_config%{{ config.name }}_config%diagnostics .and. rc == CC_SUCCESS) then
-         call this%calculate_and_update_diagnostics(column, rc)
+         call this%calculate_and_update_diagnostics(column, container, rc)
       end if
 {% endif %}
 
@@ -493,15 +474,6 @@ contains
       ! Any process-specific cleanup would go here
 
    end subroutine finalize_column_processing
-
-   !> Get the state manager for base class access to diagnostic infrastructure
-   function get_state_manager_impl(this) result(state_manager)
-      class(Process{{ config.class_name }}Interface), intent(in) :: this
-      type(StateManagerType), pointer :: state_manager
-
-      state_manager => this%state_manager
-
-   end function get_state_manager_impl
 
    !> Run the active scheme for a single virtual column
    !!
@@ -785,7 +757,7 @@ contains
    !> Get required meteorological fields for this process
    function get_required_met_fields(this) result(field_names)
       class(Process{{ config.class_name }}Interface), intent(in) :: this
-      character(len=64), allocatable :: field_names(:)
+      character(len=32), allocatable :: field_names(:)
 
       ! Get scheme-specific fields based on selected scheme
       select case (trim(this%process_config%{{ config.name }}_config%scheme))
@@ -813,7 +785,7 @@ contains
    !> Get required diagnostic fields for this process
    function get_required_diagnostic_fields(this) result(field_names)
       class(Process{{ config.class_name }}Interface), intent(in) :: this
-      character(len=64), allocatable :: field_names(:)
+      character(len=32), allocatable :: field_names(:)
 
 {% if config.diagnostics %}
       allocate(field_names({{ config.diagnostics | length }}))
@@ -841,7 +813,10 @@ contains
       type(GridManagerType), pointer :: grid_mgr
       character(len=32) :: selected_scheme
 {% set required_dims = config | analyze_required_dimensions %}
-      integer :: nx, ny{% if required_dims.dims_3d_species %}, n_species{% endif %}{% if required_dims.dims_3d_levels %}, nz{% endif %}
+      integer :: nx, ny, nz
+{% if required_dims.dims_3d_species %}
+      integer :: n_species
+{% endif %}
 {% if required_dims.dims_2d %}
       integer :: dims_2d(2)
 {% endif %}
@@ -864,7 +839,7 @@ contains
       grid_mgr => container%get_grid_manager()
       
       ! Register this process with diagnostic manager (only once per process)
-      call diag_mgr%register_process('{{ config.name }}', container, rc)
+      call diag_mgr%register_process('{{ config.name }}', rc)
       if (rc /= CC_SUCCESS) return
       
       ! Get the process registry for registering individual diagnostics
@@ -872,11 +847,7 @@ contains
       if (rc /= CC_SUCCESS) return
       
       ! Get grid dimensions
-      nx = grid_mgr%geometry%get_nx()
-      ny = grid_mgr%geometry%get_ny()
-{% if required_dims.dims_3d_levels %}
-      nz = grid_mgr%geometry%get_nz()
-{% endif %}
+      call grid_mgr%get_shape(nx, ny, nz)
 {% if required_dims.dims_2d %}
       dims_2d = [nx, ny]
 {% endif %}
@@ -932,9 +903,10 @@ contains
    !! With the new flexible column-level design, diagnostics are calculated directly by the 
    !! science schemes for each column and passed to this method for aggregation or output.
    !! This approach uses dimension inference to reduce 2D->scalar and 3D->1D for column processing.
-   subroutine calculate_and_update_diagnostics(this, column, rc)
+   subroutine calculate_and_update_diagnostics(this, column, container, rc)
       class(Process{{ config.class_name }}Interface), intent(inout) :: this
       type(VirtualColumnType), intent(in) :: column
+      type(StateManagerType), intent(inout) :: container
       integer, intent(out) :: rc
       
       integer :: i_col, j_col  ! Column grid position
@@ -948,29 +920,28 @@ contains
       if (.not. this%process_config%{{ config.name }}_config%diagnostics) return
       
       ! Get column grid position (x, y indices)
-      i_col = column%get_i_index()
-      j_col = column%get_j_index()
+      call column%get_position(i_col, j_col)
       
 {% if config.diagnostics %}
       ! Update common diagnostic fields (used by all schemes)
 {% for diagnostic in config.diagnostics %}
 {% if ('per_level' in diagnostic.name or 'level' in diagnostic.name) and ('per_bin' in diagnostic.name or 'bin' in diagnostic.name) %}
       ! 2D diagnostic field
-      call this%update_column_diagnostics('{{ diagnostic.name }}', &
+      call this%update_2d_diagnostic_column('{{ diagnostic.name }}', &
                                           this%column_{{ diagnostic.name }}, &
-                                          i_col, j_col, rc)
+                                          i_col, j_col, container, rc)
       if (rc /= CC_SUCCESS) return
 {% elif 'per_level' in diagnostic.name or 'level' in diagnostic.name or 'per_bin' in diagnostic.name or 'bin' in diagnostic.name %}
       ! 1D diagnostic field
-      call this%update_column_diagnostics('{{ diagnostic.name }}', &
+      call this%update_1d_diagnostic_column('{{ diagnostic.name }}', &
                                           this%column_{{ diagnostic.name }}, &
-                                          i_col, j_col, rc)
+                                          i_col, j_col, container, rc)
       if (rc /= CC_SUCCESS) return
 {% else %}
       ! Scalar diagnostic field
-      call this%update_column_diagnostics('{{ diagnostic.name }}', &
+      call this%update_scalar_diagnostic_column('{{ diagnostic.name }}', &
                                           this%column_{{ diagnostic.name }}, &
-                                          i_col, j_col, rc)
+                                          i_col, j_col, container, rc)
       if (rc /= CC_SUCCESS) return
 {% endif %}
       
@@ -988,25 +959,25 @@ contains
 {% if ('per_level' in diagnostic.name or 'level' in diagnostic.name) and ('per_bin' in diagnostic.name or 'bin' in diagnostic.name) %}
          ! Update 2D level-species diagnostics (map to 4D global fields)
          if (allocated(this%column_{{ diagnostic.name }})) then
-            call this%update_column_diagnostics('{{ diagnostic.name }}', &
+            call this%update_2d_diagnostic_column('{{ diagnostic.name }}', &
                                                 this%column_{{ diagnostic.name }}, &
-                                                i_col, j_col, rc)
+                                                i_col, j_col, container, rc)
             if (rc /= CC_SUCCESS) return
          end if
 {% elif 'per_level' in diagnostic.name or 'level' in diagnostic.name or 'per_bin' in diagnostic.name or 'bin' in diagnostic.name %}
          ! Update 1D diagnostics (map to 3D global fields)
          if (allocated(this%column_{{ diagnostic.name }})) then
-            call this%update_column_diagnostics('{{ diagnostic.name }}', &
+            call this%update_1d_diagnostic_column('{{ diagnostic.name }}', &
                                                 this%column_{{ diagnostic.name }}, &
-                                                i_col, j_col, rc)
+                                                i_col, j_col, container, rc)
             if (rc /= CC_SUCCESS) return
          end if
 {% else %}
          ! Update scalar diagnostics (map to 2D global fields)
          if (allocated(this%column_{{ diagnostic.name }})) then
-            call this%update_column_diagnostics('{{ diagnostic.name }}', &
+            call this%update_scalar_diagnostic_column('{{ diagnostic.name }}', &
                                                 this%column_{{ diagnostic.name }}, &
-                                                i_col, j_col, rc)
+                                                i_col, j_col, container, rc)
             if (rc /= CC_SUCCESS) return
          end if
 {% endif %}

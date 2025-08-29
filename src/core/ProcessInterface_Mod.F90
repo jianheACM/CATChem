@@ -32,9 +32,9 @@ module ProcessInterface_Mod
    !!
    type, abstract :: ProcessInterface
       private
-      character(len=64) :: name = ''         !< Process name
-      character(len=64) :: version = ''      !< Version string
-      character(len=256) :: description = '' !< Process description
+      character(len=64), public :: name = ''         !< Process name
+      character(len=64), public :: version = ''      !< Version string  
+      character(len=256), public :: description = '' !< Process description
       logical :: is_initialized = .false.    !< Initialization status
       logical :: is_active = .false.         !< Active status
       real(fp) :: dt = 0.0_fp                !< Process timestep
@@ -115,9 +115,6 @@ module ProcessInterface_Mod
       procedure :: update_scalar_diagnostic_column => column_update_scalar_diagnostic
       procedure :: update_1d_diagnostic_column => column_update_1d_diagnostic
       procedure :: update_2d_diagnostic_column => column_update_2d_diagnostic
-
-      ! Method to get StateManager - must be implemented by concrete processes
-      procedure(get_state_manager_interface), deferred :: get_state_manager
    end type ColumnProcessInterface
 
    ! Abstract interfaces that must be implemented by concrete processes
@@ -157,18 +154,18 @@ module ProcessInterface_Mod
       end subroutine
 
       !> \brief Process a single virtual column
-      subroutine column_run_interface(this, column, rc)
-         import :: ColumnProcessInterface, VirtualColumnType
+      subroutine column_run_interface(this, column, container, rc)
+         import :: ColumnProcessInterface, VirtualColumnType, StateManagerType
          class(ColumnProcessInterface), intent(inout) :: this
          type(VirtualColumnType), intent(inout) :: column
+         type(StateManagerType), intent(inout) :: container
          integer, intent(out) :: rc
       end subroutine
 
       !> \brief Finalize column processing
-      subroutine column_finalize_interface(this, container, rc)
-         import :: ColumnProcessInterface, StateManagerType
+      subroutine column_finalize_interface(this, rc)
+         import :: ColumnProcessInterface
          class(ColumnProcessInterface), intent(inout) :: this
-         type(StateManagerType), intent(inout) :: container
          integer, intent(out) :: rc
       end subroutine
    end interface
@@ -180,15 +177,6 @@ module ProcessInterface_Mod
          class(ProcessInterface), intent(in) :: this
          character(len=32), allocatable :: field_names(:)
       end function get_required_met_fields_interface
-   end interface
-
-   !> \brief Interface for getting StateManager from concrete processes
-   abstract interface
-      function get_state_manager_interface(this) result(state_manager)
-         import :: ColumnProcessInterface, StateManagerType
-         class(ColumnProcessInterface), intent(in) :: this
-         type(StateManagerType), pointer :: state_manager
-      end function get_state_manager_interface
    end interface
 
 contains
@@ -896,12 +884,14 @@ contains
    !! \param[in] scalar_value The scalar value to store
    !! \param[in] i_col Column i-index (x-direction) 
    !! \param[in] j_col Column j-index (y-direction)
+   !! \param[in] container StateManager for accessing diagnostic manager
    !! \param[out] rc Return code
-   subroutine column_update_scalar_diagnostic(this, field_name, scalar_value, i_col, j_col, rc)
+   subroutine column_update_scalar_diagnostic(this, field_name, scalar_value, i_col, j_col, container, rc)
       class(ColumnProcessInterface), intent(inout) :: this
       character(len=*), intent(in) :: field_name
       real(fp), intent(in) :: scalar_value
       integer, intent(in) :: i_col, j_col
+      type(StateManagerType), intent(inout) :: container
       integer, intent(out) :: rc
       
       type(DiagnosticManagerType), pointer :: diag_mgr => null()
@@ -909,20 +899,12 @@ contains
       type(DiagnosticFieldType), pointer :: diag_field => null()
       type(DiagnosticDataType), pointer :: diag_data => null()
       real(fp), pointer :: field_data_2d(:,:) => null()
-      type(StateManagerType), pointer :: state_manager => null()
       character(len=64) :: process_name
       
       rc = CC_SUCCESS
       
-      ! Get StateManager from the concrete process implementation
-      state_manager => this%get_state_manager()
-      if (.not. associated(state_manager)) then
-         rc = CC_FAILURE
-         return
-      end if
-      
-      ! Get DiagnosticManager from StateManager
-      diag_mgr => state_manager%get_diagnostic_manager()
+      ! Get DiagnosticManager from container
+      diag_mgr => container%get_diagnostic_manager()
       if (.not. associated(diag_mgr)) then
          rc = CC_FAILURE
          return
@@ -978,12 +960,14 @@ contains
    !! \param[in] array_1d The 1D array data to store
    !! \param[in] i_col Column i-index (x-direction)
    !! \param[in] j_col Column j-index (y-direction)
+   !! \param[in] container StateManager for accessing diagnostic manager
    !! \param[out] rc Return code
-   subroutine column_update_1d_diagnostic(this, field_name, array_1d, i_col, j_col, rc)
+   subroutine column_update_1d_diagnostic(this, field_name, array_1d, i_col, j_col, container, rc)
       class(ColumnProcessInterface), intent(inout) :: this
       character(len=*), intent(in) :: field_name
       real(fp), intent(in) :: array_1d(:)
       integer, intent(in) :: i_col, j_col
+      type(StateManagerType), intent(inout) :: container
       integer, intent(out) :: rc
       
       ! Local variables for diagnostic system integration
@@ -992,22 +976,14 @@ contains
       type(DiagnosticFieldType), pointer :: diag_field => null()
       type(DiagnosticDataType), pointer :: diag_data => null()
       real(fp), pointer :: field_data_3d(:,:,:) => null()
-      type(StateManagerType), pointer :: state_manager => null()
       character(len=64) :: process_name
       integer :: k, n_dim3
       
       rc = CC_SUCCESS
       n_dim3 = size(array_1d)
       
-      ! Get StateManager from the concrete process implementation
-      state_manager => this%get_state_manager()
-      if (.not. associated(state_manager)) then
-         rc = CC_FAILURE
-         return
-      end if
-      
-      ! Get DiagnosticManager from StateManager
-      diag_mgr => state_manager%get_diagnostic_manager()
+      ! Get DiagnosticManager from container
+      diag_mgr => container%get_diagnostic_manager()
       if (.not. associated(diag_mgr)) then
          rc = CC_FAILURE
          return
@@ -1073,12 +1049,14 @@ contains
    !! \param[in] array_2d The 2D array data to store
    !! \param[in] i_col Column i-index (x-direction)
    !! \param[in] j_col Column j-index (y-direction)
+   !! \param[in] container StateManager for accessing diagnostic manager
    !! \param[out] rc Return code
-   subroutine column_update_2d_diagnostic(this, field_name, array_2d, i_col, j_col, rc)
+   subroutine column_update_2d_diagnostic(this, field_name, array_2d, i_col, j_col, container, rc)
       class(ColumnProcessInterface), intent(inout) :: this
       character(len=*), intent(in) :: field_name
       real(fp), intent(in) :: array_2d(:,:)
       integer, intent(in) :: i_col, j_col
+      type(StateManagerType), intent(inout) :: container
       integer, intent(out) :: rc
       
       ! Local variables for diagnostic system integration
@@ -1087,7 +1065,6 @@ contains
       type(DiagnosticFieldType), pointer :: diag_field => null()
       type(DiagnosticDataType), pointer :: diag_data => null()
       real(fp), pointer :: field_data_3d(:,:,:) => null()
-      type(StateManagerType), pointer :: state_manager => null()
       character(len=64) :: process_name
       integer :: k, l, n_levels, n_species, flat_index
       
@@ -1096,15 +1073,8 @@ contains
       n_levels = size(array_2d, 1)   ! levels dimension
       n_species = size(array_2d, 2)  ! species dimension
       
-      ! Get StateManager from the concrete process implementation
-      state_manager => this%get_state_manager()
-      if (.not. associated(state_manager)) then
-         rc = CC_FAILURE
-         return
-      end if
-      
-      ! Get DiagnosticManager from StateManager
-      diag_mgr => state_manager%get_diagnostic_manager()
+      ! Get DiagnosticManager from container
+      diag_mgr => container%get_diagnostic_manager()
       if (.not. associated(diag_mgr)) then
          rc = CC_FAILURE
          return

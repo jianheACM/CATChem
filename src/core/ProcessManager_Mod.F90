@@ -195,7 +195,7 @@ contains
             select type(proc => this%processes(i))
             class is (ColumnProcessInterface)
                if (proc%is_ready()) then
-                  call proc%run_column(virtual_col, local_rc)
+                  call proc%run_column(virtual_col, container, local_rc)
                   if (local_rc /= CC_SUCCESS) then
                      rc = local_rc
                      return
