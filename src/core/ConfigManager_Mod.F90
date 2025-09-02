@@ -50,7 +50,8 @@ module ConfigManager_Mod
    use Error_Mod, only : CC_SUCCESS, CC_FAILURE, ERROR_INVALID_CONFIG, ERROR_INVALID_INPUT, ErrorManagerType
    use yaml_interface_mod, only : yaml_node_t, yaml_load_file, yaml_load_string, yaml_destroy_node, &
                                   yaml_get_string, yaml_get_integer, yaml_get_real, yaml_get_logical, &
-                                  yaml_has_key, yaml_get, yaml_set, yaml_is_map, yaml_get_size
+                                  yaml_has_key, yaml_get, yaml_set, yaml_is_map, yaml_is_sequence, &
+                                  yaml_get_size, yaml_get_string_array, yaml_get_all_keys
 
    implicit none
    private
@@ -1265,9 +1266,12 @@ contains
 
       type(yaml_node_t) :: species_config
       logical :: file_exists, success, already_found
+      logical :: list_success, keys_success
       integer :: i, count, total_size, j
       character(len=256) :: key, temp_name, test_key
       character(len=64), allocatable :: candidate_species(:)
+      character(len=64) :: temp_species_array(100)
+      character(len=64) :: all_yaml_keys(100)
       integer :: n_candidates
 
       rc = CC_SUCCESS
@@ -1310,41 +1314,35 @@ contains
       allocate(candidate_species(max(total_size, 100)))
       n_candidates = 0
 
-      ! First pass: Check common species patterns
-      do i = 1, size(species_patterns)
-         if (yaml_has_key(species_config, trim(species_patterns(i)))) then
-            n_candidates = n_candidates + 1
-            candidate_species(n_candidates) = trim(species_patterns(i))
-         endif
-      end do
-
-      ! If we found fewer species than expected, try broader search patterns
-      if (n_candidates < total_size / 2) then
-         write(*, '(A)') 'INFO: Performing extended species search...'
-
-         ! Try numbered variations (1-10) for common base names
-         do i = 1, size(base_names)
-            do count = 1, 10
-               write(test_key, '(A,I0)') trim(base_names(i)), count
-               if (yaml_has_key(species_config, trim(test_key))) then
-                  ! Check if we already have this species
-                  already_found = .false.
-                  do j = 1, n_candidates
-                     if (trim(candidate_species(j)) == trim(test_key)) then
-                        already_found = .true.
-                        exit
-                     endif
-                  end do
-
-                  if (.not. already_found) then
-                     n_candidates = n_candidates + 1
-                     if (n_candidates <= size(candidate_species)) then
-                        candidate_species(n_candidates) = trim(test_key)
-                     endif
-                  endif
-               endif
+      ! SOLUTION: Direct YAML parsing - get all top-level keys as species
+      ! This is the proper architectural approach - no hardcoded patterns needed!
+      
+      ! First, look for explicit species metadata (preferred for structured configs)
+      if (yaml_has_key(species_config, 'species_list')) then
+         list_success = yaml_get_string_array(species_config, 'species_list', temp_species_array, n_candidates)
+         if (list_success .and. n_candidates > 0) then
+            do i = 1, min(n_candidates, size(candidate_species))
+               candidate_species(i) = temp_species_array(i)
             end do
-         end do
+            n_candidates = min(n_candidates, size(candidate_species))
+            write(*, '(A,I0,A)') 'INFO: Found ', n_candidates, ' species from metadata'
+         else
+            n_candidates = 0
+         endif
+      else
+         ! Direct approach: Get all top-level keys from YAML (these are the species)
+         keys_success = yaml_get_all_keys(species_config, all_yaml_keys, n_candidates)
+         if (keys_success .and. n_candidates > 0) then
+            write(*, '(A,I0,A)') 'INFO: Found ', n_candidates, ' species from YAML keys:'
+            do i = 1, min(n_candidates, size(candidate_species))
+               candidate_species(i) = trim(all_yaml_keys(i))
+               write(*, '(A,I0,A,A)') '  ', i, ': ', trim(candidate_species(i))
+            end do
+            n_candidates = min(n_candidates, size(candidate_species))
+         else
+            write(*, '(A)') 'ERROR: Failed to read YAML keys'
+            n_candidates = 0
+         endif
       endif
 
       num_species = n_candidates

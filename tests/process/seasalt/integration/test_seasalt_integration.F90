@@ -2,7 +2,7 @@
 !! \brief Integration test for seasalt process
 !!
 !! Tests the complete seasalt process integration
-!! Generated on: 2025-08-06T23:49:33.321037
+!! Generated on: 2025-08-29T16:37:23.879066
 
 program test_integration_seasalt
 
@@ -73,9 +73,6 @@ end program test_integration_seasalt
          call column_state%set_humidity(k, 0.6_fp)
 
          ! Set specific met fields for emission
-         call column_state%set_met_field("FROCEAN", k, get_test_value_FROCEAN(k))
-         call column_state%set_met_field("FRSEAICE", k, get_test_value_FRSEAICE(k))
-         call column_state%set_met_field("SST", k, get_test_value_SST(k))
 
          ! Initialize species concentrations
       end do
@@ -107,33 +104,6 @@ end program test_integration_seasalt
 
    end subroutine validate_results
 
-   !> Get test value for FROCEAN
-   pure function get_test_value_FROCEAN(layer) result(value)
-      integer, intent(in) :: layer
-      real(fp) :: value
-
-      ! Provide realistic test values
-      value = 1.0_fp  ! Generic default
-
-   end function get_test_value_FROCEAN
-   !> Get test value for FRSEAICE
-   pure function get_test_value_FRSEAICE(layer) result(value)
-      integer, intent(in) :: layer
-      real(fp) :: value
-
-      ! Provide realistic test values
-      value = 1.0_fp  ! Generic default
-
-   end function get_test_value_FRSEAICE
-   !> Get test value for SST
-   pure function get_test_value_SST(layer) result(value)
-      integer, intent(in) :: layer
-      real(fp) :: value
-
-      ! Provide realistic test values
-      value = 1.0_fp  ! Generic default
-
-   end function get_test_value_SST
 
    !> Validate diagnostic: seasalt_mass_emission_total
    subroutine validate_diagnostic_seasalt_mass_emission_total(column_state, is_valid)

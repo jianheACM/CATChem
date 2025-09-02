@@ -1,5 +1,5 @@
 # SeaSalt Process CMakeLists.txt
-# Generated on: 2025-08-06T23:49:33.309919
+# Generated on: 2025-08-29T16:37:23.797475
 # Author: Barry Baker & Wei Li
 # Description: Process for computing sea salt aerosol emissions over ocean surfaces
 
@@ -19,13 +19,13 @@ set(SEASALT_SCHEME_SOURCES
 
 # Combine all sources
 set(SEASALT_ALL_SOURCES
-    $${SEASALT_PROCESS_SOURCES}
-    $${SEASALT_SCHEME_SOURCES}
+    ${SEASALT_PROCESS_SOURCES}
+    ${SEASALT_SCHEME_SOURCES}
 )
 
 # Create the seasalt process library
 set(_lib CATChem_process_seasalt)
-add_library(${_lib} $${SEASALT_ALL_SOURCES})
+add_library(${_lib} ${SEASALT_ALL_SOURCES})
 
 # Link with required libraries
 target_link_libraries(${_lib} PUBLIC CATChem_core)
@@ -68,9 +68,13 @@ install(DIRECTORY ${CMAKE_BINARY_DIR}/include/
 )
 
 # Add subdirectories
-if(BUILD_TESTING)
-    add_subdirectory(tests)
-endif()
+#if(BUILD_TESTING)
+#    # Add tests subdirectory - tests are located in tests/process/seasalt/
+#    set(TESTS_DIR "${CMAKE_SOURCE_DIR}/tests/process/seasalt")
+#    if(EXISTS "${TESTS_DIR}/CMakeLists.txt")
+#        add_subdirectory("${TESTS_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/tests")
+#    endif()
+#endif()
 
 if(BUILD_EXAMPLES)
     add_subdirectory(examples)

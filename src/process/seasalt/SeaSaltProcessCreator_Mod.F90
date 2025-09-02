@@ -4,7 +4,7 @@
 !! This module provides the factory functions for creating seasalt
 !! process instances following the CATChem Process Factory pattern.
 !!
-!! Generated on: 2025-08-06T23:49:33.290771
+!! Generated on: 2025-08-29T16:37:23.024068
 !! Author: Barry Baker & Wei Li
 !! Version: 1.0.0
 
@@ -127,11 +127,7 @@ contains
       info%default_scheme = ''
 
       ! Required meteorological fields
-      info%n_required_met_fields = 3
-      allocate(info%required_met_fields(info%n_required_met_fields))
-      info%required_met_fields(1) = 'FROCEAN'
-      info%required_met_fields(2) = 'FRSEAICE'
-      info%required_met_fields(3) = 'SST'
+      info%n_required_met_fields = 0
 
       ! Optional meteorological fields
       info%n_optional_met_fields = 0
@@ -171,21 +167,6 @@ contains
       ! Check required species
 
       ! Check required meteorological fields
-      if (.not. host_config%has_met_field('FROCEAN')) then
-         call error_handler%set_warning(WARNING_COMPATIBILITY, &
-            "Required meteorological field not available: FROCEAN")
-         is_compatible = .false.
-      end if
-      if (.not. host_config%has_met_field('FRSEAICE')) then
-         call error_handler%set_warning(WARNING_COMPATIBILITY, &
-            "Required meteorological field not available: FRSEAICE")
-         is_compatible = .false.
-      end if
-      if (.not. host_config%has_met_field('SST')) then
-         call error_handler%set_warning(WARNING_COMPATIBILITY, &
-            "Required meteorological field not available: SST")
-         is_compatible = .false.
-      end if
 
 
 

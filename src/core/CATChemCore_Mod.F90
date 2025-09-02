@@ -347,13 +347,16 @@ contains
 
       call this%error_mgr%push_context('core_setup_diagnostics', 'Setting up diagnostic manager')
 
-      ! Initialize diagnostic manager with state manager reference
-      call this%diag_mgr%init(this%state_mgr, rc)
+      ! Initialize diagnostic manager with error manager reference
+      call this%diag_mgr%init(this%error_mgr, rc)
       if (rc /= CC_SUCCESS) then
          call this%error_mgr%report_error(rc, 'Failed to initialize diagnostic manager', rc)
          call this%error_mgr%pop_context()
          return
       endif
+
+      ! Connect diagnostic manager to state manager for process access
+      call this%state_mgr%set_diagnostic_manager(this%diag_mgr)
 
       call this%error_mgr%pop_context()
 
@@ -448,7 +451,7 @@ contains
       endif
 
       ! 2. Collect diagnostics
-      call this%diag_mgr%collect_all_diagnostics(this%state_mgr, rc)
+      call this%diag_mgr%collect_all_diagnostics(rc)
       if (rc /= CC_SUCCESS) then
          ! Don't fail the timestep for diagnostic issues, just warn
          call this%error_mgr%report_error(ERROR_PROCESS_INITIALIZATION, &
