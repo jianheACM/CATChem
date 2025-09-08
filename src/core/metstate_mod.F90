@@ -36,9 +36,9 @@ MODULE MetState_Mod
    !!!>
    TYPE, PUBLIC :: MetStateType
       CHARACTER(LEN=3)             :: State     = 'MET'    !< Name of this state
-      INTEGER                      :: NLEVS             !< Number of vertical levels
+      INTEGER                      :: NLEVS     = 127      !< Number of vertical levels (default)
       TYPE(GridGeometryType) :: geometry
-      INTEGER                      :: NSURFTYPE         !< Number of surface types
+      INTEGER                      :: NSURFTYPE = 20       !< Number of surface types (default)
       ! Grid flags (2D: nx, ny)
       LOGICAL, ALLOCATABLE         :: IsLand(:,:)       !< Is this a land grid box?
       LOGICAL, ALLOCATABLE         :: IsWater(:,:)      !< Is this a water grid box?
@@ -89,8 +89,8 @@ MODULE MetState_Mod
       REAL(fp), ALLOCATABLE        :: GWETTOP(:,:)      !< Top soil moisture [1]
       REAL(fp), ALLOCATABLE        :: GWETROOT(:,:)     !< Root Zone soil moisture [1]
       REAL(fp), ALLOCATABLE        :: WILT(:,:)         !< Wilt point [1]
-      INTEGER,  ALLOCATABLE        :: nSOIL             !< # number of soil layers
-      INTEGER,  ALLOCATABLE        :: nSOILTYPE         !< # number of soil types
+      INTEGER                      :: nSOIL = 1         !< # number of soil layers (default)
+      INTEGER                      :: nSOILTYPE = 1     !< # number of soil types (default)
       REAL(fp), ALLOCATABLE        :: SOILM(:,:,:)      !< Volumetric Soil moisture [m3/m3] (nx,ny,nsoil)
       REAL(fp), ALLOCATABLE        :: FRLANDUSE(:,:,:)  !< Fractional Land Use (nx,ny,nlanduse)
       REAL(fp), ALLOCATABLE        :: FRSOIL(:,:,:)     !< Fractional Soil (nx,ny,nsoil)
@@ -229,6 +229,12 @@ CONTAINS
 
       rc = CC_SUCCESS
 
+      ! Initialize default values for integer parameters
+      this%NLEVS = nlevs
+      ! Initialize integer parameters with default values
+      if (this%nSOIL == 0) this%nSOIL = 1
+      if (this%nSOILTYPE == 0) this%nSOILTYPE = 1
+
       call this%geometry%set(nx, ny, nlevs) ! Add a set() method to GridGeometryType
       this%State = 'MET'
 
@@ -261,9 +267,10 @@ CONTAINS
       rc = CC_SUCCESS
 
       call this%geometry%get_dimensions(nx, ny, nz)
-      nsoil = this%nSOIL
-      nsoiltype = this%nSOILTYPE
-      nSURFTYPE = this%NSURFTYPE
+      ! Use default values if not properly initialized
+      nsoil = max(1, this%nSOIL)
+      nsoiltype = max(1, this%nSOILTYPE)
+      nSURFTYPE = max(1, this%NSURFTYPE)
 
       ! Auto-allocate all REAL(fp), ALLOCATABLE fields (generated, now field-by-field)
       select case (trim(field_name))
@@ -306,6 +313,8 @@ CONTAINS
       end select
 
       this%State = ''
+      this%NLEVS = 72  ! Reset to default
+      this%NSURFTYPE = 1  ! Reset to default
 
    end subroutine metstate_cleanup
 
@@ -503,7 +512,8 @@ CONTAINS
       ! For current column-based architecture
       nx = 1
       ny = 1
-      nlev = this%NLEVS
+      ! Ensure nlev is properly bounded
+      nlev = max(1, this%NLEVS)
 
    end subroutine metstate_get_dimensions
 
@@ -545,9 +555,10 @@ CONTAINS
       integer :: nx, ny, nz, nsoil, nsoiltype, nSURFTYPE
       rc = CC_SUCCESS
       call this%geometry%get_dimensions(nx, ny, nz)
-      nsoil = 1; nsoiltype = 1; nSURFTYPE = this%NSURFTYPE
-      if (allocated(this%nSOIL)) nsoil = this%nSOIL
-      if (allocated(this%nSOILTYPE)) nsoiltype = this%nSOILTYPE
+      ! Use default values with proper bounds checking
+      nsoil = max(1, this%nSOIL)
+      nsoiltype = max(1, this%nSOILTYPE)
+      nSURFTYPE = max(1, this%NSURFTYPE)
       ! Only allocate the requested field
       select case (trim(field_name))
 #include "metstate_allocate_fields.inc"
