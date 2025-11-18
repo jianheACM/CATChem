@@ -10,8 +10,10 @@ simulation:
   name: test
   start_date: 20240501 0000
   end_date: 20240501 0100
-  species_filename: ./Configs/Default/CATChem_species.yml
-  emission_filename: ./Configs/Default/CATChem_emission.yml
+  #species_filename: ./Configs/Default/CATChem_species.yml
+  #emission_filename: ./Configs/Default/CATChem_emission.yml
+  species_filename: ./CATChem_species.yml
+  emission_filename: ./CATChem_emission.yml
   verbose:
     activate: true
 #============================================================================
@@ -40,13 +42,79 @@ diagnostics:
     enabled: true
     buffer_size: 1000
 #============================================================================
+# RunPhase settings: define process running order
+#============================================================================
+run_phases:
+  test1:
+    description: "Test phase 1"
+    processes:
+      seasalt
+  #     dust
+  #     drydep
+  # test2:
+  #   description: "Test phase 2"
+  #   processes:
+  #     dust
+  #     drydep
+  #     #wetdep
+
+#============================================================================
 # Settings for CATChem processes
 #============================================================================
-process:
+processes:
+  extemis:
+    activate: true
+    diagnostics: true
+    global_factor: 1.0
+    anthro:
+      activate: true
+      scale_factor: 1.0
+      source_file: "anthro_emis.nc"
+      format: "netcdf"
+      gridded: true
+      frequency: "hourly"
+      diag_list: [NO, SO2, CO]
+    point:
+      activate: true
+      scale_factor: 1.0
+      topfraction: -1.0
+      source_file: "point_emis.nc"
+      format: "netcdf"
+      gridded: false
+      frequency: "hourly"
+      lat_name: "LATITUDE"
+      lon_name: "LONGITUDE"
+      plume_rise: "sofiev"
+      stack_diameter:    STKDM
+      stack_height:      STKHT
+      stack_temperature: STKTK
+      stack_velocity:    STKVE
+      diag_list: [NO, SO2, CO]
+    fire:
+      activate: true
+      scale_factor: 1.0
+      topfraction: -1.0
+      source_file: "fire_emis.nc"
+      format: "netcdf"
+      gridded: true
+      frequency: "hourly"
+      plume_rise: "sofiev"
+      diag_list: [NO, SO2, CO]
+    fengsha:
+      activate: true
+      species: ["CLAYF", "SANDF", "DRAG", "UTHR"]
+      units: ["1", "1", "1", "1"]
+      scale_factor: [1.0, 1.0, 1.0, 1.0]
+      source_file: "fengsha_emis.nc"
+      format: "netcdf"
+      gridded: true
+      frequency: "static"
+      diag_list: []
   seasalt:
     activate: true
+    diagnostics: true
+    diag_species: [seas1, seas3, seas5]
     scheme: 'geos12'
-    diagnostics: true # New diagnostic switch
     gong97:
       scale_factor: 1.0
       weibull_flag: false
@@ -65,5 +133,14 @@ process:
     dust_beta: 1.0
   drydep:
     activate: true
-    scheme_opt: 1
-    resuspension: false
+    diagnostics: true
+    diag_species: [seas1, seas3, seas5]
+    gas_scheme: 'wesely'
+    aero_scheme: 'zhang'
+    wesely:
+      scale_factor: 1.0
+    gocart:
+      scale_factor: 1.0
+      resuspension: false
+    zhang:
+      scale_factor: 1.0

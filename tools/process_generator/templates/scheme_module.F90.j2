@@ -23,33 +23,19 @@
 
 module {{ config.class_name }}Scheme_{{ scheme.class_name }}_Mod
 
-   use iso_fortran_env, only: fp => real64
+   use precision_mod, only: fp
+   use {{ config.class_name }}Common_Mod, only: {{ config.class_name }}Scheme{{ scheme.class_name }}Config
+   use Constants, only: PI  !load the constants needed for this scheme
 
    implicit none
    private
 
    ! Public interface - pure science only
    public :: compute_{{ scheme.name }}
-   public :: {{ scheme.name }}_params_t
 
-   ! Physical constants (modify as needed for your scheme)
-   real(fp), parameter :: R_GAS = 8.314_fp           ! Universal gas constant [J/mol/K]
+   ! Additional physical constants (modify as needed for your scheme)
    real(fp), parameter :: T_STANDARD = 303.15_fp    ! Standard reference temperature [K]
    real(fp), parameter :: DEFAULT_SCALING = 1.0e-9_fp ! Default emission scaling factor
-   real(fp), parameter :: PI = 3.14159265359_fp     ! Pi constant
-
-   !> Science parameters for {{ scheme.name }} scheme
-   !! Host model is responsible for initializing and validating these
-   type :: {{ scheme.name }}_params_t
-{% if scheme.parameters and scheme.parameters|length > 0 %}
-{% for param_name, param in scheme.parameters.items() %}
-      real(fp) :: {{ param_name }}  ! {{ param.description if param.description else 'Parameter: ' + param_name }}
-{% endfor %}
-{% else %}
-      ! (No scheme parameters defined. Add your parameters here.)
-      real(fp) :: scaling_factor  ! Default scaling factor
-{% endif %}
-   end type {{ scheme.name }}_params_t
 
 contains
 
@@ -62,9 +48,17 @@ contains
    !! @param[in]  num_layers     Number of vertical layers
    !! @param[in]  num_species    Number of chemical species
    !! @param[in]  params         Scheme parameters (pre-validated by host)
-{% for field in scheme.required_met_fields %}
+{% if config.process_behavior and config.process_behavior.species_filter and config.process_behavior.species_filter.type == "emission_mapping" %}
+   !! @param[in]  n_species_mapping Number of chemical species per emission species (num_species)
+{% endif %}
+{% set all_met_fields = scheme | all_required_met_fields %}
+{% for field in all_met_fields %}
 {% if field is string %}
+{% if field_classifier.get_field_type(field) == 'special_timestep' %}
+   !! @param[in]  {{ field | lower | replace('-', '_') | replace('.', '_') }}    Time step [s] - retrieved from process interface
+{% else %}
    !! @param[in]  {{ field | lower | replace('-', '_') | replace('.', '_') }}    {{ field }} field [appropriate units]
+{% endif %}
 {% else %}
    !! @param[in]  {{ field.variable_name }}    {{ field.description }} [{{ field.units }}]
 {% endif %}
@@ -72,16 +66,60 @@ contains
    !! @param[in]  species_conc   Species concentrations [mol/mol] (num_layers, num_species)
    !! @param[inout] species_tendencies  Species tendency terms [mol/mol/s] (num_layers, num_species)
 {% if config.diagnostics %}
-   !! @param[inout] diag_mass_emission_total    Total mass emission diagnostic [{{ config.diagnostics[0].units if config.diagnostics else 'kg/m2/s' }}]
-   !! @param[inout] diag_number_emission_total  Total number emission diagnostic [{{ config.diagnostics[1].units if config.diagnostics and config.diagnostics|length > 1 else '#/m2/s' }}]
-   !! @param[inout] diag_mass_emission_per_bin   Mass emission per bin diagnostic [{{ config.diagnostics[2].units if config.diagnostics and config.diagnostics|length > 2 else 'kg/m2/s' }}] (num_species)
-   !! @param[inout] diag_number_emission_per_bin Number emission per bin diagnostic [{{ config.diagnostics[3].units if config.diagnostics and config.diagnostics|length > 3 else '#/m2/s' }}] (num_species)
+{% for diag in config.diagnostics %}
+{% set diag_name = diag['name'] if diag is mapping else diag %}
+{% set diag_desc = diag.get('description', 'Diagnostic field') if diag is mapping else 'Diagnostic field' %}
+{% set diag_units = diag.get('units', 'units') if diag is mapping else 'units' %}
+{% set diag_dims = diag.get('dimensions', 'auto') if diag is mapping else 'auto' %}
+{% if diag_dims == 'auto' %}
+{% if 'per_species' in diag_name or 'per_bin' in diag_name %}
+   !! @param[inout] {{ diag_name }}    {{ diag_desc }} [{{ diag_units }}] (num_species)
+{% else %}
+   !! @param[inout] {{ diag_name }}    {{ diag_desc }} [{{ diag_units }}]
 {% endif %}
+{% elif diag_dims == 'scalar' %}
+   !! @param[inout] {{ diag_name }}    {{ diag_desc }} [{{ diag_units }}]
+{% elif diag_dims == '1d' or diag_dims == 'num_species' %}
+   !! @param[inout] {{ diag_name }}    {{ diag_desc }} [{{ diag_units }}] (num_species)
+{% elif diag_dims == 'num_layers' %}
+   !! @param[inout] {{ diag_name }}    {{ diag_desc }} [{{ diag_units }}] (num_layers)
+{% else %}
+   !! @param[inout] {{ diag_name }}    {{ diag_desc }} [{{ diag_units }}] ({{ diag_dims }})
+{% endif %}
+{% endfor %}
+{% endif %}
+{% if scheme.scheme_diagnostics %}
+{% for diag in scheme.scheme_diagnostics %}
+{% set diag_name = diag['name'] if diag is mapping else diag %}
+{% set diag_desc = diag.get('description', 'Diagnostic field') if diag is mapping else 'Diagnostic field' %}
+{% set diag_units = diag.get('units', 'units') if diag is mapping else 'units' %}
+{% set diag_dims = diag.get('dimensions', 'auto') if diag is mapping else 'auto' %}
+{% if diag_dims == 'auto' %}
+{% if 'per_species' in diag_name or 'per_bin' in diag_name %}
+   !! @param[inout] {{ diag_name }}    {{ diag_desc }} [{{ diag_units }}] (num_species)
+{% else %}
+   !! @param[inout] {{ diag_name }}    {{ diag_desc }} [{{ diag_units }}]
+{% endif %}
+{% elif diag_dims == 'scalar' %}
+   !! @param[inout] {{ diag_name }}    {{ diag_desc }} [{{ diag_units }}]
+{% elif diag_dims == '1d' or diag_dims == 'num_species' %}
+   !! @param[inout] {{ diag_name }}    {{ diag_desc }} [{{ diag_units }}] (num_species)
+{% elif diag_dims == 'num_layers' %}
+   !! @param[inout] {{ diag_name }}    {{ diag_desc }} [{{ diag_units }}] (num_layers)
+{% else %}
+   !! @param[inout] {{ diag_name }}    {{ diag_desc }} [{{ diag_units }}] ({{ diag_dims }})
+{% endif %}
+{% endfor %}
+{% endif %}
+   !! @param[in] diagnostic_species_id Indices mapping diagnostic species to species array (optional, for per-species diagnostics)
    pure subroutine compute_{{ scheme.name }}( &
       num_layers, &
       num_species, &
-      params{% if scheme.required_met_fields and scheme.required_met_fields|length > 0 %}, &
-{% for field in scheme.required_met_fields %}
+{% if config.process_behavior and config.process_behavior.species_filter and config.process_behavior.species_filter.type == "emission_mapping" %}
+      n_species_mapping, &
+{% endif %}
+      params{% if all_met_fields and all_met_fields|length > 0 %}, &
+{% for field in all_met_fields %}
 {% if field is string %}
       {{ field | lower | replace('-', '_') | replace('.', '_') }}{% if not loop.last %}, &
 {% endif %}
@@ -96,50 +134,136 @@ contains
 {% endfor %}
 {% endif %}
       species_conc, &
-      species_tendencies{% if config.diagnostics %}, &
-      diag_mass_emission_total, &
-      diag_number_emission_total, &
-      diag_mass_emission_per_bin, &
-      diag_number_emission_per_bin{% endif %} &
+      species_tendencies{% if config.process_behavior and config.process_behavior.gas_aero_differentiation %}, &
+      is_gas{% endif %}{% if config.diagnostics %}{% for diag in config.diagnostics %}, &
+      {{ diag['name'] if diag is mapping else diag }}{% endfor %}{% endif %}{% if scheme.scheme_diagnostics %}{% for diag in scheme.scheme_diagnostics %}, &
+      {{ diag['name'] if diag is mapping else diag }}{% endfor %}{% endif %}{% if config.diagnostics or scheme.scheme_diagnostics %}, &
+      diagnostic_species_id{% endif %} &
    )
 
       ! Arguments
       integer, intent(in) :: num_layers
       integer, intent(in) :: num_species
-      type({{ scheme.name }}_params_t), intent(in) :: params
-{% if scheme.required_met_fields and scheme.required_met_fields|length > 0 %}
-{% for field in scheme.required_met_fields %}
+{% if config.process_behavior and config.process_behavior.species_filter and config.process_behavior.species_filter.type == "emission_mapping" %}
+      integer, intent(in) :: n_species_mapping(num_species)  ! Number of chem species per emission species
+{% endif %}
+      type({{ config.class_name }}Scheme{{ scheme.class_name }}Config), intent(in) :: params
+{% if all_met_fields and all_met_fields|length > 0 %}
+{% for field in all_met_fields %}
 {% if field is string %}
-      real(fp), intent(in) :: {{ field | lower | replace('-', '_') | replace('.', '_') }}(num_layers)
+{% set field_name = field %}
+{% set var_name = field | lower | replace('-', '_') | replace('.', '_') %}
+{% if field_classifier.get_field_type(field_name) == 'special_timestep' %}
+      {{ field_classifier.get_data_type(field_name) }}, intent(in) :: {{ var_name }}  ! Time step [s] - from process interface
+{% elif field_classifier.get_field_type(field_name) == '3d_edge' %}
+      {{ field_classifier.get_data_type(field_name) }}, intent(in) :: {{ var_name }}(num_layers+1)  ! Edge field - requires nz+1 dimensions
+{% elif field_classifier.get_field_type(field_name) == '2d_surface' %}
+      {{ field_classifier.get_data_type(field_name) }}, intent(in) :: {{ var_name }}  ! Surface field - scalar
+{% elif field_classifier.get_field_type(field_name) == 'categorical' %}
+      {{ field_classifier.get_data_type(field_name) }}, intent(in) :: {{ var_name }}(:)  ! Categorical field - variable dimension array
+{% else %}
+      {{ field_classifier.get_data_type(field_name) }}, intent(in) :: {{ var_name }}(num_layers)    ! 3D atmospheric field
+{% endif %}
 {% else %}
 {% if field.dimensions == "scalar" %}
-      real(fp), intent(in) :: {{ field.variable_name }}  ! {{ field.description }} [{{ field.units }}]
+      {{ field_classifier.get_data_type(field.name) }}, intent(in) :: {{ field.variable_name }}  ! {{ field.description }} [{{ field.units }}]
 {% elif field.dimensions == "1d" %}
-      real(fp), intent(in) :: {{ field.variable_name }}(num_layers)  ! {{ field.description }} [{{ field.units }}]
-{% elif field.dimensions == "2d" %}
-      real(fp), intent(in) :: {{ field.variable_name }}(num_layers, {{ field.second_dimension_size | default('num_species') }})  ! {{ field.description }} [{{ field.units }}]
+{% if field_classifier.get_field_type(field.name) == 'special_timestep' %}
+      {{ field_classifier.get_data_type(field.name) }}, intent(in) :: {{ field.variable_name }}  ! {{ field.description }} [{{ field.units }}] - from process interface
+{% elif field_classifier.get_field_type(field.name) == '3d_edge' %}
+      {{ field_classifier.get_data_type(field.name) }}, intent(in) :: {{ field.variable_name }}(num_layers+1)  ! {{ field.description }} [{{ field.units }}] - Edge field
+{% elif field_classifier.get_field_type(field.name) == '2d_surface' %}
+      {{ field_classifier.get_data_type(field.name) }}, intent(in) :: {{ field.variable_name }}  ! {{ field.description }} [{{ field.units }}] - Surface field
+{% elif field_classifier.get_field_type(field.name) == 'categorical' %}
+      {{ field_classifier.get_data_type(field.name) }}, intent(in) :: {{ field.variable_name }}(:)  ! {{ field.description }} [{{ field.units }}] - Categorical field
 {% else %}
-      real(fp), intent(in) :: {{ field.variable_name }}(num_layers)  ! {{ field.description }} [{{ field.units }}] (default 1D)
+      {{ field_classifier.get_data_type(field.name) }}, intent(in) :: {{ field.variable_name }}(num_layers)  ! {{ field.description }} [{{ field.units }}] - 3D atmospheric field
+{% endif %}
+{% elif field.dimensions == "2d" %}
+      {{ field_classifier.get_data_type(field.name) }}, intent(in) :: {{ field.variable_name }}(num_layers, {{ field.second_dimension_size | default('num_species') }})  ! {{ field.description }} [{{ field.units }}]
+{% else %}
+{% if field_classifier.get_field_type(field.name) == '3d_edge' %}
+      {{ field_classifier.get_data_type(field.name) }}, intent(in) :: {{ field.variable_name }}(num_layers+1)  ! {{ field.description }} [{{ field.units }}] - Edge field (default 1D)
+{% elif field_classifier.get_field_type(field.name) == '2d_surface' %}
+      {{ field_classifier.get_data_type(field.name) }}, intent(in) :: {{ field.variable_name }}  ! {{ field.description }} [{{ field.units }}] - Surface field (default)
+{% elif field_classifier.get_field_type(field.name) == 'categorical' %}
+      {{ field_classifier.get_data_type(field.name) }}, intent(in) :: {{ field.variable_name }}(:)  ! {{ field.description }} [{{ field.units }}] - Categorical field (default 1D)
+{% else %}
+      {{ field_classifier.get_data_type(field.name) }}, intent(in) :: {{ field.variable_name }}(num_layers)  ! {{ field.description }} [{{ field.units }}] - 3D atmospheric field (default 1D)
+{% endif %}
 {% endif %}
 {% endif %}
 {% endfor %}
 {% endif %}
 {% if scheme.required_species_properties and scheme.required_species_properties|length > 0 %}
 {% for prop in scheme.required_species_properties %}
-      real(fp), intent(in) :: species_{{ prop }}(num_species)  ! Species {{ prop }} property
+      {{ field_classifier.get_species_property_data_type(prop) }}, intent(in) :: species_{{ prop }}(num_species)  ! Species {{ prop }} property
 {% endfor %}
 {% endif %}
+{% if config.process_behavior and config.process_behavior.species_filter and config.process_behavior.species_filter.type == "emission_mapping" %}
+      real(fp), intent(in) :: species_conc(num_layers, sum(n_species_mapping))  ! Chemical species concentrations
+{% else %}
       real(fp), intent(in) :: species_conc(num_layers, num_species)
+{% endif %}
       real(fp), intent(inout) :: species_tendencies(num_layers, num_species)
+{% if config.process_behavior and config.process_behavior.gas_aero_differentiation %}
+      logical, intent(in) :: is_gas(num_species)  ! Species type flags (true=gas, false=aerosol)
+{% endif %}
 {% if config.diagnostics %}
-      real(fp), intent(inout), optional :: diag_mass_emission_total
-      real(fp), intent(inout), optional :: diag_number_emission_total  
-      real(fp), intent(inout), optional :: diag_mass_emission_per_bin(num_species)
-      real(fp), intent(inout), optional :: diag_number_emission_per_bin(num_species)
+{% for diag in config.diagnostics %}
+{% set diag_name = diag['name'] if diag is mapping else diag %}
+{% set diag_dims = diag.get('dimensions', 'auto') if diag is mapping else 'auto' %}
+{% if diag_dims == 'auto' %}
+{% if 'per_species' in diag_name or 'per_bin' in diag_name %}
+      real(fp), intent(inout), optional :: {{ diag_name }}(:)
+{% else %}
+      real(fp), intent(inout), optional :: {{ diag_name }}
+{% endif %}
+{% elif diag_dims == 'scalar' %}
+      real(fp), intent(inout), optional :: {{ diag_name }}
+{% elif diag_dims == '1d' or diag_dims == 'num_species' %}
+      real(fp), intent(inout), optional :: {{ diag_name }}(:)
+{% elif diag_dims == 'num_layers' %}
+      real(fp), intent(inout), optional :: {{ diag_name }}(num_layers)
+{% else %}
+      real(fp), intent(inout), optional :: {{ diag_name }}({{ diag_dims }})
+{% endif %}
+{% endfor %}
+{% endif %}
+{% if scheme.scheme_diagnostics %}
+{% for diag in scheme.scheme_diagnostics %}
+{% set diag_name = diag['name'] if diag is mapping else diag %}
+{% set diag_dims = diag.get('dimensions', 'auto') if diag is mapping else 'auto' %}
+{% if diag_dims == 'auto' %}
+{% if 'per_species' in diag_name or 'per_bin' in diag_name %}
+      real(fp), intent(inout), optional :: {{ diag_name }}(:)
+{% else %}
+      real(fp), intent(inout), optional :: {{ diag_name }}
+{% endif %}
+{% elif diag_dims == 'scalar' %}
+      real(fp), intent(inout), optional :: {{ diag_name }}
+{% elif diag_dims == '1d' or diag_dims == 'num_species' %}
+      real(fp), intent(inout), optional :: {{ diag_name }}(:)
+{% elif diag_dims == 'num_layers' %}
+      real(fp), intent(inout), optional :: {{ diag_name }}(num_layers)
+{% else %}
+      real(fp), intent(inout), optional :: {{ diag_name }}({{ diag_dims }})
+{% endif %}
+{% endfor %}
+{% endif %}
+{% if config.diagnostics or scheme.scheme_diagnostics %}
+      integer, intent(in), optional :: diagnostic_species_id(:)  ! Indices mapping diagnostic species to species array
 {% endif %}
 
       ! Local variables
       integer :: k, species_idx
+{% if config.diagnostics or scheme.scheme_diagnostics %}
+      integer :: diag_idx  ! For diagnostic species indexing
+{% endif %}
+{% if config.process_behavior and config.process_behavior.species_filter and config.process_behavior.species_filter.type == "emission_mapping" %}
+      integer :: chem_idx, j  ! For emission mapping indexing
+      real(fp) :: avg_conc  ! Average concentration for emission mapping
+{% endif %}
       real(fp) :: base_emission_factor
       real(fp) :: environmental_factor
       real(fp) :: species_factor
@@ -158,8 +282,9 @@ contains
          environmental_factor = 1.0_fp
 
          ! Apply scheme-specific environmental responses based on meteorological fields
-{% if scheme.required_met_fields and scheme.required_met_fields|length > 0 %}
-{% for field in scheme.required_met_fields %}
+{% set all_met_fields = scheme|all_required_met_fields %}
+{% if all_met_fields and all_met_fields|length > 0 %}
+{% for field in all_met_fields %}
 {% if field is string %}
 {% if field == "temperature_2m" %}
          ! Temperature response (customize for your scheme)
@@ -214,7 +339,66 @@ contains
 {% endif %}
 
          ! Apply to each species
+{% if config.process_behavior and config.process_behavior.species_filter and config.process_behavior.species_filter.type == "emission_mapping" %}
+         ! For emission mapping: loop over emission species, consider mapped chemical species
+         chem_idx = 1  ! Index into chemical species concentration array
+         do species_idx = 1, num_species  ! Loop over emission species
+{% if config.process_behavior and config.process_behavior.gas_aero_differentiation %}
+            ! Skip species that don't match scheme type (gas vs aerosol)
+{% if scheme.gas_or_aero == 'gas' %}
+            if (.not. is_gas(species_idx)) then
+               ! Still need to advance chemical species index
+               chem_idx = chem_idx + n_species_mapping(species_idx)
+               cycle
+            end if
+{% else %}
+            if (is_gas(species_idx)) then
+               ! Still need to advance chemical species index
+               chem_idx = chem_idx + n_species_mapping(species_idx)
+               cycle
+            end if
+{% endif %}
+{% endif %}
+            ! Base emission factor (customize this for species-specific emissions)
+{% if scheme.parameters and 'scaling_factor' in scheme.parameters %}
+            base_emission_factor = params%scaling_factor
+{% else %}
+            base_emission_factor = DEFAULT_SCALING
+{% endif %}
+
+            ! Species-specific factor (customize based on species properties)
+            species_factor = 1.0_fp  ! TODO: Add species-specific scaling
+
+            ! Compute emission flux using average of mapped chemical species concentrations
+            ! TODO: Customize this averaging/selection logic for your scheme
+            avg_conc = 0.0_fp
+            do j = 1, n_species_mapping(species_idx)
+               avg_conc = avg_conc + species_conc(k, chem_idx + j - 1)
+            end do
+            avg_conc = avg_conc / real(n_species_mapping(species_idx), fp)
+
+            ! Compute emission flux using your scheme's formula
+            ! This is a simple example - replace with your actual algorithm
+            species_tendencies(k, species_idx) = base_emission_factor * &
+                                          environmental_factor * &
+                                          species_factor * &
+                                          (1.0_fp + avg_conc)
+
+            ! Ensure non-negative emissions
+            species_tendencies(k, species_idx) = max(0.0_fp, species_tendencies(k, species_idx))
+
+            ! Move chemical species index forward
+            chem_idx = chem_idx + n_species_mapping(species_idx)
+{% else %}
          do species_idx = 1, num_species
+{% if config.process_behavior and config.process_behavior.gas_aero_differentiation %}
+            ! Skip species that don't match scheme type (gas vs aerosol)
+{% if scheme.gas_or_aero == 'gas' %}
+            if (.not. is_gas(species_idx)) cycle
+{% else %}
+            if (is_gas(species_idx)) cycle
+{% endif %}
+{% endif %}
             ! Base emission factor (customize this for species-specific emissions)
 {% if scheme.parameters and 'scaling_factor' in scheme.parameters %}
             base_emission_factor = params%scaling_factor
@@ -234,23 +418,114 @@ contains
 
             ! Ensure non-negative emissions
             species_tendencies(k, species_idx) = max(0.0_fp, species_tendencies(k, species_idx))
+{% endif %}
 {% if config.diagnostics %}
             
             ! TODO: Update diagnostic fields here based on your scheme's requirements
             ! Each process should implement custom diagnostic calculations
             ! Example patterns:
-            if (present(diag_mass_emission_total)) then
-               ! Add your custom mass emission total calculation
+{% for diag in config.diagnostics %}
+{% set diag_name = diag['name'] if diag is mapping else diag %}
+{% set diag_desc = diag.get('description', 'diagnostic') if diag is mapping else 'diagnostic' %}
+{% set diag_dims = diag.get('dimensions', 'auto') if diag is mapping else 'auto' %}
+{% if diag_dims == 'auto' %}
+{% if 'per_species' in diag_name or 'per_bin' in diag_name %}
+            ! Per-species diagnostic: only update for diagnostic species
+            if (present({{ diag_name }}) .and. present(diagnostic_species_id)) then
+               ! Find position of this species in diagnostic_species_id array
+               do diag_idx = 1, size(diagnostic_species_id)
+                  if (diagnostic_species_id(diag_idx) == species_idx) then
+                     ! Add your custom {{ diag_desc | lower }} calculation
+                     {{ diag_name }}(diag_idx) = species_tendencies(k, species_idx) * 1.0_fp  ! TODO: Replace with actual calculation
+                     exit
+                  end if
+               end do
             end if
-            if (present(diag_number_emission_total)) then
-               ! Add your custom number emission total calculation  
+{% else %}
+            if (present({{ diag_name }})) then
+               ! Add your custom {{ diag_desc | lower }} calculation
+               {{ diag_name }} = {{ diag_name }} + species_tendencies(k, species_idx) * 1.0_fp  ! TODO: Replace with actual calculation
             end if
-            if (present(diag_mass_emission_per_bin)) then
-               ! Add your custom per-bin mass emission calculation
+{% endif %}
+{% else %}
+{% if diag_dims == 'scalar' %}
+            if (present({{ diag_name }})) then
+               ! Add your custom {{ diag_desc | lower }} calculation
+               {{ diag_name }} = {{ diag_name }} + species_tendencies(k, species_idx) * 1.0_fp  ! TODO: Replace with actual calculation
             end if
-            if (present(diag_number_emission_per_bin)) then
-               ! Add your custom per-bin number emission calculation
+{% elif diag_dims == '1d' or diag_dims == 'num_species' %}
+            ! Per-species diagnostic: only update for diagnostic species  
+            if (present({{ diag_name }}) .and. present(diagnostic_species_id)) then
+               ! Find position of this species in diagnostic_species_id array
+               do diag_idx = 1, size(diagnostic_species_id)
+                  if (diagnostic_species_id(diag_idx) == species_idx) then
+                     ! Add your custom {{ diag_desc | lower }} calculation
+                     {{ diag_name }}(diag_idx) = species_tendencies(k, species_idx) * 1.0_fp  ! TODO: Replace with actual calculation
+                     exit
+                  end if
+               end do
             end if
+{% else %}
+            if (present({{ diag_name }})) then
+               ! Add your custom {{ diag_desc | lower }} calculation for {{ diag_dims }} diagnostic
+            end if
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% if scheme.scheme_diagnostics %}
+            
+            ! TODO: Update scheme-specific diagnostic fields here based on your scheme's requirements
+            ! Each scheme should implement custom diagnostic calculations
+            ! Example patterns:
+{% for diag in scheme.scheme_diagnostics %}
+{% set diag_name = diag['name'] if diag is mapping else diag %}
+{% set diag_desc = diag.get('description', 'diagnostic') if diag is mapping else 'diagnostic' %}
+{% set diag_dims = diag.get('dimensions', 'auto') if diag is mapping else 'auto' %}
+{% if diag_dims == 'auto' %}
+{% if 'per_species' in diag_name or 'per_bin' in diag_name %}
+            ! Per-species diagnostic: only update for diagnostic species
+            if (present({{ diag_name }}) .and. present(diagnostic_species_id)) then
+               ! Find position of this species in diagnostic_species_id array
+               do diag_idx = 1, size(diagnostic_species_id)
+                  if (diagnostic_species_id(diag_idx) == species_idx) then
+                     ! Add your custom {{ diag_desc | lower }} calculation
+                     {{ diag_name }}(diag_idx) = species_tendencies(k, species_idx) * 1.0_fp  ! TODO: Replace with actual calculation
+                     exit
+                  end if
+               end do
+            end if
+{% else %}
+            if (present({{ diag_name }})) then
+               ! Add your custom {{ diag_desc | lower }} calculation
+               {{ diag_name }} = {{ diag_name }} + species_tendencies(k, species_idx) * 1.0_fp  ! TODO: Replace with actual calculation
+            end if
+{% endif %}
+{% else %}
+{% if diag_dims == 'scalar' %}
+            if (present({{ diag_name }})) then
+               ! Add your custom {{ diag_desc | lower }} calculation
+               {{ diag_name }} = {{ diag_name }} + species_tendencies(k, species_idx) * 1.0_fp  ! TODO: Replace with actual calculation
+            end if
+{% elif diag_dims == '1d' or diag_dims == 'num_species' %}
+            ! Per-species diagnostic: only update for diagnostic species
+            if (present({{ diag_name }}) .and. present(diagnostic_species_id)) then
+               ! Find position of this species in diagnostic_species_id array
+               do diag_idx = 1, size(diagnostic_species_id)
+                  if (diagnostic_species_id(diag_idx) == species_idx) then
+                     ! Add your custom {{ diag_desc | lower }} calculation
+                     {{ diag_name }}(diag_idx) = species_tendencies(k, species_idx) * 1.0_fp  ! TODO: Replace with actual calculation
+                     exit
+                  end if
+               end do
+            end if
+{% else %}
+            if (present({{ diag_name }})) then
+               ! Add your custom {{ diag_desc | lower }} calculation for {{ diag_dims }} diagnostic
+            end if
+{% endif %}
+{% endif %}
+{% endfor %}
 {% endif %}
          end do
 
@@ -278,7 +553,7 @@ contains
    !> Example helper function for species-specific scaling
    pure function compute_species_scaling_{{ scheme.name }}(species_idx, params) result(scaling)
       integer, intent(in) :: species_idx
-      type({{ scheme.name }}_params_t), intent(in) :: params
+      type({{ config.class_name }}Scheme{{ scheme.class_name }}Config), intent(in) :: params
       real(fp) :: scaling
 
       ! Species-specific scaling - customize for your scheme

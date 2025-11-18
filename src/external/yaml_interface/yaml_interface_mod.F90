@@ -9,11 +9,11 @@
 module yaml_interface_mod
    use iso_c_binding
    use iso_fortran_env, only: real32, real64
+   use Precision_Mod, only: fp  ! Use project-wide precision definition
    implicit none
    private
 
-   ! Define precision types
-   integer, parameter :: fp = real64  ! Default floating-point precision
+   ! No longer define fp here - use the one from Precision_Mod
 
    ! Public types
    public :: yaml_node_t
@@ -25,6 +25,9 @@ module yaml_interface_mod
    public :: yaml_has_key, yaml_get_size, yaml_is_sequence, yaml_is_map
    public :: yaml_set_string, yaml_set_integer, yaml_set_real, yaml_set_logical
    public :: yaml_save_file, yaml_get_all_keys
+
+   ! Safe conversion functions (no yaml-cpp error messages)
+   public :: safe_yaml_get_real, safe_yaml_get_logical, safe_yaml_get_integer
 
    ! High-level generic interfaces
    public :: yaml_get, yaml_set, yaml_get_array
@@ -41,8 +44,8 @@ module yaml_interface_mod
       module procedure yaml_get_string_generic
       module procedure yaml_get_integer_generic
       module procedure yaml_get_logical_generic
-      module procedure yaml_get_real_dp_generic
       module procedure yaml_get_real_sp_generic
+      module procedure yaml_get_real_dp_generic
    end interface yaml_get
 
    !> Generic interface for setting values in YAML
@@ -53,7 +56,6 @@ module yaml_interface_mod
       module procedure yaml_set_integer_generic
       module procedure yaml_set_logical_generic
       module procedure yaml_set_real_dp_generic
-      module procedure yaml_set_real_sp_generic
    end interface yaml_set
 
    !> Generic interface for getting arrays from YAML
@@ -63,7 +65,6 @@ module yaml_interface_mod
       module procedure yaml_get_string_array_generic
       module procedure yaml_get_integer_array_generic
       module procedure yaml_get_real_dp_array_generic
-      module procedure yaml_get_real_sp_array_generic
    end interface yaml_get_array
 
    ! C interface declarations
@@ -271,8 +272,16 @@ contains
       logical :: success
 
       character(len=len(value)) :: c_value
+      integer :: i
+      
       success = c_yaml_get_string(node%ptr, trim(key)//c_null_char, c_value, len(value))
       if (success) then
+         ! Clean null characters from C string before returning to Fortran
+         do i = 1, len(c_value)
+            if (ichar(c_value(i:i)) == 0) then
+               c_value(i:i) = ' '
+            endif
+         end do
          value = c_value
       endif
    end function yaml_get_string
@@ -367,13 +376,19 @@ contains
 
       character(len=len(values)) :: c_values(size(values))
       integer(c_int) :: c_actual_size
-      integer :: i
+      integer :: i, j
 
       success = c_yaml_get_string_array(node%ptr, trim(key)//c_null_char, &
                                         c_values, size(values), len(values), c_actual_size)
       if (success) then
          actual_size = c_actual_size
          do i = 1, actual_size
+            ! Clean null characters from each C string before returning to Fortran
+            do j = 1, len(c_values(i))
+               if (ichar(c_values(i)(j:j)) == 0) then
+                  c_values(i)(j:j) = ' '
+               endif
+            end do
             values(i) = c_values(i)
          end do
       endif
@@ -517,8 +532,38 @@ contains
       if (present(rc)) rc = local_rc
    end subroutine yaml_get_integer_generic
 
-   !> Generic double precision real getter
+   !> Generic single precision real getter
+   subroutine yaml_get_real_sp_generic(node, key, value, rc, default_value)
+      use iso_fortran_env, only: real32
+      type(yaml_node_t), intent(in) :: node
+      character(len=*), intent(in) :: key
+      real(kind=real32), intent(out) :: value
+      integer, intent(out), optional :: rc
+      real(kind=real32), intent(in), optional :: default_value
+
+      logical :: success
+      integer :: local_rc
+      real(c_double) :: c_value
+
+      ! Call C interface directly and convert to single precision
+      success = c_yaml_get_real(node%ptr, trim(key)//c_null_char, c_value)
+      if (success) then
+         value = real(c_value, kind=real32)
+         local_rc = 0
+      else
+         local_rc = -1
+         if (present(default_value)) then
+            value = default_value
+            local_rc = 0
+         endif
+      endif
+
+      if (present(rc)) rc = local_rc
+   end subroutine yaml_get_real_sp_generic
+
+   !> Generic double precision real getter  
    subroutine yaml_get_real_dp_generic(node, key, value, rc, default_value)
+      use iso_fortran_env, only: real64
       type(yaml_node_t), intent(in) :: node
       character(len=*), intent(in) :: key
       real(kind=real64), intent(out) :: value
@@ -527,10 +572,12 @@ contains
 
       logical :: success
       integer :: local_rc
+      real(c_double) :: c_value
 
-      success = yaml_get_real(node, key, value)
-
+      ! Call C interface directly and convert to double precision
+      success = c_yaml_get_real(node%ptr, trim(key)//c_null_char, c_value)
       if (success) then
+         value = real(c_value, kind=real64)
          local_rc = 0
       else
          local_rc = -1
@@ -542,34 +589,6 @@ contains
 
       if (present(rc)) rc = local_rc
    end subroutine yaml_get_real_dp_generic
-
-   !> Generic single precision real getter
-   subroutine yaml_get_real_sp_generic(node, key, value, rc, default_value)
-      type(yaml_node_t), intent(in) :: node
-      character(len=*), intent(in) :: key
-      real(kind=real32), intent(out) :: value
-      integer, intent(out), optional :: rc
-      real(kind=real32), intent(in), optional :: default_value
-
-      logical :: success
-      integer :: local_rc
-      real(kind=real64) :: temp_value
-
-      success = yaml_get_real(node, key, temp_value)
-
-      if (success) then
-         local_rc = 0
-         value = real(temp_value, real32)
-      else
-         local_rc = -1
-         if (present(default_value)) then
-            value = default_value
-            local_rc = 0
-         endif
-      endif
-
-      if (present(rc)) rc = local_rc
-   end subroutine yaml_get_real_sp_generic
 
    !> Generic logical getter with optional default and return code
    subroutine yaml_get_logical_generic(node, key, value, rc, default_value)
@@ -633,7 +652,7 @@ contains
    subroutine yaml_set_real_dp_generic(node, key, value, rc)
       type(yaml_node_t), intent(in) :: node
       character(len=*), intent(in) :: key
-      real(kind=real64), intent(in) :: value
+      real(kind=fp), intent(in) :: value
       integer, intent(out), optional :: rc
 
       logical :: success
@@ -644,24 +663,6 @@ contains
 
       if (present(rc)) rc = local_rc
    end subroutine yaml_set_real_dp_generic
-
-   !> Generic single precision real setter
-   subroutine yaml_set_real_sp_generic(node, key, value, rc)
-      type(yaml_node_t), intent(in) :: node
-      character(len=*), intent(in) :: key
-      real(kind=real32), intent(in) :: value
-      integer, intent(out), optional :: rc
-
-      logical :: success
-      integer :: local_rc
-      real(kind=real64) :: temp_value
-
-      temp_value = real(value, real64)
-      success = yaml_set_real(node, key, temp_value)
-      local_rc = merge(0, -1, success)
-
-      if (present(rc)) rc = local_rc
-   end subroutine yaml_set_real_sp_generic
 
    !> Generic logical setter with return code
    subroutine yaml_set_logical_generic(node, key, value, rc)
@@ -719,7 +720,7 @@ contains
    subroutine yaml_get_real_dp_array_generic(node, key, values, rc, actual_size)
       type(yaml_node_t), intent(in) :: node
       character(len=*), intent(in) :: key
-      real(kind=real64), intent(out) :: values(:)
+      real(kind=fp), intent(out) :: values(:)
       integer, intent(out), optional :: rc
       integer, intent(out), optional :: actual_size
 
@@ -733,31 +734,6 @@ contains
       if (present(actual_size)) actual_size = local_size
    end subroutine yaml_get_real_dp_array_generic
 
-   !> Generic single precision real array getter
-   subroutine yaml_get_real_sp_array_generic(node, key, values, rc, actual_size)
-      type(yaml_node_t), intent(in) :: node
-      character(len=*), intent(in) :: key
-      real(kind=real32), intent(out) :: values(:)
-      integer, intent(out), optional :: rc
-      integer, intent(out), optional :: actual_size
-
-      logical :: success
-      integer :: local_rc, local_size, i
-      real(kind=real64) :: temp_values(size(values))
-
-      success = yaml_get_real_array(node, key, temp_values, local_size)
-      local_rc = merge(0, -1, success)
-
-      if (success) then
-         do i = 1, min(local_size, size(values))
-            values(i) = real(temp_values(i), real32)
-         end do
-      endif
-
-      if (present(rc)) rc = local_rc
-      if (present(actual_size)) actual_size = local_size
-   end subroutine yaml_get_real_sp_array_generic
-
    !> Get all keys from a YAML map
    function yaml_get_all_keys(node, keys, actual_count) result(success)
       type(yaml_node_t), intent(in) :: node
@@ -767,7 +743,7 @@ contains
 
       character(kind=c_char) :: c_keys(size(keys) * len(keys(1)))
       integer(c_int) :: c_actual_count
-      integer :: i, key_len, start_pos
+      integer :: i, j, key_len, start_pos
 
       key_len = len(keys(1))
       success = c_yaml_get_all_keys(node%ptr, c_keys, size(keys), key_len, c_actual_count)
@@ -777,10 +753,123 @@ contains
          do i = 1, actual_count
             start_pos = (i - 1) * key_len + 1
             keys(i) = transfer(c_keys(start_pos:start_pos + key_len - 1), keys(i))
+            ! Clean null characters from each key before returning to Fortran
+            do j = 1, len(keys(i))
+               if (ichar(keys(i)(j:j)) == 0) then
+                  keys(i)(j:j) = ' '
+               endif
+            end do
          end do
       else
          actual_count = 0
       endif
    end function yaml_get_all_keys
+
+   !========================================================================
+   ! Safe conversion functions (no yaml-cpp error messages)
+   !========================================================================
+
+   !> \brief Safe YAML real number reader
+   !! Reads value as string first, then converts to avoid yaml-cpp conversion errors
+   subroutine safe_yaml_get_real(yaml_root, key, value, rc)
+      implicit none
+      type(yaml_node_t), intent(in) :: yaml_root
+      character(len=*), intent(in) :: key
+      real(fp), intent(out) :: value
+      integer, intent(out) :: rc
+
+      character(len=64) :: str_value
+      integer :: iostat_val
+
+      ! Try to read as string first to avoid yaml-cpp conversion errors
+      call yaml_get(yaml_root, key, str_value, rc)
+      if (rc /= 0) then
+         return  ! Key not found
+      endif
+
+      ! Convert string to real
+      read(str_value, *, iostat=iostat_val) value
+      if (iostat_val /= 0) then
+         rc = -1  ! Conversion failed
+      else
+         rc = 0   ! Success
+      endif
+   end subroutine safe_yaml_get_real
+
+   !> \brief Safe YAML integer reader
+   !! Reads value as string first, then converts to avoid yaml-cpp conversion errors
+   subroutine safe_yaml_get_integer(yaml_root, key, value, rc)
+      implicit none
+      type(yaml_node_t), intent(in) :: yaml_root
+      character(len=*), intent(in) :: key
+      integer, intent(out) :: value
+      integer, intent(out) :: rc
+
+      character(len=64) :: str_value
+      integer :: iostat_val
+
+      ! Try to read as string first to avoid yaml-cpp conversion errors
+      call yaml_get(yaml_root, key, str_value, rc)
+      if (rc /= 0) then
+         return  ! Key not found
+      endif
+
+      ! Convert string to integer
+      read(str_value, *, iostat=iostat_val) value
+      if (iostat_val /= 0) then
+         rc = -1  ! Conversion failed
+      else
+         rc = 0   ! Success
+      endif
+   end subroutine safe_yaml_get_integer
+
+   !> \brief Safe YAML logical reader
+   !! Reads value as string first, then converts to avoid yaml-cpp conversion errors
+   subroutine safe_yaml_get_logical(yaml_root, key, value, rc)
+      implicit none
+      type(yaml_node_t), intent(in) :: yaml_root
+      character(len=*), intent(in) :: key
+      logical, intent(out) :: value
+      integer, intent(out) :: rc
+
+      character(len=64) :: str_value
+      character(len=64) :: lower_str
+
+      ! Try to read as string first to avoid yaml-cpp conversion errors
+      call yaml_get(yaml_root, key, str_value, rc)
+      if (rc /= 0) then
+         return  ! Key not found
+      endif
+
+      ! Convert to lowercase for comparison
+      lower_str = trim(adjustl(str_value))
+      call to_lowercase_internal(lower_str)
+
+      ! Convert string to logical with various accepted formats
+      select case (trim(lower_str))
+         case ('true', 't', '1', 'yes', 'y', 'on')
+            value = .true.
+            rc = 0
+         case ('false', 'f', '0', 'no', 'n', 'off')
+            value = .false.
+            rc = 0
+         case default
+            rc = -1  ! Conversion failed
+      end select
+   end subroutine safe_yaml_get_logical
+
+   !> \brief Convert string to lowercase (internal helper)
+   subroutine to_lowercase_internal(str)
+      implicit none
+      character(len=*), intent(inout) :: str
+      integer :: i, ascii_val
+
+      do i = 1, len_trim(str)
+         ascii_val = ichar(str(i:i))
+         if (ascii_val >= 65 .and. ascii_val <= 90) then  ! A-Z
+            str(i:i) = char(ascii_val + 32)  ! Convert to lowercase
+         endif
+      end do
+   end subroutine to_lowercase_internal
 
 end module yaml_interface_mod

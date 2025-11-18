@@ -18,6 +18,7 @@ module ProcessManager_Mod
    use GridManager_Mod, only : GridManagerType, ColumnIteratorType
    use ColumnInterface_Mod, only : ColumnProcessorType, ColumnViewType
    use VirtualColumn_Mod, only : VirtualColumnType
+   use ConfigManager_Mod, only : ConfigDataType, RunPhaseType, ProcessConfigType
 
    implicit none
    private
@@ -26,11 +27,12 @@ module ProcessManager_Mod
 
    type :: ProcessManagerType
       private
-      class(ProcessInterface), allocatable :: processes(:)
+      class(ProcessInterface), allocatable, public  :: processes(:)
       integer :: num_processes = 0
       integer :: max_processes = 50
       type(ProcessFactoryType) :: factory
       type(ColumnProcessorType) :: column_processor  !< Batch column processor
+      character(len=64), public, allocatable :: required_met_fields(:)  !< All unique required met fields from processes
    contains
       procedure :: init => manager_init
       procedure :: add_process => manager_add_process
@@ -41,11 +43,13 @@ module ProcessManager_Mod
       procedure :: finalize => manager_finalize
       procedure :: list_processes => manager_list_processes
       procedure :: get_column_processes => manager_get_column_processes
-      procedure :: configure_run_phases => manager_configure_run_phases
       procedure :: run_phase => manager_run_phase
+      procedure :: run_all_phases => manager_run_all_phases
       procedure :: run_all_processes => manager_run_all_processes
       procedure :: set_max_processes => manager_set_max_processes
       procedure :: enable_column_batching => manager_enable_column_batching
+      procedure :: register_process => manager_register_process
+      procedure, private :: add_met_fields_from_process => manager_add_met_fields_from_process
    end type ProcessManagerType
 
 contains
@@ -61,6 +65,10 @@ contains
       ! Initialize counters - allocatable array will be allocated on first assignment
       this%num_processes = 0
 
+      ! Initialize empty required met fields array
+      if (allocated(this%required_met_fields)) deallocate(this%required_met_fields)
+      allocate(this%required_met_fields(0))
+
       ! Initialize column processor with default max columns
       call this%column_processor%init(100, rc)  ! Default max columns
       if (rc /= CC_SUCCESS) return
@@ -69,10 +77,9 @@ contains
    end subroutine manager_init
 
    !> \brief Add a process to the manager
-   subroutine manager_add_process(this, process_name, scheme_name, container, rc)
+   subroutine manager_add_process(this, process_name, container, rc)
       class(ProcessManagerType), intent(inout) :: this
       character(len=*), intent(in) :: process_name
-      character(len=*), intent(in) :: scheme_name
       type(StateManagerType), intent(inout) :: container
       integer, intent(out) :: rc
 
@@ -83,12 +90,16 @@ contains
          return
       endif
 
-      ! Create the process
-      call this%factory%create_process(process_name, scheme_name, container, new_process, rc)
+      ! Create the process (scheme is read from configuration)
+      call this%factory%create_process(process_name, container, new_process, rc)
       if (rc /= CC_SUCCESS) return
 
       ! Initialize the process
       call new_process%init(container, rc)
+      if (rc /= CC_SUCCESS) return
+
+      ! Collect required met fields from this process
+      call this%add_met_fields_from_process(new_process, rc)
       if (rc /= CC_SUCCESS) return
 
       ! Add to manager
@@ -209,7 +220,7 @@ contains
                endif
             end select
          enddo
-
+         
          ! Apply virtual column changes back to container
          call container%apply_virtual_column(virtual_col, rc)
          if (rc /= CC_SUCCESS) return
@@ -225,8 +236,8 @@ contains
 
       type(GridManagerType), pointer :: grid_mgr
       type(ColumnIteratorType) :: col_iter
-      !type(VirtualColumnType) :: virtual_col
-      integer :: col_idx, local_rc
+      type(VirtualColumnType) :: virtual_col
+      integer :: col_i, col_j
 
       rc = CC_SUCCESS
 
@@ -253,17 +264,19 @@ contains
             if (rc /= CC_SUCCESS) return
 
             ! Get current column indices
-            call col_iter%get_current_indices(col_idx, local_rc)
-            if (local_rc /= CC_SUCCESS) return
+            call col_iter%get_current_indices(col_i, col_j)
 
-            ! TODO: Create and use virtual_col as needed
-            ! call grid_mgr%create_virtual_column(col_idx, virtual_col, rc)
-            ! call virtual_col%extract_from_container(container, rc)
-            ! call proc%run_column(virtual_col, local_rc)
-            ! call virtual_col%update_container(container, rc)
+            call container%create_virtual_column(col_i, col_j, virtual_col, rc)
+            if (rc /= CC_SUCCESS) return
+
+            call proc%run_column(virtual_col, container, rc)
+            if (rc /= CC_SUCCESS) return
+
+            ! Apply virtual column changes back to container for each column
+            call container%apply_virtual_column(virtual_col, rc)
+            if (rc /= CC_SUCCESS) return
          enddo
-      class default
-         call this%processes(process_index)%run(container, rc)
+
       end select
    end subroutine manager_run_process_on_columns
 
@@ -313,49 +326,136 @@ contains
       enddo
    end subroutine manager_get_column_processes
 
-   !> Configure run phases for multi-phase execution
-   subroutine manager_configure_run_phases(this, phase_names, rc)
-      class(ProcessManagerType), intent(inout) :: this
-      character(len=64), intent(in) :: phase_names(:)
-      integer, intent(out) :: rc
-
-      ! TODO: Implement run phase configuration
-      ! This would involve setting up process execution order by phase
-      rc = CC_SUCCESS
-
-   end subroutine manager_configure_run_phases
-
-   !> Run a specific run phase
-   subroutine manager_run_phase(this, phase_name, container, rc)
+   !> Run a specific run phase using ConfigManager run phases configuration
+   subroutine manager_run_phase(this, phase_name, config_data, container, rc)
       class(ProcessManagerType), intent(inout) :: this
       character(len=*), intent(in) :: phase_name
+      type(ConfigDataType), intent(in) :: config_data
       type(StateManagerType), intent(inout) :: container
       integer, intent(out) :: rc
 
-      integer :: i, local_rc
+      integer :: i, j, local_rc, phase_idx, process_idx
+      type(RunPhaseType) :: current_phase
+      type(ProcessConfigType) :: process_config
+      logical :: phase_found
 
       rc = CC_SUCCESS
+      phase_found = .false.
 
-      ! Run all processes configured for this phase
-      do i = 1, this%num_processes
-         ! TODO: Check if process belongs to this phase
-         ! For now, run all processes
-         if (this%processes(i)%is_ready()) then
-            select type(proc => this%processes(i))
-            class is (ColumnProcessInterface)
-               call this%run_process_on_columns(i, container, rc)
-            class default
-               call this%processes(i)%run(container, local_rc)
-            end select
+      ! Check if run phases are configured
+      if (.not. allocated(config_data%run_phases)) then
+         write(*,*) 'WARNING: No run phases configured, skipping phase execution'
+         return
+      endif
 
-            if (local_rc /= CC_SUCCESS) then
-               rc = local_rc
-               return
-            endif
+      ! Find the requested phase
+      do phase_idx = 1, size(config_data%run_phases)
+         if (trim(config_data%run_phases(phase_idx)%name) == trim(phase_name)) then
+            current_phase = config_data%run_phases(phase_idx)
+            phase_found = .true.
+            exit
          endif
       enddo
 
+      if (.not. phase_found) then
+         write(*,*) 'WARNING: Phase "', trim(phase_name), '" not found in configuration'
+         rc = CC_FAILURE
+         return
+      endif
+
+      write(*,*) 'INFO: Running phase "', trim(phase_name), '" with ', current_phase%num_processes, ' processes'
+
+      ! Loop through each process in this phase
+      do j = 1, current_phase%num_processes
+         process_config = current_phase%processes(j)
+         
+         ! Check if process is enabled
+         if (.not. process_config%enabled) then
+            write(*,*) 'INFO: Skipping disabled process: ', trim(process_config%name)
+            cycle
+         endif
+
+         ! Map process_index to actual process in manager's array
+         process_idx = process_config%process_index
+         
+         ! Validate process index bounds
+         if (process_idx < 1 .or. process_idx > this%num_processes) then
+            write(*,*) 'WARNING: Process index ', process_idx, ' out of bounds for process: ', &
+                      trim(process_config%name)
+            cycle
+         endif
+
+         write(*,*) 'INFO: Running process: ', trim(process_config%name), ' (index=', process_idx, ')'
+
+         ! Run the process based on its type
+         if (this%processes(process_idx)%is_ready()) then
+            select type(proc => this%processes(process_idx))
+            class is (ColumnProcessInterface)
+               call this%run_process_on_columns(process_idx, container, local_rc)
+            class default
+               call this%processes(process_idx)%run(container, local_rc)
+            end select
+
+            if (local_rc /= CC_SUCCESS) then
+               write(*,*) 'ERROR: Process ', trim(process_config%name), ' failed with code: ', local_rc
+               rc = local_rc
+               return
+            endif
+         else
+            write(*,*) 'WARNING: Process ', trim(process_config%name), ' is not ready'
+         endif
+      enddo
+
+      write(*,*) 'INFO: Phase "', trim(phase_name), '" completed successfully'
+
    end subroutine manager_run_phase
+
+   !> Run all run phases in sequence using ConfigManager run phases configuration
+   subroutine manager_run_all_phases(this, config_data, container, rc)
+      class(ProcessManagerType), intent(inout) :: this
+      type(ConfigDataType), intent(in) :: config_data
+      type(StateManagerType), intent(inout) :: container
+      integer, intent(out) :: rc
+
+      integer :: phase_idx, local_rc
+      character(len=64) :: phase_name
+
+      rc = CC_SUCCESS
+
+      ! Check if run phases are configured
+      if (.not. allocated(config_data%run_phases)) then
+         write(*,*) 'WARNING: No run phases configured, skipping all phases execution'
+         return
+      endif
+
+      if (size(config_data%run_phases) == 0) then
+         write(*,*) 'WARNING: Empty run phases array, skipping all phases execution'
+         return
+      endif
+
+      write(*,*) 'INFO: Running all phases - total phases: ', size(config_data%run_phases)
+
+      ! Loop through all phases and run each one
+      do phase_idx = 1, size(config_data%run_phases)
+         phase_name = config_data%run_phases(phase_idx)%name
+         
+         write(*,*) 'INFO: Starting phase ', phase_idx, ' of ', size(config_data%run_phases), &
+                   ': "', trim(phase_name), '"'
+
+         ! Run this phase
+         call this%run_phase(phase_name, config_data, container, local_rc)
+         if (local_rc /= CC_SUCCESS) then
+            write(*,*) 'ERROR: Phase "', trim(phase_name), '" failed with code: ', local_rc
+            rc = local_rc
+            return
+         endif
+
+         write(*,*) 'INFO: Phase "', trim(phase_name), '" completed successfully'
+      enddo
+
+      write(*,*) 'INFO: All ', size(config_data%run_phases), ' phases completed successfully'
+
+   end subroutine manager_run_all_phases
 
    !> Run all processes (compatibility method)
    subroutine manager_run_all_processes(this, container, rc)
@@ -409,6 +509,7 @@ contains
       call this%column_processor%cleanup()
 
       if (allocated(this%processes)) deallocate(this%processes)
+      if (allocated(this%required_met_fields)) deallocate(this%required_met_fields)
       this%num_processes = 0
    end subroutine manager_finalize
 
@@ -426,5 +527,104 @@ contains
       enddo
       count = max_count
    end subroutine manager_list_processes
+
+   !> \brief Register a process with the ProcessManager's factory
+   !!
+   !! This method allows external modules to register processes with this
+   !! ProcessManager's factory, which is needed for integration tests.
+   !!
+   !! @param[inout] this The ProcessManager instance
+   !! @param[in] name Process name
+   !! @param[in] category Process category
+   !! @param[in] description Process description
+   !! @param[in] creator Process creator function
+   !! @param[out] rc Return code
+   subroutine manager_register_process(this, name, category, description, creator, rc)
+      use ProcessRegistry_Mod, only: ProcessCreatorInterface
+
+      class(ProcessManagerType), intent(inout) :: this
+      character(len=*), intent(in) :: name, category, description
+      procedure(ProcessCreatorInterface) :: creator
+      integer, intent(out) :: rc
+
+      call this%factory%register_process(name, category, description, creator, rc)
+   end subroutine manager_register_process
+
+   !> \brief Add required met fields from a process, ensuring no duplicates
+   !!
+   !! This private helper function collects the required meteorological fields
+   !! from a newly added process and merges them with the existing list,
+   !! ensuring no duplicate field names.
+   !!
+   !! \param[inout] this ProcessManager instance
+   !! \param[in] process Process to get required fields from
+   !! \param[out] rc Return code
+   subroutine manager_add_met_fields_from_process(this, process, rc)
+      class(ProcessManagerType), intent(inout) :: this
+      class(ProcessInterface), intent(in) :: process
+      integer, intent(out) :: rc
+
+      character(len=64), allocatable :: new_fields(:), merged_fields(:)
+      character(len=64), allocatable :: current_fields(:)
+      integer :: i, j, current_size, new_size, merged_size
+      logical :: field_exists
+
+      rc = CC_SUCCESS
+
+      ! Get required fields from the new process
+      new_fields = process%get_required_met_fields()
+      new_size = size(new_fields)
+
+      ! If no new fields, nothing to do
+      if (new_size == 0) return
+
+      ! Get current fields (make a copy for merging)
+      if (allocated(this%required_met_fields)) then
+         current_size = size(this%required_met_fields)
+         allocate(current_fields(current_size))
+         current_fields = this%required_met_fields
+      else
+         current_size = 0
+         allocate(current_fields(0))
+      endif
+
+      ! Merge fields, avoiding duplicates
+      ! Worst case: all new fields are unique, so allocate maximum possible size
+      allocate(merged_fields(current_size + new_size))
+      
+      ! Start with current fields
+      merged_fields(1:current_size) = current_fields(1:current_size)
+      merged_size = current_size
+
+      ! Add new fields if they're not already present
+      do i = 1, new_size
+         field_exists = .false.
+         
+         ! Check if this field already exists (case insensitive)
+         do j = 1, merged_size
+            if (trim(adjustl(new_fields(i))) == trim(adjustl(merged_fields(j)))) then
+               field_exists = .true.
+               exit
+            endif
+         end do
+         
+         ! Add if it's a new field
+         if (.not. field_exists) then
+            merged_size = merged_size + 1
+            merged_fields(merged_size) = new_fields(i)
+         endif
+      end do
+
+      ! Update the manager's required fields list with proper size
+      if (allocated(this%required_met_fields)) deallocate(this%required_met_fields)
+      allocate(this%required_met_fields(merged_size))
+      this%required_met_fields(1:merged_size) = merged_fields(1:merged_size)
+
+      ! Cleanup
+      if (allocated(current_fields)) deallocate(current_fields)
+      if (allocated(new_fields)) deallocate(new_fields)
+      if (allocated(merged_fields)) deallocate(merged_fields)
+
+   end subroutine manager_add_met_fields_from_process
 
 end module ProcessManager_Mod

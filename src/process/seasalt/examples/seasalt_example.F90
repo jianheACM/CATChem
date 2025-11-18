@@ -4,12 +4,13 @@
 !! This program demonstrates how to use the seasalt process
 !! in a standalone application or host model integration.
 !!
-!! Generated on: 2025-08-29T16:37:23.941270
+!! Generated on: 2025-11-14T23:01:21.967591
 !! Author: Barry Baker & Wei Li
 
 program seasalt_example
 
-   use iso_fortran_env, only: fp => real64, output_unit, error_unit
+   use precision_mod, only: fp
+   use iso_fortran_env, only: output_unit, error_unit
    use precision_mod, only: fp
    use Error_Mod, only: CC_SUCCESS, CC_FAILURE
    use ProcessInterface_Mod
@@ -194,6 +195,8 @@ contains
       type(ErrorHandler), intent(inout) :: error_handler
 
       ! Add required meteorological fields
+      call state_manager%add_met_field('DELP', error_handler)
+      if (error_handler%has_error()) return
 
       ! Add optional meteorological fields
 
@@ -218,6 +221,9 @@ contains
             latitude = 45.0_fp + real(i_col - 1, fp) * 1.0_fp  ! Latitude
             longitude = -120.0_fp + real(i_col - 1, fp) * 1.0_fp  ! Longitude
 
+            call state_manager%set_met_field('DELP', i_col, i_lev, &
+               1.0_fp, error_handler)  ! Default value
+            if (error_handler%has_error()) return
 
          end do
       end do

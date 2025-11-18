@@ -62,7 +62,7 @@ module species_mod
    !! @param photolysis_index Index in photolysis array
    !! @param gocart_aero_index Index in GOCART aerosol array
    !! @param conc Species concentration [v/v] or [kg/kg]
-   type, public :: SpeciesType
+   type :: SpeciesType
 
       ! Names
       character(len=30) :: long_name   !< Long name for species used for NetCDF attribute "long_name"
@@ -87,6 +87,13 @@ module species_mod
       real(kind=fp) :: lower_radius         !< Lower radius [m]
       real(kind=fp) :: upper_radius         !< Upper radius [m]
       real(kind=fp) :: viscosity            !< Kinematic viscosity [m²/s]
+
+      ! used for dry deposition
+      real(kind=fp) :: dd_f0                !< reactivity factor for oxidation of biological substances
+      real(kind=fp) :: dd_hstar             !< Henry’s law constant
+      real(kind=fp) :: dd_DvzAerSnow        !< fix dry deposition velocity (cm/s) over ice and snow for certain aerosol species
+      real(kind=fp) :: dd_DvzMinVal_snow    !< minimum dry deposition velocity (cm/s) over snow and ice
+      real(kind=fp) :: dd_DvzMinVal_land    !< minimum dry deposition velocity (cm/s) over land
 
       ! Default background concentration
       real(kind=fp) :: BackgroundVV        !< Background concentration [v/v]

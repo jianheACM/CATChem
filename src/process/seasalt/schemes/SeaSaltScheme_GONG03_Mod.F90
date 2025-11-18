@@ -17,32 +17,24 @@
 !! - Memory management and array allocation
 !! - Integration with host model time stepping
 !!
-!! Generated on: 2025-08-29T16:37:23.755985
+!! Generated on: 2025-11-14T23:01:21.740375
 !! Author: Barry Baker
 !! Reference: Gong [2003]
 module SeaSaltScheme_GONG03_Mod
 
-   use iso_fortran_env, only: fp => real64
+   use precision_mod, only: fp
+   use SeaSaltCommon_Mod, only: SeaSaltSchemeGONG03Config
+   use Constants, only: PI  !load the constants needed for this scheme
 
    implicit none
    private
 
    ! Public interface - pure science only
    public :: compute_gong03
-   public :: gong03_params_t
 
-   ! Physical constants (modify as needed for your scheme)
-   real(fp), parameter :: R_GAS = 8.314_fp           ! Universal gas constant [J/mol/K]
+   ! Additional physical constants (modify as needed for your scheme)
    real(fp), parameter :: T_STANDARD = 303.15_fp    ! Standard reference temperature [K]
    real(fp), parameter :: DEFAULT_SCALING = 1.0e-9_fp ! Default emission scaling factor
-   real(fp), parameter :: PI = 3.14159265359_fp     ! Pi constant
-
-   !> Science parameters for gong03 scheme
-   !! Host model is responsible for initializing and validating these
-   type :: gong03_params_t
-      real(fp) :: scale_factor  ! Emission scale factor
-      real(fp) :: weibull_flag  ! Apply Weibull distribution for particle size
-   end type gong03_params_t
 
 contains
 
@@ -55,6 +47,7 @@ contains
    !! @param[in]  num_layers     Number of vertical layers
    !! @param[in]  num_species    Number of chemical species
    !! @param[in]  params         Scheme parameters (pre-validated by host)
+   !! @param[in]  delp    DELP field [appropriate units]
    !! @param[in]  frocean    FROCEAN field [appropriate units]
    !! @param[in]  frseaice    FRSEAICE field [appropriate units]
    !! @param[in]  sst    SST field [appropriate units]
@@ -62,14 +55,16 @@ contains
    !! @param[in]  v10m    V10M field [appropriate units]
    !! @param[in]  species_conc   Species concentrations [mol/mol] (num_layers, num_species)
    !! @param[inout] species_tendencies  Species tendency terms [mol/mol/s] (num_layers, num_species)
-   !! @param[inout] diag_mass_emission_total    Total mass emission diagnostic [ug/m2/s]
-   !! @param[inout] diag_number_emission_total  Total number emission diagnostic [#/m2/s]
-   !! @param[inout] diag_mass_emission_per_bin   Mass emission per bin diagnostic [kg/m2/s] (num_species)
-   !! @param[inout] diag_number_emission_per_bin Number emission per bin diagnostic [#/m2/s] (num_species)
+   !! @param[inout] seasalt_mass_emission_total    Sea salt mass emission flux total [kg/m2/s]
+   !! @param[inout] seasalt_number_emission_total    Sea salt number emission flux total [kg/m2/s]
+   !! @param[inout] seasalt_mass_emission_per_bin    Sea salt mass emission flux per bin [kg/m2/s] (num_species)
+   !! @param[inout] seasalt_number_emission_per_bin    Sea salt number emission flux per bin [kg/m2/s] (num_species)
+   !! @param[in] diagnostic_species_id Indices mapping diagnostic species to species array (optional, for per-species diagnostics)
    pure subroutine compute_gong03( &
       num_layers, &
       num_species, &
       params, &
+      delp, &
       frocean, &
       frseaice, &
       sst, &
@@ -81,34 +76,38 @@ contains
       species_upper_radius, &
       species_conc, &
       species_tendencies, &
-      diag_mass_emission_total, &
-      diag_number_emission_total, &
-      diag_mass_emission_per_bin, &
-      diag_number_emission_per_bin &
+      seasalt_mass_emission_total, &
+      seasalt_number_emission_total, &
+      seasalt_mass_emission_per_bin, &
+      seasalt_number_emission_per_bin, &
+      diagnostic_species_id &
    )
 
       ! Arguments
       integer, intent(in) :: num_layers
       integer, intent(in) :: num_species
-      type(gong03_params_t), intent(in) :: params
-      real(fp), intent(in) :: frocean(num_layers)
-      real(fp), intent(in) :: frseaice(num_layers)
-      real(fp), intent(in) :: sst(num_layers)
-      real(fp), intent(in) :: u10m(num_layers)
-      real(fp), intent(in) :: v10m(num_layers)
+      type(SeaSaltSchemeGONG03Config), intent(in) :: params
+      real(fp), intent(in) :: delp(num_layers)    ! 3D atmospheric field
+      real(fp), intent(in) :: frocean  ! Surface field - scalar
+      real(fp), intent(in) :: frseaice  ! Surface field - scalar
+      real(fp), intent(in) :: sst  ! Surface field - scalar
+      real(fp), intent(in) :: u10m  ! Surface field - scalar
+      real(fp), intent(in) :: v10m  ! Surface field - scalar
       real(fp), intent(in) :: species_density(num_species)  ! Species density property
       real(fp), intent(in) :: species_radius(num_species)  ! Species radius property
       real(fp), intent(in) :: species_lower_radius(num_species)  ! Species lower_radius property
       real(fp), intent(in) :: species_upper_radius(num_species)  ! Species upper_radius property
       real(fp), intent(in) :: species_conc(num_layers, num_species)
       real(fp), intent(inout) :: species_tendencies(num_layers, num_species)
-      real(fp), intent(inout), optional :: diag_mass_emission_total
-      real(fp), intent(inout), optional :: diag_number_emission_total  
-      real(fp), intent(inout), optional :: diag_mass_emission_per_bin(num_species)
-      real(fp), intent(inout), optional :: diag_number_emission_per_bin(num_species)
+      real(fp), intent(inout), optional :: seasalt_mass_emission_total
+      real(fp), intent(inout), optional :: seasalt_number_emission_total
+      real(fp), intent(inout), optional :: seasalt_mass_emission_per_bin(:)
+      real(fp), intent(inout), optional :: seasalt_number_emission_per_bin(:)
+      integer, intent(in), optional :: diagnostic_species_id(:)  ! Indices mapping diagnostic species to species array
 
       ! Local variables
       integer :: k, species_idx
+      integer :: diag_idx  ! For diagnostic species indexing
       real(fp) :: base_emission_factor
       real(fp) :: environmental_factor
       real(fp) :: species_factor
@@ -127,6 +126,9 @@ contains
          environmental_factor = 1.0_fp
 
          ! Apply scheme-specific environmental responses based on meteorological fields
+         ! Generic field usage (customize for your scheme)
+         ! TODO: Consider how DELP affects your emissions
+         ! environmental_factor = environmental_factor * some_function(delp(k))
          ! Generic field usage (customize for your scheme)
          ! TODO: Consider how FROCEAN affects your emissions
          ! environmental_factor = environmental_factor * some_function(frocean(k))
@@ -164,17 +166,39 @@ contains
             ! TODO: Update diagnostic fields here based on your scheme's requirements
             ! Each process should implement custom diagnostic calculations
             ! Example patterns:
-            if (present(diag_mass_emission_total)) then
-               ! Add your custom mass emission total calculation
+            if (present(seasalt_mass_emission_total)) then
+               ! Add your custom sea salt mass emission flux total calculation
+               seasalt_mass_emission_total = seasalt_mass_emission_total + species_tendencies(k, species_idx) * 1.0_fp  ! TODO: Replace with actual calculation
             end if
-            if (present(diag_number_emission_total)) then
-               ! Add your custom number emission total calculation  
+            if (present(seasalt_number_emission_total)) then
+               ! Add your custom sea salt number emission flux total calculation
+               seasalt_number_emission_total = seasalt_number_emission_total + species_tendencies(k, species_idx) * 1.0_fp  ! TODO: Replace with actual calculation
             end if
-            if (present(diag_mass_emission_per_bin)) then
-               ! Add your custom per-bin mass emission calculation
+            
+            ! TODO: Update scheme-specific diagnostic fields here based on your scheme's requirements
+            ! Each scheme should implement custom diagnostic calculations
+            ! Example patterns:
+            ! Per-species diagnostic: only update for diagnostic species
+            if (present(seasalt_mass_emission_per_bin) .and. present(diagnostic_species_id)) then
+               ! Find position of this species in diagnostic_species_id array
+               do diag_idx = 1, size(diagnostic_species_id)
+                  if (diagnostic_species_id(diag_idx) == species_idx) then
+                     ! Add your custom sea salt mass emission flux per bin calculation
+                     seasalt_mass_emission_per_bin(diag_idx) = species_tendencies(k, species_idx) * 1.0_fp  ! TODO: Replace with actual calculation
+                     exit
+                  end if
+               end do
             end if
-            if (present(diag_number_emission_per_bin)) then
-               ! Add your custom per-bin number emission calculation
+            ! Per-species diagnostic: only update for diagnostic species
+            if (present(seasalt_number_emission_per_bin) .and. present(diagnostic_species_id)) then
+               ! Find position of this species in diagnostic_species_id array
+               do diag_idx = 1, size(diagnostic_species_id)
+                  if (diagnostic_species_id(diag_idx) == species_idx) then
+                     ! Add your custom sea salt number emission flux per bin calculation
+                     seasalt_number_emission_per_bin(diag_idx) = species_tendencies(k, species_idx) * 1.0_fp  ! TODO: Replace with actual calculation
+                     exit
+                  end if
+               end do
             end if
          end do
 
@@ -202,7 +226,7 @@ contains
    !> Example helper function for species-specific scaling
    pure function compute_species_scaling_gong03(species_idx, params) result(scaling)
       integer, intent(in) :: species_idx
-      type(gong03_params_t), intent(in) :: params
+      type(SeaSaltSchemeGONG03Config), intent(in) :: params
       real(fp) :: scaling
 
       ! Species-specific scaling - customize for your scheme

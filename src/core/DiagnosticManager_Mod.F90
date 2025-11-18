@@ -42,7 +42,8 @@ module DiagnosticManager_Mod
    use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE, &
                         ERROR_INVALID_INPUT, ERROR_NOT_FOUND, ERROR_MEMORY_ALLOCATION
    use DiagnosticInterface_Mod, only: DiagnosticRegistryType, DiagnosticFieldType, &
-                                      DiagnosticDataType
+                                      DiagnosticDataType, DIAG_REAL_SCALAR, DIAG_REAL_1D, &
+                                      DIAG_REAL_2D, DIAG_REAL_3D
    ! Removed StateManager_Mod import to break circular dependency
 
    implicit none
@@ -98,6 +99,7 @@ module DiagnosticManager_Mod
       ! Diagnostic collection and output
       procedure :: collect_all_diagnostics => diagnostic_manager_collect_all
       procedure :: collect_process_diagnostics => diagnostic_manager_collect_process
+      procedure :: get_field_value => diagnostic_manager_get_field_value
       procedure :: write_output => diagnostic_manager_write_output
       procedure :: advance_timestep => diagnostic_manager_advance_timestep
 
@@ -430,7 +432,8 @@ contains
       class(DiagnosticManagerType), intent(inout) :: this
       integer, intent(out) :: rc
 
-      integer :: i, local_rc
+      integer :: i, local_rc, total_fields
+      character(len=64) :: current_process
 
       rc = CC_SUCCESS
 
@@ -439,16 +442,31 @@ contains
       call this%error_mgr%push_context('diagnostic_manager_collect_all', &
                                   'Collecting diagnostics from all processes')
 
-      ! Collect from each process
+      total_fields = 0
+
+      ! Collect from each registered process
       do i = 1, this%num_processes
-         call this%collect_process_diagnostics(this%process_names(i), local_rc)
+         current_process = trim(this%process_names(i))
+         
+         call this%collect_process_diagnostics(current_process, local_rc)
          if (local_rc /= CC_SUCCESS) then
             call this%error_mgr%report_error(local_rc, &
                                         'Failed to collect diagnostics from: ' // &
-                                        trim(this%process_names(i)), rc)
-            ! Continue with other processes
+                                        trim(current_process), local_rc)
+            ! Continue with other processes - don't let one failure stop collection
+         else
+            ! Count fields collected from this process
+            total_fields = total_fields + this%process_registries(i)%get_field_count()
          endif
       enddo
+
+      ! Log collection summary
+      if (this%num_processes > 0) then
+         write(*,'(A,I0,A,I0,A)') 'DiagnosticManager: Collected diagnostics from ', &
+                                  this%num_processes, ' processes (', total_fields, ' total fields)'
+      else
+         write(*,'(A)') 'DiagnosticManager: No processes registered for diagnostic collection'
+      end if
 
       call this%error_mgr%pop_context()
 
@@ -465,17 +483,193 @@ contains
       integer, intent(out) :: rc
 
       type(DiagnosticRegistryType), pointer :: registry
+      character(len=64), allocatable :: field_names(:)
+      integer :: num_fields, i, local_rc, data_type
+      real(fp) :: scalar_value
+      real(fp), pointer :: array_1d_ptr(:) => null()
+      real(fp), pointer :: array_2d_ptr(:,:) => null()
+      real(fp), pointer :: array_3d_ptr(:,:,:) => null()
+      character(len=64) :: field_name
+
+      rc = CC_SUCCESS
+
+      call this%error_mgr%push_context('diagnostic_manager_collect_process', &
+                                  'Collecting diagnostics from process: ' // trim(process_name))
+
+      ! Get process registry
+      call this%get_process_registry(process_name, registry, rc)
+      if (rc /= CC_SUCCESS) then
+         call this%error_mgr%pop_context()
+         return
+      end if
+
+      ! Get the number of registered diagnostic fields
+      num_fields = registry%get_field_count()
+      if (num_fields == 0) then
+         call this%error_mgr%pop_context()
+         return  ! No fields to collect
+      end if
+
+      ! Allocate array for field names
+      allocate(field_names(num_fields), stat=local_rc)
+      if (local_rc /= 0) then
+         call this%error_mgr%report_error(ERROR_MEMORY_ALLOCATION, &
+                                     'Failed to allocate field names array', rc)
+         call this%error_mgr%pop_context()
+         return
+      end if
+
+      ! Get all field names
+      call registry%list_fields(field_names, num_fields)
+
+      ! Iterate through all diagnostic fields and collect their current values
+      do i = 1, num_fields
+         field_name = trim(field_names(i))
+
+         ! Get field value using existing get_field_value method
+         call this%get_field_value(process_name, field_name, &
+                                  scalar_value, array_1d_ptr, array_2d_ptr, array_3d_ptr, &
+                                  data_type, rc=local_rc)
+         
+         if (local_rc /= CC_SUCCESS) then
+            ! Log warning but continue with other fields
+            call this%error_mgr%report_error(local_rc, &
+                                        'Failed to collect field: ' // trim(field_name), local_rc)
+            ! Don't fail the entire collection for one field
+         else
+            ! TODO: Write diagnostic fields to output file
+            ! This is where we would write each field's values to a diagnostic output file
+            ! The file format could be NetCDF, CSV, or custom binary format
+            ! Example: call write_field_to_file(process_name, field_name, data_type, values)
+            ! For now, we just verify the field is accessible and report successful collection
+         end if
+
+         ! Clean up pointers
+         if (associated(array_1d_ptr)) nullify(array_1d_ptr)
+         if (associated(array_2d_ptr)) nullify(array_2d_ptr)
+         if (associated(array_3d_ptr)) nullify(array_3d_ptr)
+      end do
+
+      ! Clean up
+      deallocate(field_names)
+
+      call this%error_mgr%pop_context()
+
+   end subroutine diagnostic_manager_collect_process
+
+   !> \brief Get diagnostic field value for validation purposes
+   !!
+   !! \param[inout] this DiagnosticManagerType instance
+   !! \param[in] process_name Name of the process
+   !! \param[in] field_name Name of the diagnostic field
+   !! \param[out] scalar_value Scalar value (for scalar diagnostics)
+   !! \param[out] array_1d_ptr Pointer to 1D array (for 1D diagnostics)
+   !! \param[out] array_2d_ptr Pointer to 2D array (for 2D diagnostics)
+   !! \param[out] array_3d_ptr Pointer to 3D array (for 3D diagnostics)
+   !! \param[out] data_type Type of the diagnostic data
+   !! \param[out] description Optional field description for NetCDF metadata
+   !! \param[out] units Optional field units for NetCDF metadata
+   !! \param[out] rc Return code
+   subroutine diagnostic_manager_get_field_value(this, process_name, field_name, &
+                                                scalar_value, array_1d_ptr, array_2d_ptr, array_3d_ptr, &
+                                                data_type, description, units, rc)
+      class(DiagnosticManagerType), intent(inout) :: this
+      character(len=*), intent(in) :: process_name
+      character(len=*), intent(in) :: field_name
+      real(fp), intent(out), optional :: scalar_value
+      real(fp), pointer, intent(out), optional :: array_1d_ptr(:)
+      real(fp), pointer, intent(out), optional :: array_2d_ptr(:,:)
+      real(fp), pointer, intent(out), optional :: array_3d_ptr(:,:,:)
+      integer, intent(out), optional :: data_type
+      character(len=*), intent(out), optional :: description
+      character(len=*), intent(out), optional :: units
+      integer, intent(out) :: rc
+
+      type(DiagnosticRegistryType), pointer :: registry
+      type(DiagnosticFieldType), pointer :: field_ptr
+      type(DiagnosticDataType), pointer :: data_ptr
+      integer :: local_data_type
+
+      rc = CC_SUCCESS
+
+      ! Initialize outputs
+      if (present(scalar_value)) scalar_value = 0.0_fp
+      if (present(array_1d_ptr)) nullify(array_1d_ptr)
+      if (present(array_2d_ptr)) nullify(array_2d_ptr)
+      if (present(array_3d_ptr)) nullify(array_3d_ptr)
+      if (present(data_type)) data_type = 0
+      if (present(description)) description = ''
+      if (present(units)) units = ''
 
       ! Get process registry
       call this%get_process_registry(process_name, registry, rc)
       if (rc /= CC_SUCCESS) return
 
-      ! Collect diagnostics (would access state data to update diagnostic values)
-      ! This is a placeholder - actual implementation would extract data from
-      ! StateContainer components and update diagnostic field values
-      rc = CC_SUCCESS
+      ! Get diagnostic field
+      field_ptr => registry%get_field_ptr(field_name)
+      if (.not. associated(field_ptr)) then
+         rc = ERROR_NOT_FOUND
+         call this%error_mgr%report_error(ERROR_NOT_FOUND, &
+                'Diagnostic field not found: ' // trim(field_name), rc)
+         return
+      end if
 
-   end subroutine diagnostic_manager_collect_process
+      ! Check if field is ready and enabled
+      if (.not. field_ptr%is_ready() .or. .not. field_ptr%get_is_enabled()) then
+         rc = ERROR_INVALID_INPUT
+         call this%error_mgr%report_error(ERROR_INVALID_INPUT, &
+                'Diagnostic field not ready or disabled: ' // trim(field_name), rc)
+         return
+      end if
+
+      ! Get data pointer
+      data_ptr => field_ptr%get_data_ptr()
+      if (.not. associated(data_ptr)) then
+         rc = ERROR_INVALID_INPUT
+         return
+      end if
+
+      ! Get data type and extract values
+      local_data_type = data_ptr%get_data_type()
+      if (present(data_type)) data_type = local_data_type
+
+      ! Get field metadata
+      if (present(description)) then
+         description = field_ptr%get_description()
+      end if
+      
+      if (present(units)) then
+         units = field_ptr%get_units()
+      end if
+
+      select case (local_data_type)
+      case (DIAG_REAL_SCALAR)
+         if (present(scalar_value)) then
+            scalar_value = data_ptr%get_real_scalar()
+         end if
+
+      case (DIAG_REAL_1D)
+         if (present(array_1d_ptr)) then
+            array_1d_ptr => data_ptr%get_real_1d_ptr()
+         end if
+
+      case (DIAG_REAL_2D)
+         if (present(array_2d_ptr)) then
+            array_2d_ptr => data_ptr%get_real_2d_ptr()
+         end if
+
+      case (DIAG_REAL_3D)
+         if (present(array_3d_ptr)) then
+            array_3d_ptr => data_ptr%get_real_3d_ptr()
+         end if
+
+      case default
+         rc = ERROR_INVALID_INPUT
+         call this%error_mgr%report_error(ERROR_INVALID_INPUT, &
+                'Unsupported diagnostic data type for field: ' // trim(field_name), rc)
+      end select
+
+   end subroutine diagnostic_manager_get_field_value
 
    !> \brief Write diagnostic output
    !!

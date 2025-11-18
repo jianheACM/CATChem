@@ -4,9 +4,9 @@ add_library(yaml_interface
     yaml_interface_mod.F90
 )
 
-# Link with yaml-cpp (from MICM/MUSICA)
+# Link with yaml-cpp (from MICM/MUSICA) and basic utilities
 target_link_libraries(yaml_interface
-    PRIVATE yaml-cpp::yaml-cpp
+    PRIVATE yaml-cpp::yaml-cpp catchem_utilities
 )
 
 # Set include directories
@@ -21,9 +21,8 @@ set_target_properties(yaml_interface PROPERTIES
     Fortran_MODULE_DIRECTORY "${CMAKE_BINARY_DIR}/include"
 )
 
-# Export the target
+# Export the target (removed from CATChemTargets to avoid yaml-cpp export issues)
 install(TARGETS yaml_interface
-    EXPORT CATChemTargets
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
     RUNTIME DESTINATION bin
