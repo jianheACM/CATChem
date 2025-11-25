@@ -238,14 +238,6 @@ nav:
       - Dust Emissions: processes/dust/dust.md
       - Sea Salt Emissions: processes/seasalt/index.md
       - External Emissions: processes/external_emission_data/external_emission_data.md
-    - Advanced Topics:
-      - Process Infrastructure: user-guide/advanced_topics/process-infrastructure.md
-      - Column Virtualization: user-guide/advanced_topics/column-virtualization.md
-      - StateContainer: user-guide/advanced_topics/statecontainer.md
-      - Diagnostic System: user-guide/advanced_topics/diagnostic-system.md
-      - Configuration Management: user-guide/advanced_topics/configuration-management.md
-      - Performance Optimization: user-guide/advanced_topics/performance.md
-      - Integration Patterns: user-guide/advanced_topics/integration-patterns.md
 
   - Developer Guide:
     - developer-guide/index.md
@@ -261,13 +253,6 @@ nav:
       - Creating Custom Processes: developer-guide/processes/creating.md
       - Templates and Patterns: developer-guide/processes/templates.md
       - Testing Processes: developer-guide/processes/testing.md
-    - Core Systems:
-      - developer-guide/core/index.md
-      - State Management: developer-guide/core/state-management.md
-      - Column Virtualization: developer-guide/core/column-virtualization.md
-      - Diagnostic System: developer-guide/core/diagnostics.md
-      - Error Handling: developer-guide/core/error-handling.md
-      - Configuration System: developer-guide/core/configuration.md
     - Integration:
       - developer-guide/integration/index.md
       - CCPP Integration: developer-guide/integration/ccpp.md
@@ -275,6 +260,16 @@ nav:
     - Testing: developer-guide/testing.md
     - Documentation Guide: developer-guide/documentation.md
     - Performance Guide: developer-guide/performance.md
+
+  - Core Concepts:
+    - core-concepts/index.md
+    - Process Infrastructure: core-concepts/process-infrastructure.md
+    - StateContainer: core-concepts/statecontainer.md
+    - Column Virtualization: core-concepts/column-virtualization.md
+    - Diagnostic System: core-concepts/diagnostic-system.md
+    - Configuration Management: core-concepts/configuration-management.md
+    - Integration Patterns: core-concepts/integration-patterns.md
+    - Performance Optimization: core-concepts/performance.md
 
 
   - API Reference:

@@ -12,19 +12,7 @@ If you are new to CATChem, here are the first steps to get you started:
 
 ## Core Concepts
 
-CATChem is built on a set of modern software engineering principles and patterns. Understanding these core concepts is key to developing effectively within the framework.
-
--   **State Management**: At the heart of CATChem is the **StateContainer**, a centralized data management system that holds all model state. This pattern avoids global variables and provides a structured, type-safe way to access meteorological and chemical data. Learn more in the [State Management Guide](core/state-management.md).
-
--   **Column Virtualization**: CATChem's high performance is largely due to its **column virtualization** architecture. The 3D model domain is treated as a collection of independent 1D columns, which allows for efficient, cache-friendly processing and straightforward parallelization. Dive deeper in the [Column Virtualization Guide](core/column-virtualization.md).
-
--   **Process-Based Architecture**: Atmospheric processes (like chemistry, transport, and emissions) are implemented as independent, pluggable components that inherit from a common `ProcessInterface`. This makes it easy to add new processes or modify existing ones. See the [Process Development Guide](processes/index.md) for details.
-
--   **Configuration System**: CATChem uses a flexible **YAML-based configuration system**. A `ConfigManagerType` loads configuration from YAML files into a structured Fortran `ConfigDataType`, providing type-safe access to all configuration parameters. Explore the details in the [Configuration System Guide](core/configuration.md).
-
--   **Diagnostic System**: The **diagnostic system** is dynamic and process-driven. Each process can register its own internal fields as diagnostics, which are then collected and written to output files by a central `DiagnosticManagerType`. Learn more in the [Diagnostic System Guide](core/diagnostics.md).
-
--   **Error Handling**: CATChem includes a robust **error handling system** built around an `ErrorManagerType`. It supports a stack of error contexts for detailed debugging, as well as standardized error codes and severity levels. See the [Error Handling Guide](core/error-handling.md) for best practices.
+CATChem is built on a set of modern software engineering principles and patterns. Understanding these core concepts is key to developing effectively within the framework. For a deep dive into the foundational infrastructure of CATChem, including state management, configuration, diagnostics, and error handling, please see the **[Core Concepts](../core-concepts/index.md)** section.
 
 ## Development Guides
 
@@ -32,7 +20,7 @@ Ready to dive in? These guides provide detailed information on specific areas of
 
 <div class="grid cards" markdown>
 
--   [:material-cog: **Core Systems**](core/index.md)
+-   [:material-cog: **Core Concepts**](../core-concepts/index.md)
 
     ---
 
