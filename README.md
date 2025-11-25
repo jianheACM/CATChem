@@ -1,6 +1,52 @@
-# Configurable ATmospheric Chemistry
+# CATChem
 
-This is the repository for the Configurable ATmospheric Chemistry modelling component.
+**CATChem** (Configurable ATmospheric Chemistry) is a modelling component that includes all chemical and aerosol processes needed to perform atmospheric chemistry and composition simulations within a model through a flexible, easy to modify, and well-documented infrastructure.
+
+## Features
+
+- **NUOPC-compliant interface** for integration with Earth system models
+- **ESMF I/O integration** for efficient parallel file operations
+- **Flexible configuration system** with YAML-based setup
+- **Automatic regridding** with weight file management
+- **CF-compliant input/output** supporting Climate and Forecast conventions
+- **Comprehensive utility tools** for configuration and weight generation
+
+## Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+
+- **[Documentation Home](docs/index.md)** - Complete documentation portal
+- **[Quick Start Guide](docs/quick-start/index.md)** - Get started quickly
+- **[User Guide](docs/user-guide/index.md)** - Complete user documentation
+- **[Developer Guide](docs/developer-guide/index.md)** - Technical documentation for developers
+- **[API Reference](docs/api/index.md)** - Complete API documentation
+
+## Quick Start
+
+### NUOPC Interface
+
+```bash
+# Build the NUOPC interface
+cd drivers/nuopc
+make
+
+# Set up utilities and weight files
+../../util/generate_esmf_weights.sh setup
+
+# Validate configuration
+python ../../util/validate_weight_config.py catchem_input_config.yml
+
+# Run standalone test
+./catchem_nuopc_driver
+```
+
+### Utility Scripts
+
+The `util/` directory contains helpful scripts:
+
+- **`generate_esmf_weights.sh`** - ESMF weight file generation and management
+- **`manage_weights.sh`** - Weight file optimization and maintenance
+- **`validate_weight_config.py`** - Configuration validation and checking
 
 ## Development
 

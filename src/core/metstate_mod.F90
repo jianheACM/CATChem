@@ -1,4 +1,4 @@
-!> \file metstate_mod.F90
+! \file metstate_mod.F90
 !! \brief Module for meteorology state variables
 !!
 !! This module contains subroutines and functions related to the MetStateType instance of CATChem.
@@ -10,693 +10,1177 @@ MODULE MetState_Mod
    !
    ! USES:
    !
-   USE Cmn_Size_Mod, ONLY : NSURFTYPE
-   ! USE Dictionary_M, ONLY : dictionary_t
    USE Error_Mod
    USE Precision_Mod
-   ! USE Registry_Mod
+   USE GridGeometry_Mod
+   ! USE TimeState_Mod, only: TimeStateType
+
 
 
    IMPLICIT NONE
    PRIVATE
-   !
-   ! !PUBLIC MEMBER FUNCTIONS:
-   PUBLIC :: Zero_MetState
-   PUBLIC :: Met_Allocate
-   !
-   ! !PUBLIC DATA MEMBERS:
-   !
+
+   !PUBLIC :: MetStateType           ! Main data type
+
    !=========================================================================
    ! Derived type for Meteorology State
    !=========================================================================
 
-   !> \brief Derived type for Meteorology State
+   ! \brief Derived type for Meteorology State
+   !!
+   !! Contains all meteorological state variables for CATChem including
+   !! land, radiation, flux, cloud, and state-related fields. Use type-bound
+   !! procedures for initialization, cleanup, validation, and memory usage.
    !!
    !! \ingroup core_modules
    !!!>
    TYPE, PUBLIC :: MetStateType
+      CHARACTER(LEN=3)             :: State     = 'MET'    !< Name of this state
+      INTEGER                      :: NLEVS     = 127      !< Number of vertical levels (default)
+      TYPE(GridGeometryType) :: geometry
+      INTEGER                      :: NSURFTYPE = 20       !< Number of surface types (default)
+      ! Grid flags (2D: nx, ny)
+      LOGICAL, ALLOCATABLE         :: IsLand(:,:)       !< Is this a land grid box?
+      LOGICAL, ALLOCATABLE         :: IsWater(:,:)      !< Is this a water grid box?
+      LOGICAL, ALLOCATABLE         :: IsIce(:,:)        !< Is this an ice grid box?
+      LOGICAL, ALLOCATABLE         :: IsSnow(:,:)       !< Is this a snow grid box?
+      ! Vertical flags and arrays (3D: nx, ny, nz)
+      LOGICAL,  ALLOCATABLE        :: InStratMeso(:,:,:)    !< Are we in the stratosphere or mesosphere?
+      LOGICAL,  ALLOCATABLE        :: InStratosphere(:,:,:) !< Are we in the stratosphere?
+      LOGICAL,  ALLOCATABLE        :: InTroposphere(:,:,:)  !< Are we in the troposphere?
+      LOGICAL,  ALLOCATABLE        :: InPbl(:,:,:)          !< Are we in the PBL?
+      LOGICAL,  ALLOCATABLE        :: IsLocalNoon(:,:)      !< Is it local noon (between 11 and 13 local solar time)?
+      ! Surface properties (2D: nx, ny)
+      REAL(fp), ALLOCATABLE        :: AREA_M2(:,:)      !< Grid box surface area [m2]
+      INTEGER,  ALLOCATABLE        :: LWI(:,:)          !< Land water ice mask (0-sea, 1-land, 2-ice)
+      INTEGER,  ALLOCATABLE        :: DLUSE(:,:)        !< Dominant land-use type
+      REAL(fp), ALLOCATABLE        :: FRVEG(:,:)        !< Fraction of veg [1]
+      REAL(fp), ALLOCATABLE        :: FRLAKE(:,:)       !< Fraction of lake [1]
+      REAL(fp), ALLOCATABLE        :: FRLAND(:,:)       !< Fraction of land [1]
+      REAL(fp), ALLOCATABLE        :: FRLANDIC(:,:)     !< Fraction of land ice [1]
+      REAL(fp), ALLOCATABLE        :: FROCEAN(:,:)      !< Fraction of ocean [1]
+      REAL(fp), ALLOCATABLE        :: FRSEAICE(:,:)     !< Sfc sea ice fraction
+      REAL(fp), ALLOCATABLE        :: FRSNO(:,:)        !< Sfc snow fraction
+      REAL(fp), ALLOCATABLE        :: LAI(:,:)          !< Leaf area index [m2/m2] (online) Dominant
+      REAL(fp), ALLOCATABLE        :: GVF(:,:)          !< Green Vegetative Fraction
+      ! Dust Only Variables
+      REAL(fp), ALLOCATABLE        :: RDRAG(:,:)        !< Drag Partition [1]
+      REAL(fp), ALLOCATABLE        :: USTAR_THRESHOLD(:,:) !< Threshold friction velocity [m/s]
+      REAL(fp), ALLOCATABLE        :: SSM(:,:)          !< Sediment Supply Map [1]
+      ! Surface and ice properties (2D: nx, ny)
+      REAL(fp), ALLOCATABLE        :: SEAICE00(:,:)     !< Sea ice coverage 00-10%
+      REAL(fp), ALLOCATABLE        :: SEAICE10(:,:)     !< Sea ice coverage 10-20%
+      REAL(fp), ALLOCATABLE        :: SEAICE20(:,:)     !< Sea ice coverage 20-30%
+      REAL(fp), ALLOCATABLE        :: SEAICE30(:,:)     !< Sea ice coverage 30-40%
+      REAL(fp), ALLOCATABLE        :: SEAICE40(:,:)     !< Sea ice coverage 40-50%
+      REAL(fp), ALLOCATABLE        :: SEAICE50(:,:)     !< Sea ice coverage 50-60%
+      REAL(fp), ALLOCATABLE        :: SEAICE60(:,:)     !< Sea ice coverage 60-70%
+      REAL(fp), ALLOCATABLE        :: SEAICE70(:,:)     !< Sea ice coverage 70-80%
+      REAL(fp), ALLOCATABLE        :: SEAICE80(:,:)     !< Sea ice coverage 80-90%
+      REAL(fp), ALLOCATABLE        :: SEAICE90(:,:)     !< Sea ice coverage 90-100%
+      REAL(fp), ALLOCATABLE        :: SNODP(:,:)        !< Snow depth [m]
+      REAL(fp), ALLOCATABLE        :: SNOMAS(:,:)       !< Snow mass [kg/m2]
 
-      CHARACTER(LEN=3)             :: State     = 'MET'    ! Name of this state
-
-      ! NLEVS
-      !------
-      INTEGER               :: NLEVS             !< Number of vertical levels
-
-      ! TIMESTEP
-      !---------
-      REAL(fp)              :: TSTEP             !< Time step [s]
-
-      ! Logicals
-      !---------
-      LOGICAL           :: IsLand            !< Is this a land grid box?
-      LOGICAL           :: IsWater           !< Is this a water grid box?
-      LOGICAL           :: IsIce             !< Is this a ice grid box?
-      LOGICAL           :: IsSnow            !< Is this a snow grid box?
-      LOGICAL,  ALLOCATABLE :: InStratMeso(:)    !< Are we in the stratosphere or mesosphere?
-      LOGICAL,  ALLOCATABLE :: InStratosphere(:) !< Are we in the stratosphere?
-      LOGICAL,  ALLOCATABLE :: InTroposphere(:)  !< Are we in the troposphere?
-      LOGICAL,  ALLOCATABLE :: InPbl(:)          !< Are we in the PBL?
-      LOGICAL,  ALLOCATABLE :: IsLocalNoon       ! Is it local noon (between 11 and 13 local solar time?
-
-      ! Land Specific Fields
-      !---------------------
-      REAL(fp)              :: AREA_M2         !< Grid box surface area [m2]
-      INTEGER               :: LWI             !< Land water ice mask (0-sea, 1-land, 2-ice)
-      REAL(fp)              :: CLAYFRAC        !< Fraction of clay [1]
-      INTEGER               :: DSOILTYPE       !< Dominant soil type
-      INTEGER               :: DLUSE           !< Dominant land-use type
-      REAL(fp)              :: FRVEG           !< Fraction of veg [1]
-      REAL(fp)              :: FRLAKE          !< Fraction of lake [1]
-      REAL(fp)              :: FRLAND          !< Fraction of land [1]
-      REAL(fp)              :: FRLANDIC        !< Fraction of land ice [1]
-      REAL(fp)              :: FROCEAN         !< Fraction of ocean [1]
-      REAL(fp)              :: FRSEAICE        !< Sfc sea ice fraction
-      REAL(fp)              :: FRSNO           !< Sfc snow fraction
-      REAL(fp)              :: LAI             !< Leaf area index [m2/m2] (online) Dominant
-      REAL(fp)              :: GVF             !< Green Vegetative Fraction
-      REAL(fp)              :: RDRAG           !< Drag Partition [1]
-      REAL(fp)              :: SANDFRAC        !< Fraction of sand [1]
-      REAL(fp)              :: SEAICE00        !< Sea ice coverage 00-10%
-      REAL(fp)              :: SEAICE10        !< Sea ice coverage 10-20%
-      REAL(fp)              :: SEAICE20        !< Sea ice coverage 20-30%
-      REAL(fp)              :: SEAICE30        !< Sea ice coverage 30-40%
-      REAL(fp)              :: SEAICE40        !< Sea ice coverage 40-50%
-      REAL(fp)              :: SEAICE50        !< Sea ice coverage 50-60%
-      REAL(fp)              :: SEAICE60        !< Sea ice coverage 60-70%
-      REAL(fp)              :: SEAICE70        !< Sea ice coverage 70-80%
-      REAL(fp)              :: SEAICE80        !< Sea ice coverage 80-90%
-      REAL(fp)              :: SEAICE90        !< Sea ice coverage 90-100%
-      REAL(fp)              :: SNODP           !< Snow depth [m]
-      REAL(fp)              :: SNOMAS          !< Snow mass [kg/m2]
-      REAL(fp)              :: SSM             !< Sediment Supply Map [1]
-      REAL(fp)              :: USTAR_THRESHOLD !< Threshold friction velocity [m/s]
-      INTEGER,  ALLOCATABLE :: nLNDTYPE        !< # of landtypes in box (I,J)
-      REAL(fp)              :: GWETTOP         !< Top soil moisture [1]
-      REAL(fp)              :: GWETROOT        !< Root Zone soil moisture [1]
-      REAL(fp)              :: WILT            !< Wilt point [1]
-      INTEGER,  ALLOCATABLE :: nSOIL           !< # number of soil layers
-      REAL(fp), ALLOCATABLE :: SOILM(:)        !< Volumetric Soil moisture [m3/m3]
-      REAL(fp), ALLOCATABLE :: FRLANDUSE(:)    !< Fractional Land Use
-      REAL(fp), ALLOCATABLE :: FRLAI(:)        !< LAI in each Fractional Land use type [m2/m2]
-
-      ! Radiation Related Surface Fields
-      !---------------------------------
-      REAL(fp)              :: ALBD_VIS       !< Visible surface albedo [1]
-      REAL(fp)              :: ALBD_NIR       !< Near-IR surface albedo [1]
-      REAL(fp)              :: ALBD_UV        !< UV surface albedo [1]
-      REAL(fp)              :: PARDR          !< Direct photsynthetically active radiation [W/m2]
-      REAL(fp)              :: PARDF          !< Diffuse photsynthetically active radiation [W/m2]
-      REAL(fp)              :: SUNCOS         !< COS(solar zenith angle) at current time
-      REAL(fp)              :: SUNCOSmid      !< COS(solar zenith angle) at midpoint of chem timestep
-      REAL(fp)              :: SUNCOSsum      !< Sum of COS(SZA) for HEMCO OH diurnal variability
-      REAL(fp)              :: SZAFACT        !< Diurnal scale factor for HEMCO OH diurnal variability (computed) [1]
-      REAL(fp)              :: SWGDN          !< Incident radiation @ ground [W/m2]
-
-
-
-      ! Flux Related Fields
-      !--------------------
-      REAL(fp)              :: EFLUX             !< Latent heat flux [W/m2]
-      REAL(fp)              :: HFLUX             !< Sensible heat flux [W/m2]
-      REAL(fp)              :: U10M              !< E/W wind speed @ 10m ht [m/s]
-      REAL(fp)              :: USTAR             !< Friction velocity [m/s]
-      REAL(fp)              :: V10M              !< N/S wind speed @ 10m ht [m/s]
-      REAL(fp)              :: Z0                !< Surface roughness height [m]
-      REAL(fp)              :: Z0H               !< Surface roughness height, for heat (thermal roughness) [m]
-      REAL(fp), ALLOCATABLE :: FRZ0(:)           !< Aerodynamic Roughness Length per FRLANDUSE
-      REAL(fp)              :: PBLH              !< PBL height [m]
-      REAL(fp), ALLOCATABLE :: F_OF_PBL(:)       !< Fraction of box within PBL [1]
-      REAL(fp), ALLOCATABLE :: F_UNDER_PBLTOP(:) !< Fraction of box under PBL top
-
-      ! Cloud & Precipitation Related Fields
-      !-------------------------------------
-      REAL(fp)              :: CLDFRC         !< Column cloud fraction [1]
-      REAL(fp)              :: CONV_DEPTH     !< Convective cloud depth [m]
-      REAL(fp)              :: FLASH_DENS     !< Lightning flash density [#/km2/s]
-      REAL(fp)              :: CNV_FRC        !< Convective fraction [1]
-      REAL(fp), ALLOCATABLE :: CLDF(:)        !< 3-D cloud fraction [1]
-      REAL(fp), ALLOCATABLE :: CMFMC(:)       !< Cloud mass flux [kg/m2/s]
-      REAL(fp), ALLOCATABLE :: DQRCU(:)       !< Conv precip production rate [kg/kg/s] (assume per dry air)
-      REAL(fp), ALLOCATABLE :: DQRLSAN(:)     !< LS precip prod rate [kg/kg/s] (assume per dry air)
-      REAL(fp), ALLOCATABLE :: DTRAIN(:)      !< Detrainment flux [kg/m2/s]
-      REAL(fp)              :: PRECANV        !< Anvil previp @ ground [kg/m2/s] -> [mm/day]
-      REAL(fp)              :: PRECCON        !< Conv  precip @ ground [kg/m2/s] -> [mm/day]
-      REAL(fp)              :: PRECLSC        !< Large-scale precip @ ground kg/m2/s] -> [mm/day]
-      REAL(fp)              :: PRECTOT        !< Total precip @ ground [kg/m2/s] -> [mm/day]
-      REAL(fp), ALLOCATABLE :: QI(:)          !< Mass fraction of cloud ice water [kg/kg dry air]
-      REAL(fp), ALLOCATABLE :: QL(:)          !< Mass fraction of cloud liquid water [kg/kg dry air]
-      REAL(fp), ALLOCATABLE :: PFICU(:)       !< Dwn flux ice prec:conv [kg/m2/s]
-      REAL(fp), ALLOCATABLE :: PFILSAN(:)     !< Dwn flux ice prec:LS+anv [kg/m2/s]
-      REAL(fp), ALLOCATABLE :: PFLCU(:)       !< Dwn flux liq prec:conv [kg/m2/s]
-      REAL(fp), ALLOCATABLE :: PFLLSAN(:)     !< Dwn flux ice prec:LS+anv [kg/m2/s]
-      REAL(fp), ALLOCATABLE :: TAUCLI(:)      !< Opt depth of ice clouds [1]
-      REAL(fp), ALLOCATABLE :: TAUCLW(:)      !< Opt depth of H2O clouds [1]
-
-      ! State Related Fields
-      !---------------------
-      REAL(fp)              :: PHIS           !< Surface geopotential height [m2/s2]
-      REAL(fp), ALLOCATABLE :: Z(:)           !< Full Layer Geopotential Height
-      REAL(fp), ALLOCATABLE :: ZMID(:)        !< Mid Layer Geopotential Height
-      REAL(fp), ALLOCATABLE :: BXHEIGHT(:)    !< Grid box height [m] (dry air)
-      REAL(fp)              :: PS_WET         !< Wet surface pressure at start of timestep [hPa]
-      REAL(fp)              :: PS_DRY         !< Dry surface pressure at start of timestep [hPa]
-      REAL(fp)              :: QV2M           !< Specific Humidity at 2m [kg/kg]
-      REAL(fp), ALLOCATABLE :: QV(:)          !< Specific Humidity [kg/kg]
-      REAL(fp)              :: T2M            !< Temperature 2m [K]
-      REAL(fp)              :: TS             !< Surface temperature [K]
-      REAL(fp)              :: TSKIN          !< Surface skin temperature [K]
-      REAL(fp), ALLOCATABLE :: T(:)           !< Temperature [K]
-      REAL(fp), ALLOCATABLE :: THETA(:)       !< Potential temperature [K]
-      REAL(fp), ALLOCATABLE :: TV(:)          !< Virtual temperature [K]
-      REAL(fp), ALLOCATABLE :: V(:)           !< N/S component of wind [m s-1]
-      REAL(fp), ALLOCATABLE :: U(:)           !< E/W component of wind [m s-1]
-      REAL(fp)              :: SST            !< Sea surface temperature [K]
-      REAL(fp)              :: SLP            !< Sea level pressure [hPa]
-      REAL(fp)              :: PS             !< Surface Pressure [hPa]
-      REAL(fp), ALLOCATABLE :: OMEGA(:)       !< Updraft velocity [Pa/s]
-      REAL(fp), ALLOCATABLE :: RH(:)          !< Relative humidity [%]
-      REAL(fp)              :: TO3            !< Total overhead O3 column [DU]
-      REAL(fp)              :: TROPP          !< Tropopause pressure [hPa]
-      INTEGER               :: TropLev        !< Tropopause level [1]
-      REAL(fp)              :: TropHt         !< Tropopause height [km]
-      REAL(fp), ALLOCATABLE :: SPHU(:)        !< Specific humidity [g H2O/kg tot air]
-      REAL(fp), ALLOCATABLE :: AIRDEN(:)      !< Dry air density [kg/m3]
-      REAL(fp), ALLOCATABLE :: AIRNUMDEN(:)   !< Dry air density [molec/cm3]
-      REAL(fp), ALLOCATABLE :: MAIRDEN(:)     !< Moist air density [kg/m3]
-      REAL(fp), ALLOCATABLE :: AVGW(:)        !< Water vapor volume mixing ratio [vol H2O/vol dry air]
-      REAL(fp), ALLOCATABLE :: DELP(:)        !< Delta-P (wet) across box [hPa]
-      REAL(fp), ALLOCATABLE :: DELP_DRY(:)    !< Delta-P (dry) across box [hPa]
-      REAL(fp), ALLOCATABLE :: DAIRMASS(:)    !< Dry air mass [kg] in grid box
-      REAL(fp), ALLOCATABLE :: AIRVOL(:)      !< Grid box volume [m3] (dry air)
-      REAL(fp), ALLOCATABLE :: PEDGE_DRY(:)   !< Dry air partial pressure @ level edges [hPa]
-      REAL(fp), ALLOCATABLE :: PMID(:)        !< Average wet air pressure [hPa] defined as arithmetic average of edge pressures
-      REAL(fp), ALLOCATABLE :: PMID_DRY(:)    !< Dry air partial pressure [hPa] defined as arithmetic avg of edge pressures
-
-   END TYPE MetStateType
+      ! Soil and land use arrays (2D for counts, 3D for fractions)
+      INTEGER,  ALLOCATABLE        :: DSOILTYPE(:,:)    !< Dominant soil type
+      REAL(fp), ALLOCATABLE        :: CLAYFRAC(:,:)     !< Fraction of clay [1]
+      REAL(fp), ALLOCATABLE        :: SANDFRAC(:,:)     !< Fraction of sand [1]
+      INTEGER,  ALLOCATABLE        :: nLNDTYPE(:,:)     !< # of landtypes in box (I,J)
+      REAL(fp), ALLOCATABLE        :: GWETTOP(:,:)      !< Top soil moisture [1]
+      REAL(fp), ALLOCATABLE        :: GWETROOT(:,:)     !< Root Zone soil moisture [1]
+      REAL(fp), ALLOCATABLE        :: WILT(:,:)         !< Wilt point [1]
+      INTEGER                      :: nSOIL             !< # number of soil layers
+      INTEGER                      :: nSOILTYPE         !< # number of soil types
+      REAL(fp), ALLOCATABLE        :: SOILM(:,:,:)      !< Volumetric Soil moisture [m3/m3] (nx,ny,nsoil)
+      REAL(fp), ALLOCATABLE        :: FRLANDUSE(:,:,:)  !< Fractional Land Use (nx,ny,nlanduse)
+      REAL(fp), ALLOCATABLE        :: FRSOIL(:,:,:)     !< Fractional Soil (nx,ny,nsoil)
+      REAL(fp), ALLOCATABLE        :: FRLAI(:,:,:)      !< LAI in each Fractional Land use type [m2/m2] (nx,ny,nlanduse)
+      INTEGER, ALLOCATABLE         :: ILAND(:,:,:)      !< Land type ID in current grid box (nx,ny,nlanduse)
+      ! Location arrays (1D for single point, 2D for grid)
+      real(fp), ALLOCATABLE        :: LAT(:,:)         !< Latitude
+      real(fp), ALLOCATABLE        :: LON(:,:)         !< Longitude
+      character(len=20)            :: LUCNAME          !< name of land use category
+      ! Surface meteorological properties (2D: nx, ny)
+      REAL(fp), ALLOCATABLE        :: ALBD_VIS(:,:)     !< Visible surface albedo [1]
+      REAL(fp), ALLOCATABLE        :: ALBD_NIR(:,:)     !< Near-IR surface albedo [1]
+      REAL(fp), ALLOCATABLE        :: ALBD_UV(:,:)      !< UV surface albedo [1]
+      REAL(fp), ALLOCATABLE        :: PARDR(:,:)        !< Direct photsynthetically active radiation [W/m2]
+      REAL(fp), ALLOCATABLE        :: PARDF(:,:)        !< Diffuse photsynthetically active radiation [W/m2]
+      REAL(fp), ALLOCATABLE        :: SUNCOS(:,:)       !< COS(solar zenith angle) at current time
+      REAL(fp), ALLOCATABLE        :: SUNCOSmid(:,:)    !< COS(solar zenith angle) at midpoint of chem timestep
+      REAL(fp), ALLOCATABLE        :: SUNCOSsum(:,:)    !< Sum of COS(SZA) for HEMCO OH diurnal variability
+      REAL(fp), ALLOCATABLE        :: SZAFACT(:,:)      !< Diurnal scale factor for HEMCO OH diurnal variability (computed) [1]
+      REAL(fp), ALLOCATABLE        :: SWGDN(:,:)        !< Incident radiation @ ground [W/m2]
+      REAL(fp), ALLOCATABLE        :: EFLUX(:,:)        !< Latent heat flux [W/m2]
+      REAL(fp), ALLOCATABLE        :: HFLUX(:,:)        !< Sensible heat flux [W/m2]
+      REAL(fp), ALLOCATABLE        :: U10M(:,:)         !< E/W wind speed @ 10m ht [m/s]
+      REAL(fp), ALLOCATABLE        :: USTAR(:,:)        !< Friction velocity [m/s]
+      REAL(fp), ALLOCATABLE        :: V10M(:,:)         !< N/S wind speed @ 10m ht [m/s]
+      REAL(fp), ALLOCATABLE        :: Z0(:,:)           !< Surface roughness height [m]
+      REAL(fp), ALLOCATABLE        :: Z0H(:,:)          !< Surface roughness height, for heat (thermal roughness) [m]
+      REAL(fp), ALLOCATABLE        :: FRZ0(:,:,:)       !< Aerodynamic Roughness Length per FRLANDUSE (nx,ny,nlanduse)
+      REAL(fp), ALLOCATABLE        :: PBLH(:,:)         !< PBL height [m]
+      REAL(fp), ALLOCATABLE        :: SALINITY(:,:)     !< Salinity of the ocean [part per thousand]
+      ! 3D volumetric fields (3D: nx, ny, nz)
+      REAL(fp), ALLOCATABLE        :: F_OF_PBL(:,:,:)       !< Fraction of box within PBL [1]
+      REAL(fp), ALLOCATABLE        :: F_UNDER_PBLTOP(:,:,:) !< Fraction of box under PBL top
+      real(fp), ALLOCATABLE        :: OBK(:,:)          !< Monin-Obhukov length [m]
+      ! Cloud and precipitation properties (2D for surface, 3D for volumetric)
+      REAL(fp), ALLOCATABLE        :: CLDFRC(:,:)       !< Column cloud fraction [1]
+      REAL(fp), ALLOCATABLE        :: CONV_DEPTH(:,:)   !< Convective cloud depth [m]
+      REAL(fp), ALLOCATABLE        :: FLASH_DENS(:,:)   !< Lightning flash density [#/km2/s]
+      REAL(fp), ALLOCATABLE        :: CNV_FRC(:,:)      !< Convective fraction [1]
+      REAL(fp), ALLOCATABLE        :: CLDF(:,:,:)       !< 3-D cloud fraction [1]
+      REAL(fp), ALLOCATABLE        :: CMFMC(:,:,:)      !< Cloud mass flux [kg/m2/s]
+      REAL(fp), ALLOCATABLE        :: DQRCU(:,:,:)      !< Conv precip production rate [kg/kg/s] (assume per dry air)
+      REAL(fp), ALLOCATABLE        :: DQRLSAN(:,:,:)    !< LS precip prod rate [kg/kg/s] (assume per dry air)
+      REAL(fp), ALLOCATABLE        :: DTRAIN(:,:,:)     !< Detrainment flux [kg/m2/s]
+      REAL(fp), ALLOCATABLE        :: PRECANV(:,:)      !< Anvil previp @ ground [kg/m2/s] -> [mm/day]
+      REAL(fp), ALLOCATABLE        :: PRECCON(:,:)      !< Conv  precip @ ground [kg/m2/s] -> [mm/day]
+      REAL(fp), ALLOCATABLE        :: PRECLSC(:,:)      !< Large-scale precip @ ground kg/m2/s] -> [mm/day]
+      ! 3D cloud and precipitation arrays
+      REAL(fp), ALLOCATABLE        :: QI(:,:,:)         !< Mass fraction of cloud ice water [kg/kg dry air]
+      REAL(fp), ALLOCATABLE        :: QL(:,:,:)         !< Mass fraction of cloud liquid water [kg/kg dry air]
+      REAL(fp), ALLOCATABLE        :: PFICU(:,:,:)      !< Dwn flux ice prec:conv [kg/m2/s]
+      REAL(fp), ALLOCATABLE        :: PFILSAN(:,:,:)    !< Dwn flux ice prec:LS+anv [kg/m2/s]
+      REAL(fp), ALLOCATABLE        :: PFLCU(:,:,:)      !< Dwn flux liq prec:conv [kg/m2/s]
+      REAL(fp), ALLOCATABLE        :: PFLLSAN(:,:,:)    !< Dwn flux ice prec:LS+anv [kg/m2/s]
+      REAL(fp), ALLOCATABLE        :: TAUCLI(:,:,:)     !< Opt depth of ice clouds [1]
+      REAL(fp), ALLOCATABLE        :: TAUCLW(:,:,:)     !< Opt depth of H2O clouds [1]
+      ! Surface scalars (now 2D: nx, ny)
+      REAL(fp), ALLOCATABLE        :: PHIS(:,:)         !< Surface geopotential height [m2/s2]
+      REAL(fp), ALLOCATABLE        :: PS_WET(:,:)       !< Wet surface pressure at start of timestep [Pa]
+      REAL(fp), ALLOCATABLE        :: PS_DRY(:,:)       !< Dry surface pressure at start of timestep [Pa]
+      REAL(fp), ALLOCATABLE        :: QV2M(:,:)         !< Specific Humidity at 2m [kg/kg]
+      REAL(fp), ALLOCATABLE        :: T2M(:,:)          !< Temperature 2m [K]
+      REAL(fp), ALLOCATABLE        :: TS(:,:)           !< Surface temperature [K]
+      REAL(fp), ALLOCATABLE        :: TSKIN(:,:)        !< Surface skin temperature [K]
+      REAL(fp), ALLOCATABLE        :: SST(:,:)          !< Sea surface temperature [K]
+      REAL(fp), ALLOCATABLE        :: SLP(:,:)          !< Sea level pressure [Pa]
+      REAL(fp), ALLOCATABLE        :: PS(:,:)           !< Surface Pressure [Pa]
+      REAL(fp), ALLOCATABLE        :: TO3(:,:)          !< Total overhead O3 column [DU]
+      REAL(fp), ALLOCATABLE        :: TROPP(:,:)        !< Tropopause pressure [Pa]
+      INTEGER,  ALLOCATABLE        :: TropLev(:,:)      !< Tropopause level [1]
+      REAL(fp), ALLOCATABLE        :: TropHt(:,:)       !< Tropopause height [km]
+      ! 3D atmospheric variables (3D: nx, ny, nz)
+      REAL(fp), ALLOCATABLE        :: Z(:,:,:)          !< Full Layer Geopotential Height
+      REAL(fp), ALLOCATABLE        :: ZMID(:,:,:)       !< Mid Layer Geopotential Height
+      REAL(fp), ALLOCATABLE        :: BXHEIGHT(:,:,:)   !< Grid box height [m] (dry air)
+      REAL(fp), ALLOCATABLE        :: QV(:,:,:)         !< Specific Humidity [kg/kg]
+      REAL(fp), ALLOCATABLE        :: T(:,:,:)          !< Temperature [K]
+      REAL(fp), ALLOCATABLE        :: THETA(:,:,:)      !< Potential temperature [K]
+      REAL(fp), ALLOCATABLE        :: TV(:,:,:)         !< Virtual temperature [K]
+      REAL(fp), ALLOCATABLE        :: V(:,:,:)          !< N/S component of wind [m s-1]
+      REAL(fp), ALLOCATABLE        :: U(:,:,:)          !< E/W component of wind [m s-1]
+      REAL(fp), ALLOCATABLE        :: OMEGA(:,:,:)      !< Updraft velocity [Pa/s]
+      REAL(fp), ALLOCATABLE        :: RH(:,:,:)         !< Relative humidity [fraction, not %]
+      REAL(fp), ALLOCATABLE        :: SPHU(:,:,:)       !< Specific humidity [g H2O/kg tot air]
+      REAL(fp), ALLOCATABLE        :: AIRDEN(:,:,:)     !< Dry air density [kg/m3]
+      REAL(fp), ALLOCATABLE        :: AIRNUMDEN(:,:,:)  !< Dry air density [molec/cm3]
+      REAL(fp), ALLOCATABLE        :: MAIRDEN(:,:,:)    !< Moist air density [kg/m3]
+      REAL(fp), ALLOCATABLE        :: AVGW(:,:,:)       !< Water vapor volume mixing ratio [vol H2O/vol dry air]
+      REAL(fp), ALLOCATABLE        :: DELP(:,:,:)       !< Delta-P (wet) across box [hPa]
+      REAL(fp), ALLOCATABLE        :: DELP_DRY(:,:,:)   !< Delta-P (dry) across box [hPa]
+      REAL(fp), ALLOCATABLE        :: DAIRMASS(:,:,:)   !< Dry air mass [kg] in grid box
+      REAL(fp), ALLOCATABLE        :: AIRVOL(:,:,:)     !< Grid box volume [m3] (dry air)
+      REAL(fp), ALLOCATABLE        :: PEDGE_DRY(:,:,:)  !< Dry air partial pressure @ level edges [Pa] (nx,ny,nz+1)
+      REAL(fp), ALLOCATABLE        :: PEDGE(:,:,:)      !< Air partial pressure @ level edges [Pa] (nx,ny,nz+1)
+      REAL(fp), ALLOCATABLE        :: PMID(:,:,:)       !< Average wet air pressure [Pa] defined as arithmetic average of edge pressures
+      REAL(fp), ALLOCATABLE        :: PMID_DRY(:,:,:)   !< Dry air partial pressure [Pa] defined as arithmetic avg of edge pressures
+   contains
+      procedure :: init => metstate_init
+      procedure :: cleanup => metstate_cleanup
+      procedure :: validate => metstate_validate
+      procedure :: reset => metstate_reset
+      procedure :: is_allocated => metstate_is_allocated
+      procedure :: get_memory_usage => metstate_get_memory_usage
+      procedure :: print_summary => metstate_print_summary
+      procedure :: get_dimensions => metstate_get_dimensions
+      procedure :: get_field_ptr => metstate_get_field_ptr
+      procedure :: get_field_ptr_int => metstate_get_field_ptr_int
+      procedure :: get_field_ptr_logical => metstate_get_field_ptr_logical
+      procedure, public :: get_column_ptr_func => metstate_get_column_ptr_func
+      procedure, public :: get_column_ptr_func_int => metstate_get_column_ptr_func_int
+      procedure, public :: get_column_ptr_func_logical => metstate_get_column_ptr_func_logical
+      procedure, public :: get_column_ptr => metstate_get_column_ptr_subroutine
+      procedure, public :: get_2Dto0D_value => metstate_get_2Dto0D_value
+      procedure, public :: get_2Dto0D_value_int => metstate_get_2Dto0D_value_int
+      procedure, public :: get_2Dto0D_value_logical => metstate_get_2Dto0D_value_logical
+      procedure, public :: get_scalar_value => metstate_get_scalar_value
+      procedure, public :: get_scalar_value_int => metstate_get_scalar_value_int
+      procedure, public :: get_scalar_value_logical => metstate_get_scalar_value_logical
+      ! Generic interface for setting fields with proper dimensions
+      generic, public :: set_field => metstate_set_field_scalar_real, &
+         metstate_set_field_scalar_int, &
+         metstate_set_field_scalar_logical, &
+         metstate_set_field_2d_real, &
+         metstate_set_field_2d_int, &
+         metstate_set_field_2d_logical, &
+         metstate_set_field_3d_real, &
+         metstate_set_field_3d_int, &
+         metstate_set_field_3d_logical
+      procedure, public :: metstate_set_field_scalar_real
+      procedure, public :: metstate_set_field_scalar_int
+      procedure, public :: metstate_set_field_scalar_logical
+      procedure, public :: metstate_set_field_2d_real
+      procedure, public :: metstate_set_field_2d_int
+      procedure, public :: metstate_set_field_2d_logical
+      procedure, public :: metstate_set_field_3d_real
+      procedure, public :: metstate_set_field_3d_int
+      procedure, public :: metstate_set_field_3d_logical
+      procedure, public :: set_multiple_fields => metstate_set_multiple_fields
+      procedure :: allocate_field => metstate_allocate_field
+      procedure :: deallocate_field => metstate_deallocate_field
+      procedure, private :: allocate_arrays => allocate_metstate_arrays
+   end type MetStateType
 
 CONTAINS
 
-   !---------------------------------------------------------------------------
-   ! PUBLIC MEMBER FUNCTIONS
-   !---------------------------------------------------------------------------
-   !
-   SUBROUTINE Zero_MetState( MetState, RC )
-      !
-      ! !INPUT/OUTPUT PARAMETERS:
-      !
-      TYPE(MetStateType), INTENT(INOUT) :: MetState
-      !
-      ! !OUTPUT PARAMETERS:
-      !
-      INTEGER,        INTENT(OUT)   :: RC
-      !
-      ! !REVISION HISTORY:
-      !  21 Sep 2020 - R. Yantosca - Initial version
-      !  See the subsequent Git history with the gitk browser!
-      !EOP
-      !------------------------------------------------------------------------------
-      !BOC
-      !
-      ! Initialize
-      RC = CC_SUCCESS
-
-      MetState%USTAR = ZERO
-
-   END SUBROUTINE Zero_MetState
-
-   !>
-   !! \brief Allocate the MetState object
+   !> \brief Initialize a MetStateType object
    !!
-   !! \ingroup core_modules
+   !! Initializes the meteorological state object, sets default values, and allocates required arrays.
    !!
-   !! \param GridState   CATCHem grid state
-   !! \param MetState    CATCHem met state
-   !! \param RC          Error return code
-   !!!>
-   SUBROUTINE Met_Allocate( GridState, MetState, RC)
-      ! USES
-      USE GridState_Mod, Only : GridStateType
+   !! \param[inout] this      MetStateType object to initialize
+   !! \param[in]    nx        Number of grid points in x direction
+   !! \param[in]    ny        Number of grid points in y direction
+   !! \param[in]    nlevs     Number of vertical levels
+   !! \param[in]    nsoil     Number of soil layers
+   !! \param[in]    nsoiltype Number of soil types
+   !! \param[in]    nsurftype Number of surface types
+   !! \param[inout] error_mgr Error manager for context and error reporting
+   !! \param[out]   rc        Return code (CC_SUCCESS or error code)
+   subroutine metstate_init(this, nx, ny, nlevs, nsoil, nsoiltype, nsurftype, error_mgr, rc)
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, ERROR_MEMORY_ALLOCATION
 
-      IMPLICIT NONE
+      implicit none
+      class(MetStateType), intent(inout) :: this
+      integer, intent(in) :: nx, ny, nlevs
+      integer, intent(in), optional :: nsoil, nsoiltype, nsurftype
+      type(ErrorManagerType), pointer, intent(inout) :: error_mgr
+      integer, intent(out) :: rc
+      character(len=256) :: thisLoc
 
-      ! Arguments
-      TYPE(GridStateType), INTENT(IN)  :: GridState !< Grid state
-      TYPE(MetStateType), INTENT(INOUT) :: MetState !< Meteorological state
-      INTEGER,            INTENT(OUT)   :: RC       !< Return code
+      thisLoc = 'metstate_init (in core/metstate_mod.F90)'
+      call error_mgr%push_context('metstate_init', 'initializing meteorological state')
 
-      ! Local variables
-      CHARACTER(LEN=255) :: ErrMsg, thisLoc
+      rc = CC_SUCCESS
 
-      ! Initialize
-      RC = CC_SUCCESS
-      ErrMsg = ''
-      thisLoc = ' -> at Met_Allocate (in core/metstate_mod.F90)'
+      ! Initialize default values for integer parameters
+      this%NLEVS = nlevs
 
-      ! Nullify all fields for safety's sake before allocating them
-      ! This can prevent compilation errors caused by uninitialized values
+      call this%geometry%set(nx, ny, nlevs) ! Add a set() method to GridGeometryType
 
+      this%State = 'MET'
 
-      !--------------------------------------------------
-      ! Initialize fields
-      !--------------------------------------------------
-      MetState%nSOIL = GridState%number_of_soil_layers
-      print*, 'MetState%nSOIL = ', MetState%nSOIL
-
-      ! Visible Surface Albedo
-      !-----------------------
-      MetState%ALBD_VIS = ZERO
-      MetState%ALBD_NIR = ZERO
-      MetState%ALBD_UV = ZERO
-      MetState%AREA_M2 = ZERO
-      MetState%CLDFRC = ZERO
-      MetState%CONV_DEPTH = ZERO
-      MetState%EFLUX = ZERO
-      MetState%FRLAKE = ZERO
-      MetState%FRLAND = ZERO
-      MetState%FRLANDIC = ZERO
-      MetState%FROCEAN = ZERO
-      MetState%FRSEAICE = ZERO
-      MetState%FRSNO = ZERO
-      MetState%GWETROOT = ZERO
-      MetState%GWETTOP = ZERO
-      MetState%HFLUX = ZERO
-      MetState%IsLand = .false.
-      MetState%IsWater = .false.
-      MetState%IsIce = .false.
-      MetState%IsSnow = .false.
-      MetState%LAI = ZERO
-      MetState%PARDR = ZERO
-      MetState%PARDF = ZERO
-      MetState%PBLH = ZERO
-      MetState%PS = ZERO
-      MetState%QV2M = ZERO
-      MetState%T2M = ZERO
-      MetState%TSKIN = ZERO
-      MetState%U10M = ZERO
-      MetState%V10M = ZERO
-      MetState%z0 = ZERO
-      MetState%z0h = ZERO
-      MetState%USTAR_THRESHOLD = ZERO
-      MetState%RDRAG = ZERO
-      MetState%SSM = ZERO
-      MetState%CLAYFRAC = ZERO
-      MetSTate%SANDFRAC = ZERO
-      MetState%SST = ZERO
-
-      ! Allocate Column Fields
-      !-----------------------
-      !  Logicals
-      if (.not. allocated(MetState%InStratosphere)) then
-         allocate(MetState%InStratosphere(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InStratosphere'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
+      ! Set soil and surface parameters if provided
+      if (present(nsurftype)) then
+         this%NSURFTYPE = nsurftype
+      else
+         this%NSURFTYPE = 0  ! Will prevent allocation of surface arrays
       end if
 
-      if (.not. allocated(MetState%InPbl)) then
-         allocate(MetState%InPbl(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InPbl'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
+      ! Set soil parameters if provided
+      if (present(nsoil)) then
+         this%nSOIL = nsoil
+      else
+         this%nSOIL = 0  ! Will prevent allocation of soil arrays
       end if
 
-      if (.not. allocated(MetState%InStratMeso)) then
-         allocate(MetState%InStratMeso(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InStratMeso'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
+      if (present(nsoiltype)) then
+         this%nSOILTYPE = nsoiltype
+      else
+         this%nSOILTYPE = 0  ! Will prevent allocation of soil type arrays
       end if
 
-      if (.not. allocated(MetState%InTroposphere)) then
-         allocate(MetState%InTroposphere(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InTroposphere'
-            call CC_Error(errMsg, RC, thisLoc)
+      ! Call helper procedure to allocate arrays
+      call this%allocate_arrays('ALL', error_mgr, rc)
+
+      call error_mgr%pop_context()
+   end subroutine metstate_init
+
+   !> \brief Allocate all arrays for MetStateType (optionally, only a specific field)
+   !!
+   !! Helper procedure to allocate and initialize arrays in the meteorological state.
+   !!
+   !! \param[inout] this      MetStateType object
+   !! \param[in]    field_name Name of the field to allocate (or 'ALL' for all fields)
+   !! \param[inout] error_mgr Error manager for context and error reporting
+   !! \param[out]   rc        Return code
+   subroutine allocate_metstate_arrays(this, field_name, error_mgr, rc)
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, ERROR_MEMORY_ALLOCATION
+
+      implicit none
+      class(MetStateType), intent(inout) :: this
+      character(len=*), intent(in) :: field_name
+      type(ErrorManagerType), pointer, intent(inout) :: error_mgr
+      integer, intent(out) :: rc
+      character(len=256) :: thisLoc
+      integer :: nx, ny, nz, nsoil, nsoiltype, nSURFTYPE
+
+      thisLoc = 'allocate_metstate_arrays (in core/metstate_mod.F90)'
+      rc = CC_SUCCESS
+
+      call this%geometry%get_dimensions(nx, ny, nz)
+
+      ! Use the properly initialized values (no more defaults needed)
+      nsoil = this%nSOIL
+      nsoiltype = this%nSOILTYPE
+      nSURFTYPE = this%NSURFTYPE
+
+      ! Auto-allocate all REAL(fp), ALLOCATABLE fields (generated, now field-by-field)
+      select case (trim(field_name))
+#include "metstate_allocate_fields.inc"
+      end select
+
+      ! Initialize to safe defaults
+      this%T = 288.15_fp
+      this%U = 0.0_fp
+      this%V = 0.0_fp
+      this%QV = 0.001_fp
+      this%RH = 0.50_fp
+      this%AIRDEN = 1.2_fp
+      this%BXHEIGHT = 100.0_fp
+      this%PS = 101300.25_fp
+      this%SLP = 101300.25_fp
+      this%T2M = 288.15_fp
+      this%TS = 288.15_fp
+
+   end subroutine allocate_metstate_arrays
+
+   !> \brief Deallocate and clean up all arrays in MetStateType (field-by-field)
+   !!
+   !! Deallocates the specified allocatable array and resets scalar values in the meteorological state.
+   !!
+   !! \param[inout] this MetStateType object
+   !! \param[in]    field_name Name of the field to deallocate (or 'ALL' for all fields)
+   !! \param[out]   rc   Return code (CC_SUCCESS)
+   subroutine metstate_cleanup(this, field_name, rc)
+      implicit none
+      class(MetStateType), intent(inout) :: this
+      character(len=*), intent(in) :: field_name
+      integer, intent(out) :: rc
+
+      rc = CC_SUCCESS
+
+      ! Deallocate only the requested field (or all if 'ALL')
+      select case (trim(field_name))
+#include "metstate_deallocate_fields.inc"
+      end select
+
+      this%State = ''
+      this%NLEVS = 72  ! Reset to default
+      this%NSURFTYPE = 1  ! Reset to default
+
+   end subroutine metstate_cleanup
+
+   !> \brief Validate the MetStateType object for consistency and physical reasonableness
+   !!
+   !! Checks that the number of levels is positive, temperatures and pressures are within physical ranges,
+   !! and that required arrays are allocated.
+   !!
+   !! \param[in]    this      MetStateType object
+   !! \param[inout] error_mgr Error manager for context and error reporting
+   !! \param[out]   rc        Return code (CC_SUCCESS or error code)
+   subroutine metstate_validate(this, error_mgr, rc)
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, ERROR_INVALID_INPUT
+      use utilities_mod, only: is_valid_temperature, is_valid_pressure
+
+      implicit none
+      class(MetStateType), intent(in) :: this
+      type(ErrorManagerType), pointer, intent(inout) :: error_mgr
+      integer, intent(out) :: rc
+
+      character(len=256) :: thisLoc
+
+      thisLoc = 'metstate_validate (in core/metstate_mod.F90)'
+      call error_mgr%push_context('metstate_validate', 'validating meteorological state')
+
+      rc = CC_SUCCESS
+
+      ! Check basic state
+      if (this%NLEVS <= 0) then
+         call error_mgr%report_error(ERROR_INVALID_INPUT, &
+            'Number of levels must be positive', rc, &
+            thisLoc, 'Set NLEVS to a positive integer')
+         call error_mgr%pop_context()
+         return
+      endif
+
+      ! Validate temperatures (use maxval/minval for array validation)
+      if (allocated(this%T2M)) then
+         if (maxval(this%T2M) > 400.0_fp .or. minval(this%T2M) < 100.0_fp) then
+            call error_mgr%report_error(ERROR_INVALID_INPUT, &
+               '2m temperature out of physical range', rc, &
+               thisLoc, 'Check temperature units and values')
+            call error_mgr%pop_context()
             return
          endif
-      end if
+      endif
 
-      ! Flux Related
-      if (.not. allocated(MetState%F_OF_PBL)) then
-         allocate(MetState%F_OF_PBL(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%F_OF_PBL'
-            call CC_Error(errMsg, RC, thisLoc)
+      if (allocated(this%TS)) then
+         if (maxval(this%TS) > 400.0_fp .or. minval(this%TS) < 100.0_fp) then
+            call error_mgr%report_error(ERROR_INVALID_INPUT, &
+               'Surface temperature out of physical range', rc, &
+               thisLoc, 'Check temperature units and values')
+            call error_mgr%pop_context()
             return
          endif
-      end if
+      endif
 
-      if (.not. allocated(MetState%F_UNDER_PBLTOP)) then
-         allocate(MetState%F_UNDER_PBLTOP(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%F_UNDER_PBLTOP'
-            call CC_Error(errMsg, RC, thisLoc)
+      ! Validate pressures (use maxval/minval for array validation)
+      if (allocated(this%PS)) then
+         if (maxval(this%PS) > 120000.0_fp .or. minval(this%PS) < 1000.0_fp) then
+            call error_mgr%report_error(ERROR_INVALID_INPUT, &
+               'Surface pressure out of physical range', rc, &
+               thisLoc, 'Check pressure units and values')
+            call error_mgr%pop_context()
             return
          endif
-      end if
+      endif
 
-      ! Cloud / Precipitation
-      if (.not. allocated(MetState%CLDF)) then
-         allocate(MetState%CLDF(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%CLDF'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-            return
-         endif
-      end if
-
-      if (.not. allocated(MetState%CMFMC)) then
-         allocate(MetState%CMFMC(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%CMFMC'
-            call CC_Error(errMsg, RC, thisLoc)
+      if (allocated(this%SLP)) then
+         if (maxval(this%SLP) > 120000.0_fp .or. minval(this%SLP) < 50000.0_fp) then
+            call error_mgr%report_error(ERROR_INVALID_INPUT, &
+               'Sea level pressure out of physical range', rc, &
+               thisLoc, 'Check pressure units and values')
+            call error_mgr%pop_context()
             return
          endif
-      end if
+      endif
 
-      if (.not. allocated(MetState%DQRCU)) then
-         allocate(MetState%DQRCU(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%DQRCU'
-            call CC_Error(errMsg, RC, thisLoc)
+      ! Check array allocation
+      if (.not. this%is_allocated()) then
+         call error_mgr%report_error(ERROR_INVALID_INPUT, &
+            'Required arrays not allocated', rc, &
+            thisLoc, 'Call init() before using MetState')
+         call error_mgr%pop_context()
+         return
+      endif
+
+      call error_mgr%pop_context()
+   end subroutine metstate_validate
+
+   !> \brief Reset MetStateType to initial values
+   !!
+   !! Resets time, surface fields, and arrays to standard atmosphere values.
+   !!
+   !! \param[inout] this MetStateType object
+   !! \param[out]   rc   Return code (CC_SUCCESS)
+   subroutine metstate_reset(this, rc)
+      implicit none
+      class(MetStateType), intent(inout) :: this
+      integer, intent(out) :: rc
+
+      rc = CC_SUCCESS
+
+      ! Reset to standard atmosphere values
+      if (allocated(this%T2M)) this%T2M = 288.15_fp
+      if (allocated(this%TS)) this%TS = 288.15_fp
+      if (allocated(this%TSKIN)) this%TSKIN = 288.15_fp
+      if (allocated(this%PS)) this%PS = 101300.25_fp
+      if (allocated(this%SLP)) this%SLP = 101300.25_fp
+      if (allocated(this%SST)) this%SST = 288.15_fp
+
+      ! Reset arrays if allocated
+      if (allocated(this%T)) this%T = 288.15_fp
+      if (allocated(this%U)) this%U = 0.0_fp
+      if (allocated(this%V)) this%V = 0.0_fp
+      if (allocated(this%QV)) this%QV = 0.01_fp
+      if (allocated(this%RH)) this%RH = 0.5_fp
+
+   end subroutine metstate_reset
+
+   !> \brief Check if required arrays are allocated in MetStateType
+   !!
+   !! Returns .true. if all required arrays are allocated, .false. otherwise.
+   !!
+   !! \param[in] this MetStateType object
+   !! \return    Logical flag indicating allocation status
+   function metstate_is_allocated(this) result(is_alloc)
+      implicit none
+      class(MetStateType), intent(in) :: this
+      logical :: is_alloc
+
+      is_alloc = allocated(this%T) .and. allocated(this%U) .and. allocated(this%V) .and. &
+         allocated(this%QV) .and. allocated(this%PMID) .and. allocated(this%DELP)
+   end function metstate_is_allocated
+
+   !> \brief Get approximate memory usage of MetStateType in bytes
+   !!
+   !! Estimates the memory usage of all arrays in the meteorological state object.
+   !!
+   !! \param[in] this MetStateType object
+   !! \return    Estimated memory usage in bytes (integer(kind=8))
+   function metstate_get_memory_usage(this) result(memory_bytes)
+      implicit none
+      class(MetStateType), intent(in) :: this
+      integer(kind=8) :: memory_bytes
+
+      integer :: nlevs
+
+      memory_bytes = 0
+      nlevs = this%NLEVS
+
+      if (nlevs > 0) then
+         ! Estimate based on number of allocated arrays and precision
+         ! Each real(fp) array: nlevs * 8 bytes (assuming fp = real64)
+         ! Each logical array: nlevs * 1 byte
+         memory_bytes = nlevs * 8 * 26  ! 26 real arrays
+         memory_bytes = memory_bytes + nlevs * 1 * 4  ! 4 logical arrays
+         memory_bytes = memory_bytes + (nlevs+1) * 8 * 2  ! 2 edge arrays
+      endif
+   end function metstate_get_memory_usage
+
+   !> \brief Print a summary of the MetStateType object to standard output
+   !!
+   !! Prints key fields, allocation status, and memory usage for diagnostics.
+   !!
+   !! \param[in] this MetStateType object
+   subroutine metstate_print_summary(this)
+      implicit none
+      class(MetStateType), intent(in) :: this
+
+      write(*,'(A)') '=== MetState Summary ==='
+      write(*,'(A,A)') 'State: ', trim(this%State)
+      write(*,'(A,I0)') 'Number of levels: ', this%NLEVS
+      if (allocated(this%TS)) then
+         write(*,'(A,F8.2,A)') 'Surface temperature: ', this%TS(1,1), ' K'
+      endif
+      if (allocated(this%PS)) then
+         write(*,'(A,F8.2,A)') 'Surface pressure: ', this%PS(1,1), ' Pa'
+      endif
+      if (allocated(this%SLP)) then
+         write(*,'(A,F8.2,A)') 'Sea level pressure: ', this%SLP(1,1), ' Pa'
+      endif
+      write(*,'(A,L1)') 'Arrays allocated: ', this%is_allocated()
+      write(*,'(A,I0,A)') 'Memory usage: ', this%get_memory_usage(), ' bytes'
+      write(*,'(A)') '======================='
+   end subroutine metstate_print_summary
+
+   !========================================================================
+   !! Get grid dimensions for column interface support
+   !========================================================================
+   subroutine metstate_get_dimensions(this, nx, ny, nlev)
+      class(MetStateType), intent(in) :: this
+      integer, intent(out) :: nx, ny, nlev
+
+      ! Get actual dimensions from geometry
+      call this%geometry%get_dimensions(nx, ny, nlev)
+
+   end subroutine metstate_get_dimensions
+
+!    !========================================================================
+!    !! Get pointer to a meteorological field array by name
+!    !!
+!    !! Returns a pointer to the requested 1D field array (e.g., temperature, pressure) for the column model.
+!    !! Returns null() if the field is not found or not allocated.
+!    !!
+!    !! \param[in]  this       MetStateType object
+!    !! \param[in]  field_name Name of the field (e.g., 'T', 'temperature')
+!    !! \return     Pointer to the requested field array, or null()
+!    function metstate_get_field_ptr(this, field_name) result(field_ptr)
+!       implicit none
+!       class(MetStateType), intent(in), target :: this
+!       character(len=*), intent(in) :: field_name
+!       real(fp), pointer :: field_ptr(:)
+
+!       ! Return pointer to 1D column data
+!       field_ptr => null()
+
+!       select case (trim(field_name))
+! #include "metstate_accessor.inc"
+!       end select
+
+!    end function metstate_get_field_ptr
+
+   !> \brief Allocate a specific field in MetStateType by name
+   !!
+   !! Calls the generated select-case macro to allocate only the requested field.
+   !!
+   !! \param[inout] this      MetStateType object
+   !! \param[in]    field_name Name of the field to allocate
+   !! \param[out]   rc         Return code (CC_SUCCESS or error code)
+   subroutine metstate_allocate_field(this, field_name, rc)
+      class(MetStateType), intent(inout) :: this
+      character(len=*), intent(in) :: field_name
+      integer, intent(out) :: rc
+      integer :: nx, ny, nz, nsoil, nsoiltype, nSURFTYPE
+      rc = CC_SUCCESS
+      call this%geometry%get_dimensions(nx, ny, nz)
+      ! Use the properly initialized values (no more defaults needed)
+      nsoil = this%nSOIL
+      nsoiltype = this%nSOILTYPE
+      nSURFTYPE = this%NSURFTYPE
+      ! Only allocate the requested field
+      select case (trim(field_name))
+#include "metstate_allocate_fields.inc"
+      end select
+   end subroutine metstate_allocate_field
+
+   !> \brief Deallocate a specific field in MetStateType by name
+   !!
+   !! Calls the generated select-case macro to deallocate only the requested field.
+   !!
+   !! \param[inout] this      MetStateType object
+   !! \param[in]    field_name Name of the field to deallocate
+   !! \param[out]   rc         Return code (CC_SUCCESS or error code)
+   subroutine metstate_deallocate_field(this, field_name, rc)
+      class(MetStateType), intent(inout) :: this
+      character(len=*), intent(in) :: field_name
+      integer, intent(out) :: rc
+      rc = CC_SUCCESS
+      ! Only deallocate the requested field
+      select case (trim(field_name))
+#include "metstate_deallocate_fields.inc"
+      end select
+   end subroutine metstate_deallocate_field
+
+   !> \brief Get a pointer to a vertical column for a given field name and (i,j) indices (type-safe)
+   !!
+   !! Calls the type-safe function version to obtain a real(fp) pointer, then assigns it to a polymorphic pointer for generic access.
+   !! If the field is not found or not allocated, col_ptr is set to null and rc is set to CC_FAILURE.
+   !!
+   !! \param[inout] this      MetStateType object
+   !! \param[in]    field_name Name of the field (e.g., 'T', 'temperature')
+   !! \param[in]    i          Grid column index (1-based)
+   !! \param[in]    j          Grid row index (1-based)
+   !! \param[out]   col_ptr    Pointer to the vertical column data (polymorphic pointer)
+   !! \param[out]   rc         Return code (CC_SUCCESS if found, CC_FAILURE otherwise)
+   subroutine metstate_get_3Dto1D_ptr(this, field_name, i, j, col_ptr, rc)
+      class(MetStateType), intent(inout) :: this
+      character(len=*), intent(in) :: field_name
+      integer, intent(in) :: i, j
+      real(fp), pointer :: col_ptr(:)
+      integer, intent(out) :: rc
+      col_ptr => this%get_column_ptr_func(field_name, i, j)
+      if (associated(col_ptr)) then
+         rc = 0
+      else
+         rc = 1
+      endif
+   end subroutine metstate_get_3Dto1D_ptr
+
+   !========================================================================
+   !! Get pointer to a vertical column for a given field at (i,j)
+   !! Returns a pointer to the vertical profile for a given field at grid location (i,j).
+   !! For column models, returns the full 1D array.
+   !! \param[in]  this       MetStateType object
+   !! \param[in]  field_name Name of the field (e.g., 'T', 'temperature')
+   !! \param[in]  i          Grid column index (optional, default 1)
+   !! \param[in]  j          Grid row index (optional, default 1)
+   !! \return     Pointer to vertical profile (1D)
+   function metstate_get_column_ptr_func(this, field_name, i, j) result(column_ptr)
+      implicit none
+      class(MetStateType), intent(in), target :: this
+      character(len=*), intent(in) :: field_name
+      integer, intent(in), optional :: i, j
+      real(fp), pointer :: column_ptr(:)
+      integer :: nx, ny, nlev, col_i, col_j
+      column_ptr => null()
+      call this%get_dimensions(nx, ny, nlev)
+      col_i = 1; col_j = 1
+      if (present(i)) col_i = max(1, min(i, nx))
+      if (present(j)) col_j = max(1, min(j, ny))
+      select case (trim(field_name))
+#include "metstate_column_accessor.inc"
+      end select
+   end function metstate_get_column_ptr_func
+
+   !> Get a scalar value from a 2D field at (i,j)
+   function metstate_get_2Dto0D_value(this, field_name, i, j) result(scalar_val)
+      class(MetStateType), intent(in) :: this
+      character(len=*), intent(in) :: field_name
+      integer, intent(in) :: i, j
+      real(fp) :: scalar_val
+      integer :: col_i, col_j
+      col_i = i
+      col_j = j
+      select case (trim(field_name))
+#include "metstate_2d_scalar_accessor.inc"
+      end select
+   end function metstate_get_2Dto0D_value
+
+   !> Get a scalar value from a scalar field
+   function metstate_get_scalar_value(this, field_name) result(scalar_val)
+      class(MetStateType), intent(in) :: this
+      character(len=*), intent(in) :: field_name
+      real(fp) :: scalar_val
+      select case (trim(field_name))
+#include "metstate_scalar_accessor.inc"
+      end select
+   end function metstate_get_scalar_value
+
+   !> INTEGER versions of accessor functions
+   function metstate_get_column_ptr_func_int(this, field_name, i, j) result(column_ptr)
+      implicit none
+      class(MetStateType), intent(in), target :: this
+      character(len=*), intent(in) :: field_name
+      integer, intent(in), optional :: i, j
+      integer, pointer :: column_ptr(:)
+      integer :: nx, ny, nlev, col_i, col_j
+      column_ptr => null()
+      call this%get_dimensions(nx, ny, nlev)
+      col_i = 1; col_j = 1
+      if (present(i)) col_i = max(1, min(i, nx))
+      if (present(j)) col_j = max(1, min(j, ny))
+      select case (trim(field_name))
+#include "metstate_column_accessor_int.inc"
+      end select
+   end function metstate_get_column_ptr_func_int
+
+   function metstate_get_2Dto0D_value_int(this, field_name, i, j) result(scalar_val)
+      class(MetStateType), intent(in) :: this
+      character(len=*), intent(in) :: field_name
+      integer, intent(in) :: i, j
+      integer :: scalar_val
+      integer :: col_i, col_j
+      col_i = i
+      col_j = j
+      select case (trim(field_name))
+#include "metstate_2d_scalar_accessor_int.inc"
+      end select
+   end function metstate_get_2Dto0D_value_int
+
+   function metstate_get_scalar_value_int(this, field_name) result(scalar_val)
+      class(MetStateType), intent(in) :: this
+      character(len=*), intent(in) :: field_name
+      integer :: scalar_val
+      select case (trim(field_name))
+#include "metstate_scalar_accessor_int.inc"
+      end select
+   end function metstate_get_scalar_value_int
+
+   !> LOGICAL versions of accessor functions
+   function metstate_get_column_ptr_func_logical(this, field_name, i, j) result(column_ptr)
+      implicit none
+      class(MetStateType), intent(in), target :: this
+      character(len=*), intent(in) :: field_name
+      integer, intent(in), optional :: i, j
+      logical, pointer :: column_ptr(:)
+      integer :: nx, ny, nlev, col_i, col_j
+      column_ptr => null()
+      call this%get_dimensions(nx, ny, nlev)
+      col_i = 1; col_j = 1
+      if (present(i)) col_i = max(1, min(i, nx))
+      if (present(j)) col_j = max(1, min(j, ny))
+      select case (trim(field_name))
+#include "metstate_column_accessor_logical.inc"
+      end select
+   end function metstate_get_column_ptr_func_logical
+
+   function metstate_get_2Dto0D_value_logical(this, field_name, i, j) result(scalar_val)
+      class(MetStateType), intent(in) :: this
+      character(len=*), intent(in) :: field_name
+      integer, intent(in) :: i, j
+      logical :: scalar_val
+      integer :: col_i, col_j
+      col_i = i
+      col_j = j
+      select case (trim(field_name))
+#include "metstate_2d_scalar_accessor_logical.inc"
+      end select
+   end function metstate_get_2Dto0D_value_logical
+
+   function metstate_get_scalar_value_logical(this, field_name) result(scalar_val)
+      class(MetStateType), intent(in) :: this
+      character(len=*), intent(in) :: field_name
+      logical :: scalar_val
+      select case (trim(field_name))
+#include "metstate_scalar_accessor_logical.inc"
+      end select
+   end function metstate_get_scalar_value_logical
+
+   !> High-level interface: get any field (column, 2D, or scalar)
+   subroutine metstate_get_field_ptr(this, field_name, i, j, col_ptr, scalar_val, rc)
+      class(MetStateType), intent(in) :: this
+      character(len=*), intent(in) :: field_name
+      integer, intent(in), optional :: i, j
+      real(fp), pointer, optional :: col_ptr(:)
+      real(fp), optional :: scalar_val
+      integer, intent(out) :: rc
+      ! Try 3D column first
+      if (present(col_ptr) .and. present(i) .and. present(j)) then
+         col_ptr => this%get_column_ptr_func(field_name, i, j)
+         if (associated(col_ptr)) then
+            rc = 0
             return
-         endif
+         end if
       end if
+      ! Try 2D scalar
+      if (present(scalar_val) .and. present(i) .and. present(j)) then
+         scalar_val = this%get_2Dto0D_value(field_name, i, j)
+         rc = 0
+         return
+      end if
+      ! Try scalar field
+      if (present(scalar_val)) then
+         scalar_val = this%get_scalar_value(field_name)
+         rc = 0
+         return
+      end if
+      rc = 1 ! Not found
+   end subroutine metstate_get_field_ptr
 
-      if (.not. allocated(MetState%DQRLSAN)) then
-         allocate(MetState%DQRLSAN(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%DQRLSAN'
-            call CC_Error(errMsg, RC, thisLoc)
+   !> Integer version of get_field_ptr
+   subroutine metstate_get_field_ptr_int(this, field_name, i, j, col_ptr, scalar_val, rc)
+      class(MetStateType), intent(in) :: this
+      character(len=*), intent(in) :: field_name
+      integer, intent(in), optional :: i, j
+      integer, pointer, optional :: col_ptr(:)
+      integer, optional :: scalar_val
+      integer, intent(out) :: rc
+      ! Try 3D column first
+      if (present(col_ptr) .and. present(i) .and. present(j)) then
+         col_ptr => this%get_column_ptr_func_int(field_name, i, j)
+         if (associated(col_ptr)) then
+            rc = 0
             return
-         endif
+         end if
       end if
+      ! Try 2D scalar
+      if (present(scalar_val) .and. present(i) .and. present(j)) then
+         scalar_val = this%get_2Dto0D_value_int(field_name, i, j)
+         rc = 0
+         return
+      end if
+      ! Try scalar field
+      if (present(scalar_val)) then
+         scalar_val = this%get_scalar_value_int(field_name)
+         rc = 0
+         return
+      end if
+      rc = 1 ! Not found
+   end subroutine metstate_get_field_ptr_int
 
-      if (.not. allocated(MetState%DTRAIN)) then
-         allocate(MetState%DTRAIN(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%DTRAIN'
-            call CC_Error(errMsg, RC, thisLoc)
+   !> Logical version of get_field_ptr
+   subroutine metstate_get_field_ptr_logical(this, field_name, i, j, col_ptr, scalar_val, rc)
+      class(MetStateType), intent(in) :: this
+      character(len=*), intent(in) :: field_name
+      integer, intent(in), optional :: i, j
+      logical, pointer, optional :: col_ptr(:)
+      logical, optional :: scalar_val
+      integer, intent(out) :: rc
+      ! Try 3D column first
+      if (present(col_ptr) .and. present(i) .and. present(j)) then
+         col_ptr => this%get_column_ptr_func_logical(field_name, i, j)
+         if (associated(col_ptr)) then
+            rc = 0
             return
-         endif
+         end if
       end if
-
-      if (.not. allocated(MetState%QI)) then
-         allocate(MetState%QI(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%QI'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
+      ! Try 2D scalar
+      if (present(scalar_val) .and. present(i) .and. present(j)) then
+         scalar_val = this%get_2Dto0D_value_logical(field_name, i, j)
+         rc = 0
+         return
       end if
-
-      if (.not. allocated(MetState%QL)) then
-         allocate(MetState%QL(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%QL'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
+      ! Try scalar field
+      if (present(scalar_val)) then
+         scalar_val = this%get_scalar_value_logical(field_name)
+         rc = 0
+         return
       end if
+      rc = 1 ! Not found
+   end subroutine metstate_get_field_ptr_logical
 
-      if (.not. allocated(MetState%PFICU)) then
-         allocate(MetState%PFICU(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%PFICU'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+   !> \brief Get a pointer to a vertical column for a given field name and (i,j) indices (subroutine version)
+   !!
+   !! This subroutine version provides the interface expected by StateManager_Mod.
+   !! It handles different variable types (2D fields, 3D fields, scalar values) and returns
+   !! a 1D pointer to the appropriate data.
+   !!
+   !! \param[inout] this      MetStateType object
+   !! \param[in]    field_name Name of the field (e.g., 'T', 'temperature', 'PS')
+   !! \param[in]    i          Grid column index (1-based)
+   !! \param[in]    j          Grid row index (1-based)
+   !! \param[out]   col_ptr    Pointer to the vertical column data (1D array)
+   !! \param[out]   rc         Return code (CC_SUCCESS if found, CC_FAILURE otherwise)
+   subroutine metstate_get_column_ptr_subroutine(this, field_name, i, j, col_ptr, rc)
+      use error_mod, only: CC_SUCCESS, CC_FAILURE
 
-      if (.not. allocated(MetState%PFILSAN)) then
-         allocate(MetState%PFILSAN(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%PFILSAN'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+      implicit none
+      class(MetStateType), intent(inout), target :: this
+      character(len=*), intent(in) :: field_name
+      integer, intent(in) :: i, j
+      real(fp), pointer :: col_ptr(:)
+      integer, intent(out) :: rc
 
-      if (.not. allocated(MetState%PFLCU)) then
-         allocate(MetState%PFLCU(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%PFLCU'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+      ! Local variables for handling different field types
+      real(fp), pointer :: temp_col_ptr(:)
+      real(fp) :: scalar_val
+      integer :: nx, ny, nlev
 
-      if (.not. allocated(MetState%PFLLSAN)) then
-         allocate(MetState%PFLLSAN(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%PFLLSAN'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+      rc = CC_FAILURE
+      nullify(col_ptr)
 
-      if (.not. allocated(MetState%TAUCLI)) then
-         allocate(MetState%TAUCLI(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%TAUCLI'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+      call this%get_dimensions(nx, ny, nlev)
 
-      if (.not. allocated(MetState%TAUCLW)) then
-         allocate(MetState%TAUCLW(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%TAUCLW'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+      ! First try to get as a 3D field (vertical column)
+      temp_col_ptr => this%get_column_ptr_func(field_name, i, j)
+      if (associated(temp_col_ptr)) then
+         col_ptr => temp_col_ptr
+         rc = CC_SUCCESS
+         return
+      endif
 
-      ! State Variables
-      if (.not. allocated(MetState%Z)) then
-         allocate(MetState%Z(GridState%number_of_levels + 1), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%Z'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+      ! If not found as 3D field, try as 2D field and create a single-element array
+      ! For 2D fields, we return a pointer to a single-element array containing the scalar value
+      select case (trim(field_name))
+       case ('PS', 'SLP', 'TS', 'T2M', 'TSKIN', 'SST', 'PHIS', 'PS_WET', 'PS_DRY', &
+          'QV2M', 'AREA_M2', 'ALBD_VIS', 'ALBD_NIR', 'ALBD_UV', 'PARDR', 'PARDF', &
+          'SUNCOS', 'SUNCOSmid', 'SWGDN', 'EFLUX', 'HFLUX', 'U10M', 'V10M', &
+          'USTAR', 'Z0', 'Z0H', 'PBLH', 'OBK', 'CLDFRC', 'CONV_DEPTH', &
+          'FLASH_DENS', 'CNV_FRC', 'PRECANV', 'PRECCON', 'PRECLSC', &
+          'LAI', 'GVF', 'RDRAG', 'CLAYFRAC', 'SANDFRAC', 'FRVEG', 'FRLAKE', &
+          'FRLAND', 'FRLANDIC', 'FROCEAN', 'FRSEAICE', 'FRSNO', 'SNODP', &
+          'SNOMAS', 'SSM', 'USTAR_THRESHOLD', 'GWETTOP', 'GWETROOT', 'WILT', &
+          'TO3', 'TROPP', 'TropHt', 'LAT', 'LON')
 
-      if (.not. allocated(MetState%ZMID)) then
-         allocate(MetState%ZMID(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%ZMID'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+         scalar_val = this%get_2Dto0D_value(field_name, i, j)
 
-      if (.not. allocated(MetState%BXHEIGHT)) then
-         allocate(MetState%BXHEIGHT(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%BXHEIGHT'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+         ! For 2D fields, we need to return a pointer to a single element
+         ! This is a limitation of the current interface - we can't easily return a scalar as a 1D pointer
+         ! For now, we'll return null and indicate failure
+         rc = CC_FAILURE
+         return
 
-      if (.not. allocated(MetState%QV)) then
-         allocate(MetState%QV(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InStratosphere'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+       case default
+         ! Try as scalar field - similar limitation
+         scalar_val = this%get_scalar_value(field_name)
+         rc = CC_FAILURE
+         return
+      end select
 
-      if (.not. allocated(MetState%T)) then
-         allocate(MetState%T(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%T'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+   end subroutine metstate_get_column_ptr_subroutine
 
-      if (.not. allocated(MetState%THETA)) then
-         allocate(MetState%THETA(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%THETA'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
 
-      if (.not. allocated(MetState%TV)) then
-         allocate(MetState%TV(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%TV'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+   !---------------------------------------------------------------------------
+   !                 Dimensional MetState Set Field Subroutines
+   !---------------------------------------------------------------------------
 
-      if (.not. allocated(MetState%U)) then
-         allocate(MetState%U(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InStratosphere'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+   !> @brief Set a scalar REAL field
+   subroutine metstate_set_field_scalar_real(this, field_name, field_data, error_mgr, rc)
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE
+      implicit none
+      class(MetStateType), intent(inout) :: this
+      character(len=*), intent(in) :: field_name
+      real(fp), intent(in) :: field_data
+      type(ErrorManagerType), pointer, intent(inout) :: error_mgr
+      integer, intent(out) :: rc
 
-      if (.not. allocated(MetState%V)) then
-         allocate(MetState%V(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InStratosphere'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+      rc = CC_SUCCESS
 
-      if (.not. allocated(MetState%OMEGA)) then
-         allocate(MetState%OMEGA(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%OMEGA'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+      ! Handle scalar REAL fields directly
+      select case (trim(adjustl(field_name)))
+#include "metstate_set_field_scalar_real.inc"
+       case default
+         ! If not a scalar field, try broadcasting to 2D REAL arrays
+         select case (trim(adjustl(field_name)))
+#include "metstate_set_field_2d_real.inc"
+          case default
+            ! Try broadcasting to 3D REAL arrays
+            select case (trim(adjustl(field_name)))
+#include "metstate_set_field_3d_real.inc"
+             case default
+               call error_mgr%report_error(ERROR_NOT_FOUND, &
+                  'Unknown REAL field name: ' // trim(field_name), rc)
+               rc = CC_FAILURE
+            end select
+         end select
+      end select
+   end subroutine metstate_set_field_scalar_real
 
-      if (.not. allocated(MetState%RH)) then
-         allocate(MetState%RH(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InStratosphere'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+   !> @brief Set a scalar INTEGER field
+   subroutine metstate_set_field_scalar_int(this, field_name, field_data, error_mgr, rc)
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE
+      implicit none
+      class(MetStateType), intent(inout) :: this
+      character(len=*), intent(in) :: field_name
+      integer, intent(in) :: field_data
+      type(ErrorManagerType), pointer, intent(inout) :: error_mgr
+      integer, intent(out) :: rc
 
-      if (.not. allocated(MetState%SPHU)) then
-         allocate(MetState%SPHU(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InStratosphere'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+      rc = CC_SUCCESS
 
-      if (.not. allocated(MetState%AIRDEN)) then
-         allocate(MetState%AIRDEN(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InStratosphere'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+      ! Handle scalar INTEGER fields directly
+      select case (trim(adjustl(field_name)))
+#include "metstate_set_field_scalar_int.inc"
+       case default
+         ! If not a scalar field, try broadcasting to 2D INTEGER arrays
+         select case (trim(adjustl(field_name)))
+#include "metstate_set_field_2d_int.inc"
+          case default
+            ! Try broadcasting to 3D INTEGER arrays
+            select case (trim(adjustl(field_name)))
+#include "metstate_set_field_3d_int.inc"
+             case default
+               call error_mgr%report_error(ERROR_NOT_FOUND, &
+                  'Unknown INTEGER field name: ' // trim(field_name), rc)
+               rc = CC_FAILURE
+            end select
+         end select
+      end select
+   end subroutine metstate_set_field_scalar_int
 
-      if (.not. allocated(MetState%AIRNUMDEN)) then
-         allocate(MetState%AIRNUMDEN(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InStratosphere'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+   !> @brief Set a scalar LOGICAL field
+   subroutine metstate_set_field_scalar_logical(this, field_name, field_data, error_mgr, rc)
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE
+      implicit none
+      class(MetStateType), intent(inout) :: this
+      character(len=*), intent(in) :: field_name
+      logical, intent(in) :: field_data
+      type(ErrorManagerType), pointer, intent(inout) :: error_mgr
+      integer, intent(out) :: rc
 
-      if (.not. allocated(MetState%MAIRDEN)) then
-         allocate(MetState%MAIRDEN(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InStratosphere'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+      rc = CC_SUCCESS
 
-      if (.not. allocated(MetState%AVGW)) then
-         allocate(MetState%AVGW(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InStratosphere'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+      ! Handle scalar LOGICAL fields directly
+      select case (trim(adjustl(field_name)))
+#include "metstate_set_field_scalar_logical.inc"
+       case default
+         ! If not a scalar field, try broadcasting to 2D LOGICAL arrays
+         select case (trim(adjustl(field_name)))
+#include "metstate_set_field_2d_logical.inc"
+          case default
+            ! Try broadcasting to 3D LOGICAL arrays
+            select case (trim(adjustl(field_name)))
+#include "metstate_set_field_3d_logical.inc"
+             case default
+               call error_mgr%report_error(ERROR_NOT_FOUND, &
+                  'Unknown LOGICAL field name: ' // trim(field_name), rc)
+               rc = CC_FAILURE
+            end select
+         end select
+      end select
+   end subroutine metstate_set_field_scalar_logical
 
-      if (.not. allocated(MetState%DELP)) then
-         allocate(MetState%DELP(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InStratosphere'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+   !> @brief Set a 2D REAL field
+   subroutine metstate_set_field_2d_real(this, field_name, field_data, error_mgr, rc)
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE
+      implicit none
+      class(MetStateType), intent(inout) :: this
+      character(len=*), intent(in) :: field_name
+      real(fp), intent(in) :: field_data(:,:)
+      type(ErrorManagerType), pointer, intent(inout) :: error_mgr
+      integer, intent(out) :: rc
 
-      if (.not. allocated(MetState%DELP_DRY)) then
-         allocate(MetState%DELP_DRY(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InStratosphere'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+      ! Generated include file for 2D REAL field assignment
+      rc = CC_SUCCESS
+      select case (trim(adjustl(field_name)))
+#include "metstate_set_field_2d_real.inc"
+       case default
+         call error_mgr%report_error(ERROR_NOT_FOUND, &
+            "Unknown field name: " // trim(field_name), rc)
+         rc = CC_FAILURE
+      end select
+   end subroutine metstate_set_field_2d_real
 
-      if (.not. allocated(MetState%DAIRMASS)) then
-         allocate(MetState%DAIRMASS(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InStratosphere'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+   !> @brief Set a 2D INTEGER field
+   subroutine metstate_set_field_2d_int(this, field_name, field_data, error_mgr, rc)
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE
+      implicit none
+      class(MetStateType), intent(inout) :: this
+      character(len=*), intent(in) :: field_name
+      integer, intent(in) :: field_data(:,:)
+      type(ErrorManagerType), pointer, intent(inout) :: error_mgr
+      integer, intent(out) :: rc
 
-      if (.not. allocated(MetState%AIRVOL)) then
-         allocate(MetState%AIRVOL(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InStratosphere'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+      ! Generated include file for 2D INTEGER field assignment
+      rc = CC_SUCCESS
+      select case (trim(adjustl(field_name)))
+#include "metstate_set_field_2d_int.inc"
+       case default
+         call error_mgr%report_error(ERROR_NOT_FOUND, &
+            "Unknown field name: " // trim(field_name), rc)
+         rc = CC_FAILURE
+      end select
+   end subroutine metstate_set_field_2d_int
 
-      if (.not. allocated(MetState%PMID)) then
-         allocate(MetState%PMID(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InStratosphere'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+   !> @brief Set a 2D LOGICAL field
+   subroutine metstate_set_field_2d_logical(this, field_name, field_data, error_mgr, rc)
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE
+      implicit none
+      class(MetStateType), intent(inout) :: this
+      character(len=*), intent(in) :: field_name
+      logical, intent(in) :: field_data(:,:)
+      type(ErrorManagerType), pointer, intent(inout) :: error_mgr
+      integer, intent(out) :: rc
 
-      if (.not. allocated(MetState%PMID_DRY)) then
-         allocate(MetState%PMID_DRY(GridState%number_of_levels), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InStratosphere'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+      ! Generated include file for 2D LOGICAL field assignment
+      rc = CC_SUCCESS
+      select case (trim(adjustl(field_name)))
+#include "metstate_set_field_2d_logical.inc"
+       case default
+         call error_mgr%report_error(ERROR_NOT_FOUND, &
+            "Unknown field name: " // trim(field_name), rc)
+         rc = CC_FAILURE
+      end select
+   end subroutine metstate_set_field_2d_logical
 
-      if (.not. allocated(MetState%PEDGE_DRY)) then
-         allocate(MetState%PEDGE_DRY(GridState%number_of_levels+1), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InStratosphere'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+   !> @brief Set a 3D REAL field
+   subroutine metstate_set_field_3d_real(this, field_name, field_data, error_mgr, rc)
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE
+      implicit none
+      class(MetStateType), intent(inout) :: this
+      character(len=*), intent(in) :: field_name
+      real(fp), intent(in) :: field_data(:,:,:)
+      type(ErrorManagerType), pointer, intent(inout) :: error_mgr
+      integer, intent(out) :: rc
 
-      if (.not. allocated(MetState%SOILM)) then
-         allocate(MetState%SOILM(MetState%nSOIL), stat=RC)
-         if (RC /= CC_SUCCESS) then
-            errMsg = 'Error allocating MetState%InStratosphere'
-            call CC_Error(errMsg, RC, thisLoc)
-            return
-         endif
-      end if
+      ! Generated include file for 3D REAL field assignment
+      rc = CC_SUCCESS
+      select case (trim(adjustl(field_name)))
+#include "metstate_set_field_3d_real.inc"
+       case default
+         call error_mgr%report_error(ERROR_NOT_FOUND, &
+            "Unknown field name: " // trim(field_name), rc)
+         rc = CC_FAILURE
+      end select
+   end subroutine metstate_set_field_3d_real
 
-   end subroutine Met_Allocate
+   !> @brief Set a 3D INTEGER field
+   subroutine metstate_set_field_3d_int(this, field_name, field_data, error_mgr, rc)
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE
+      implicit none
+      class(MetStateType), intent(inout) :: this
+      character(len=*), intent(in) :: field_name
+      integer, intent(in) :: field_data(:,:,:)
+      type(ErrorManagerType), pointer, intent(inout) :: error_mgr
+      integer, intent(out) :: rc
+
+      ! Generated include file for 3D INTEGER field assignment
+      rc = CC_SUCCESS
+      select case (trim(adjustl(field_name)))
+#include "metstate_set_field_3d_int.inc"
+       case default
+         call error_mgr%report_error(ERROR_NOT_FOUND, &
+            "Unknown field name: " // trim(field_name), rc)
+         rc = CC_FAILURE
+      end select
+   end subroutine metstate_set_field_3d_int
+
+   !> @brief Set a 3D LOGICAL field
+   subroutine metstate_set_field_3d_logical(this, field_name, field_data, error_mgr, rc)
+      use error_mod, only: ErrorManagerType, CC_SUCCESS, CC_FAILURE
+      implicit none
+      class(MetStateType), intent(inout) :: this
+      character(len=*), intent(in) :: field_name
+      logical, intent(in) :: field_data(:,:,:)
+      type(ErrorManagerType), pointer, intent(inout) :: error_mgr
+      integer, intent(out) :: rc
+
+      ! Generated include file for 3D LOGICAL field assignment
+      rc = CC_SUCCESS
+      select case (trim(adjustl(field_name)))
+#include "metstate_set_field_3d_logical.inc"
+       case default
+         call error_mgr%report_error(ERROR_NOT_FOUND, &
+            "Unknown field name: " // trim(field_name), rc)
+         rc = CC_FAILURE
+      end select
+   end subroutine metstate_set_field_3d_logical
+
+! Include the auto-generated multiple fields interface
+#include "metstate_multiple_fields_interface.inc"
 
 END MODULE MetState_Mod
