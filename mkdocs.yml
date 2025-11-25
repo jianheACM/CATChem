@@ -271,5 +271,5 @@ nav:
     - ufschem/index.md
   - Community Engagement:
     - community/index.md
-  - Evaluation:
-    - evaluation/index.md
+  # - Evaluation:
+  #   - evaluation/index.md
