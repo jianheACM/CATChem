@@ -1,509 +1,255 @@
 # State Management Developer Guide
 
-CATChem's state management system provides a modern, flexible architecture for handling model state data through the StateContainer pattern with dependency injection. Everything you need to know about the state management system to develop, modify, and extend CATChem is described in this guide.
+CATChem's state management system provides a modern, flexible architecture for handling model state data. This guide describes the state management system, focusing on how to develop, modify, and extend CATChem's state-handling capabilities.
 
 ## Overview
 
-The state management system replaces traditional global variables with a structured, maintainable approach:
+The state management system is built around the `StateManagerType`, which acts as a central container for all model state. This approach avoids global variables and provides a structured, maintainable way to manage data. Key features include:
 
-- **StateContainer**: Central container for all model state
-- **StateBuilder**: Flexible construction and initialization
-- **Dependency Injection**: Components receive dependencies rather than accessing globals
-- **Type Safety**: Strong typing prevents common errors
-- **Memory Management**: Automatic cleanup and validation
+- **`StateManagerType`**: A central container for all model state components.
+- **Componentized State**: State is divided into components like `MetStateType` for meteorology and `ChemStateType` for chemistry.
+- **Type-Bound Procedures**: State components are managed through modern Fortran type-bound procedures for initialization, cleanup, and validation.
+- **Pointer-Based Access**: Efficient, direct access to data is provided via pointers.
 
-## StateContainer Architecture
+## StateManager Architecture
 
-### Core Components
+### `StateManagerType`
 
-The `StateContainerType` encapsulates all model state:
+The `StateManagerType`, defined in `StateManager_Mod.F90`, is the core of the state management system. It encapsulates all other state components.
 
 ```fortran
-type :: StateContainerType
-   private
+! Located in: src/core/StateManager_Mod.F90
 
-   ! Core state objects
-   type(ConfigDataType),    allocatable :: config
-   type(ConfigManagerType), allocatable :: config_mgr
-   type(MetStateType),     allocatable :: met_state
-   type(ChemStateType),    allocatable :: chem_state
-   type(EmisStateType),    allocatable :: emis_state
-   type(DiagStateType),    allocatable :: diag_state
+type :: StateManagerType
+  private
 
-   ! Modern diagnostic system
-   type(DiagnosticManagerType), allocatable :: diag_mgr
+  ! Core state objects
+  type(MetStateType),   allocatable :: met_state   !< Meteorological fields
+  type(ChemStateType),  allocatable :: chem_state  !< Chemical species concentrations
+  type(ErrorManagerType)            :: error_mgr   !< Error manager
 
-   ! Grid management
-   type(GridManagerType), allocatable :: grid_mgr
+  ! Manager pointers (owned by CATChemCore)
+  type(ConfigManagerType), pointer :: config => null()  !< Configuration manager
+  type(GridManagerType), pointer :: grid_mgr => null()  !< Grid manager
+  type(DiagnosticManagerType), pointer :: diag_mgr => null()  !< Diagnostic manager
 
-   ! Error handling
-   type(ErrorManagerType) :: error_mgr
+  ! ... metadata and procedures ...
+contains
+  ! Basic lifecycle (called by CATChemCore)
+  procedure :: init => manager_init
+  procedure :: cleanup => manager_cleanup
+  procedure :: finalize => manager_finalize
+  procedure :: is_ready => manager_is_ready
 
-   ! Container metadata
-   logical :: is_initialized = .false.
-   logical :: is_valid = .false.
-   character(len=64) :: build_id = ''
+  ! State object accessors
+  procedure :: get_met_state_ptr => manager_get_met_state_ptr
+  procedure :: get_chem_state_ptr => manager_get_chem_state_ptr
+  ! ... other accessors ...
+end type StateManagerType
+```
+
+The `StateManagerType` does not own all the state components directly. Instead, it holds pointers to managers like `ConfigManagerType` and `GridManagerType`, which are managed by a higher-level component (`CATChemCore_Mod`).
+
+### State Component Details
+
+#### `MetStateType` - Meteorological State
+
+The `MetStateType`, defined in `metstate_mod.F90`, manages all meteorological data. This includes a large number of 2D and 3D fields for everything from temperature and pressure to soil properties and cloud fractions.
+
+```fortran
+! Located in: src/core/metstate_mod.F90
+
+type, public :: MetStateType
+  ! ... numerous meteorological fields ...
+  real(fp), allocatable :: T(:,:,:)          !< Temperature [K]
+  real(fp), allocatable :: U(:,:,:)          !< E/W component of wind [m s-1]
+  real(fp), allocatable :: V(:,:,:)          !< N/S component of wind [m s-1]
+  real(fp), allocatable :: QV(:,:,:)         !< Specific Humidity [kg/kg]
+  real(fp), allocatable :: PS(:,:)           !< Surface Pressure [Pa]
+  ! ... and many more ...
 
 contains
-   ! Initialization and lifecycle
-   procedure :: init => state_container_init
-   procedure :: finalize => state_container_finalize
-   procedure :: validate => state_container_validate
-
-   ! State access methods
-   procedure :: get_config_ptr
-   procedure :: get_met_state_ptr
-   procedure :: get_chem_state_ptr
-   procedure :: get_emis_state_ptr
-   procedure :: get_diagnostic_manager
-   procedure :: get_error_manager
-   procedure :: get_grid_manager
-
-   ! Utility methods
-   procedure :: is_ready
-   procedure :: get_build_info
-   procedure :: serialize_state
-end type StateContainerType
-```
-
-### State Access Patterns
-
-#### Pointer-Based Access
-
-Get pointers to state components for efficient access:
-
-```fortran
-subroutine process_chemistry(container, rc)
-   type(StateContainerType), intent(inout) :: container
-   integer, intent(out) :: rc
-
-   type(MetStateType), pointer :: met_state
-   type(ChemStateType), pointer :: chem_state
-   type(ErrorManagerType), pointer :: error_mgr
-
-   ! Get state pointers
-   met_state => container%get_met_state_ptr()
-   chem_state => container%get_chem_state_ptr()
-   error_mgr => container%get_error_manager()
-
-   ! Access temperature field
-   real(fp), pointer :: temperature(:,:,:)
-   temperature => met_state%get_field('temperature')
-
-   ! Access O3 concentrations
-   real(fp), pointer :: o3_conc(:,:,:)
-   o3_conc => chem_state%get_species_ptr('O3')
-
-   ! Modify concentrations
-   o3_conc = o3_conc * 1.1_fp  ! Example modification
-
-   rc = CC_SUCCESS
-end subroutine process_chemistry
-```
-
-#### Safe Access with Validation
-
-Always validate state before use:
-
-```fortran
-subroutine safe_state_access(container, rc)
-   type(StateContainerType), intent(inout) :: container
-   integer, intent(out) :: rc
-
-   type(ErrorManagerType), pointer :: error_mgr
-
-   rc = CC_SUCCESS
-   error_mgr => container%get_error_manager()
-
-   ! Validate container state
-   if (.not. container%is_ready()) then
-      call error_mgr%report_error("StateContainer not ready")
-      rc = CC_FAILURE
-      return
-   end if
-
-   ! Validate specific state components
-   if (.not. associated(container%get_met_state_ptr())) then
-      call error_mgr%report_error("MetState not available")
-      rc = CC_FAILURE
-      return
-   end if
-
-   ! Proceed with operations...
-end subroutine safe_state_access
-```
-
-## StateBuilder Pattern
-
-### Flexible Construction
-
-Use the StateBuilder for flexible state container construction:
-
-```fortran
-program example_state_building
-   use state_mod
-
-   type(StateBuilderType) :: builder
-   type(StateContainerType) :: container
-   integer :: rc
-
-   ! Initialize builder
-   call builder%init()
-
-   ! Configure components
-   call builder%with_config('config.yml')
-   call builder%with_grid(100, 100, 50)
-   call builder%with_species(['O3', 'NO', 'NO2'])
-   call builder%with_diagnostics_enabled(.true.)
-
-   ! Build container
-   call builder%build(container, rc)
-   if (rc /= CC_SUCCESS) then
-      print *, "Failed to build state container"
-      stop 1
-   end if
-
-   ! Use container
-   call some_model_process(container, rc)
-
-   ! Cleanup
-   call container%finalize(rc)
-
-end program example_state_building
-```
-
-### StateBuilder Configuration
-
-```fortran
-type :: StateBuilderType
-   private
-
-   character(len=256) :: config_file = ''
-   integer :: nx = 0, ny = 0, nz = 0
-   character(len=32), allocatable :: species_list(:)
-   logical :: enable_diagnostics = .true.
-   logical :: enable_emissions = .true.
-   logical :: enable_column_virtualization = .true.
-
-contains
-   procedure :: init => builder_init
-   procedure :: with_config => builder_with_config
-   procedure :: with_grid => builder_with_grid
-   procedure :: with_species => builder_with_species
-   procedure :: with_diagnostics_enabled => builder_with_diagnostics
-   procedure :: build => builder_build
-   procedure :: finalize => builder_finalize
-end type StateBuilderType
-```
-
-## State Component Details
-
-### MetState - Meteorological State
-
-Manages atmospheric conditions:
-
-```fortran
-type :: MetStateType
-   private
-
-   ! 3D meteorological fields
-   real(fp), allocatable :: temperature(:,:,:)    ! K
-   real(fp), allocatable :: pressure(:,:,:)       ! Pa
-   real(fp), allocatable :: air_density(:,:,:)    ! kg/m³
-   real(fp), allocatable :: u_wind(:,:,:)         ! m/s
-   real(fp), allocatable :: v_wind(:,:,:)         ! m/s
-   real(fp), allocatable :: w_wind(:,:,:)         ! m/s
-   real(fp), allocatable :: humidity(:,:,:)       ! kg/kg
-
-   ! 2D surface fields
-   real(fp), allocatable :: surface_pressure(:,:) ! Pa
-   real(fp), allocatable :: surface_temp(:,:)     ! K
-   real(fp), allocatable :: land_fraction(:,:)    ! 0-1
-
-   ! Field registry
-   type(FieldRegistryType) :: field_registry
-
-contains
-   procedure :: init => met_state_init
-   procedure :: get_field => met_state_get_field
-   procedure :: set_field => met_state_set_field
-   procedure :: register_field => met_state_register_field
-   procedure :: finalize => met_state_finalize
+  procedure :: init => metstate_init
+  procedure :: cleanup => metstate_cleanup
+  procedure :: validate => metstate_validate
+  procedure :: get_field_ptr => metstate_get_field_ptr
+  procedure :: get_column_ptr_func => metstate_get_column_ptr_func
+  ! ... other procedures ...
 end type MetStateType
 ```
 
-### ChemState - Chemical State
+#### `ChemStateType` - Chemical State
 
-Manages species concentrations:
+The `ChemStateType`, defined in `chemstate_mod.F90`, manages chemical species and their concentrations. It contains an array of `SpeciesType` objects, where each object holds the data for a single species.
 
 ```fortran
-type :: ChemStateType
-   private
+! Located in: src/core/chemstate_mod.F90
 
-   ! Species concentrations [mol/m³] or [μg/m³]
-   real(fp), allocatable :: concentrations(:,:,:,:)  ! (nx,ny,nz,nspec)
-
-   ! Species metadata
-   type(SpeciesManagerType) :: species_mgr
-   integer :: n_species = 0
-   character(len=32), allocatable :: species_names(:)
-   real(fp), allocatable :: molar_masses(:)           ! g/mol
-
-   ! Unit conversion factors
-   real(fp), allocatable :: molar_to_mass(:)
-   real(fp), allocatable :: mass_to_molar(:)
+type, public :: ChemStateType
+  ! ...
+  integer :: nSpecies          ! Total Number of Species
+  character(len=50), allocatable :: SpeciesNames(:)  ! Species Names
+  type(SpeciesType), allocatable :: ChemSpecies(:)
+  type(GridGeometryType), pointer :: Grid => null()  ! Pointer to grid geometry
 
 contains
-   procedure :: init => chem_state_init
-   procedure :: get_species_ptr => chem_state_get_species_ptr
-   procedure :: get_species_index => chem_state_get_species_index
-   procedure :: add_species => chem_state_add_species
-   procedure :: convert_units => chem_state_convert_units
-   procedure :: finalize => chem_state_finalize
+  procedure :: init => chemstate_init
+  procedure :: cleanup => chemstate_cleanup
+  procedure :: find_species => chemstate_find_species
+  procedure :: get_concentration => chemstate_get_concentration
+  ! ... other procedures ...
 end type ChemStateType
 ```
 
-### EmisState - Emission State
+## Working with State
 
-Manages emission fluxes:
+### Initialization
+
+The `StateManagerType` and its components are initialized by a higher-level driver. The `init` procedures for each state type handle the allocation of their respective data arrays.
 
 ```fortran
-type :: EmisStateType
-   private
+! Example of initializing the StateManager and its components
+subroutine initialize_model_state(state_manager, config, grid, error_mgr, rc)
+  type(StateManagerType), intent(inout) :: state_manager
+  type(ConfigManagerType), pointer, intent(in) :: config
+  type(GridManagerType), pointer, intent(in) :: grid
+  type(ErrorManagerType), pointer, intent(inout) :: error_mgr
+  integer, intent(out) :: rc
 
-   ! Emission fluxes [mol/m²/s] or [kg/m²/s]
-   real(fp), allocatable :: surface_emissions(:,:,:)  ! (nx,ny,nspec)
-   real(fp), allocatable :: volume_emissions(:,:,:,:) ! (nx,ny,nz,nspec)
+  type(MetStateType), pointer :: met_state
+  type(ChemStateType), pointer :: chem_state
+  integer :: nx, ny, nlev, max_species
 
-   ! Emission metadata
-   type(EmissionManagerType) :: emis_mgr
-   logical :: has_surface_emissions = .false.
-   logical :: has_volume_emissions = .false.
+  ! Initialize the state manager
+  call state_manager%init('MyStateManager', rc)
+  if (rc /= CC_SUCCESS) return
 
-contains
-   procedure :: init => emis_state_init
-   procedure :: get_surface_flux => emis_state_get_surface_flux
-   procedure :: get_volume_flux => emis_state_get_volume_flux
-   procedure :: set_emissions => emis_state_set_emissions
-   procedure :: finalize => emis_state_finalize
-end type EmisStateType
+  ! Set external managers
+  call state_manager%set_config(config, rc)
+  call state_manager%set_grid_manager(grid, rc)
+
+  ! Get grid dimensions
+  call grid%get_dimensions(nx, ny, nlev)
+
+  ! Initialize MetState
+  met_state => state_manager%get_met_state_ptr()
+  call met_state%init(nx, ny, nlev, error_mgr=error_mgr, rc=rc)
+  if (rc /= CC_SUCCESS) return
+
+  ! Initialize ChemState
+  max_species = config%get_integer('max_species', default=100)
+  chem_state => state_manager%get_chem_state_ptr()
+  call chem_state%init(max_species, error_mgr=error_mgr, grid=grid%get_geometry(), rc=rc)
+  if (rc /= CC_SUCCESS) return
+
+end subroutine initialize_model_state
 ```
 
-## Advanced State Management
+### Accessing State Data
+
+Access to state data is primarily through pointers. This is an efficient way to work with large data arrays without excessive copying.
+
+#### Accessing Meteorological Data
+
+To access a meteorological field, you first get a pointer to the `MetStateType` object, and then get a pointer to the specific field you need.
+
+```fortran
+subroutine example_met_access(state_manager, rc)
+  type(StateManagerType), intent(inout) :: state_manager
+  integer, intent(out) :: rc
+
+  type(MetStateType), pointer :: met_state
+  real(fp), pointer :: temp_ptr(:,:,:)
+  real(fp), pointer :: temp_column_ptr(:)
+  integer :: i, j
+
+  met_state => state_manager%get_met_state_ptr()
+  if (.not. associated(met_state)) then
+    rc = CC_FAILURE
+    return
+  end if
+
+  ! Get a pointer to the entire 3D temperature field
+  temp_ptr => met_state%get_field_ptr('T')
+  if (associated(temp_ptr)) then
+    ! Work with the 3D temperature field
+    print *, 'Max temperature:', maxval(temp_ptr)
+  end if
+
+  ! Get a pointer to a single vertical column of temperature data
+  i = 10; j = 20
+  temp_column_ptr => met_state%get_column_ptr_func('T', i, j)
+  if (associated(temp_column_ptr)) then
+    ! Work with the 1D temperature column
+    print *, 'Surface temperature at (10, 20):', temp_column_ptr(1)
+  end if
+
+end subroutine example_met_access
+```
+
+#### Accessing Chemical Species Data
+
+Accessing chemical species data follows a similar pattern. You get a pointer to the `ChemStateType` object, find the index of the species you are interested in, and then get the concentration data.
+
+```fortran
+subroutine example_chem_access(state_manager, rc)
+  type(StateManagerType), intent(inout) :: state_manager
+  integer, intent(out) :: rc
+
+  type(ChemStateType), pointer :: chem_state
+  integer :: o3_index
+  real(fp), pointer :: o3_conc_ptr(:,:,:)
+
+  chem_state => state_manager%get_chem_state_ptr()
+  if (.not. associated(chem_state)) then
+    rc = CC_FAILURE
+    return
+  end if
+
+  ! Find the index for Ozone
+  o3_index = chem_state%find_species('O3')
+  if (o3_index > 0) then
+    ! Get a pointer to the O3 concentration data
+    o3_conc_ptr => chem_state%ChemSpecies(o3_index)%conc
+    if (associated(o3_conc_ptr)) then
+      ! Work with the 3D O3 concentration field
+      o3_conc_ptr = o3_conc_ptr * 1.05  ! Increase O3 by 5%
+    end if
+  end if
+
+end subroutine example_chem_access
+```
 
 ### State Validation
 
-Comprehensive validation ensures state consistency:
+Each state component has a `validate` procedure that can be used to check for consistency and physical reasonability of the data.
 
 ```fortran
-subroutine state_container_validate(this, rc)
-   class(StateContainerType), intent(inout) :: this
-   integer, intent(out) :: rc
+subroutine validate_state(state_manager, error_mgr, rc)
+  type(StateManagerType), intent(inout) :: state_manager
+  type(ErrorManagerType), pointer, intent(inout) :: error_mgr
+  integer, intent(out) :: rc
 
-   type(ErrorManagerType), pointer :: error_mgr
-   integer :: local_rc
+  type(MetStateType), pointer :: met_state
+  type(ChemStateType), pointer :: chem_state
 
-   rc = CC_SUCCESS
-   error_mgr => this%get_error_manager()
+  met_state => state_manager%get_met_state_ptr()
+  call met_state%validate(error_mgr, rc)
+  if (rc /= CC_SUCCESS) return
 
-   call error_mgr%push_context("state_container_validate")
+  chem_state => state_manager%get_chem_state_ptr()
+  call chem_state%validate(error_mgr, rc)
+  if (rc /= CC_SUCCESS) return
 
-   ! Validate initialization
-   if (.not. this%is_initialized) then
-      call error_mgr%report_error("StateContainer not initialized")
-      rc = CC_FAILURE
-      call error_mgr%pop_context()
-      return
-   end if
-
-   ! Validate core components
-   if (.not. allocated(this%config)) then
-      call error_mgr%report_error("Configuration not allocated")
-      rc = CC_FAILURE
-   end if
-
-   if (.not. allocated(this%met_state)) then
-      call error_mgr%report_error("MetState not allocated")
-      rc = CC_FAILURE
-   end if
-
-   if (.not. allocated(this%chem_state)) then
-      call error_mgr%report_error("ChemState not allocated")
-      rc = CC_FAILURE
-   end if
-
-   ! Validate component consistency
-   call this%validate_grid_consistency(local_rc)
-   if (local_rc /= CC_SUCCESS) then
-      call error_mgr%report_error("Grid consistency validation failed")
-      rc = local_rc
-   end if
-
-   call this%validate_species_consistency(local_rc)
-   if (local_rc /= CC_SUCCESS) then
-      call error_mgr%report_error("Species consistency validation failed")
-      rc = local_rc
-   end if
-
-   ! Set validation status
-   this%is_valid = (rc == CC_SUCCESS)
-
-   call error_mgr%pop_context()
-
-end subroutine state_container_validate
+end subroutine validate_state
 ```
 
-### Memory Management
-
-Automatic memory management with cleanup:
-
-```fortran
-subroutine state_container_finalize(this, rc)
-   class(StateContainerType), intent(inout) :: this
-   integer, intent(out) :: rc
-
-   integer :: local_rc
-
-   rc = CC_SUCCESS
-
-   ! Finalize state components in reverse order
-   if (allocated(this%diag_mgr)) then
-      call this%diag_mgr%finalize(local_rc)
-      deallocate(this%diag_mgr)
-   end if
-
-   if (allocated(this%grid_mgr)) then
-      call this%grid_mgr%finalize(local_rc)
-      deallocate(this%grid_mgr)
-   end if
-
-   if (allocated(this%emis_state)) then
-      call this%emis_state%finalize(local_rc)
-      deallocate(this%emis_state)
-   end if
-
-   if (allocated(this%chem_state)) then
-      call this%chem_state%finalize(local_rc)
-      deallocate(this%chem_state)
-   end if
-
-   if (allocated(this%met_state)) then
-      call this%met_state%finalize(local_rc)
-      deallocate(this%met_state)
-   end if
-
-   if (allocated(this%config)) then
-      call this%config%finalize(local_rc)
-      deallocate(this%config)
-   end if
-
-   ! Reset container state
-   this%is_initialized = .false.
-   this%is_valid = .false.
-   this%build_id = ''
-
-end subroutine state_container_finalize
-```
-
-### Thread Safety
-
-For parallel applications, use thread-safe access patterns:
-
-```fortran
-!$OMP PARALLEL DO PRIVATE(local_rc)
-do i = 1, n_columns
-   ! Each thread gets its own column data
-   type(VirtualColumnType) :: column
-
-   ! Extract column from container (thread-safe)
-   call container%get_column(i, column, local_rc)
-
-   ! Process column independently
-   call process_column(column, local_rc)
-
-   ! Update container (thread-safe)
-   call container%set_column(i, column, local_rc)
-end do
-!$OMP END PARALLEL DO
-```
-
-## Integration with Processes
-
-### Process-State Interaction
-
-Processes interact with state through standardized interfaces:
-
-```fortran
-subroutine settling_process_run(this, container, rc)
-   class(settlingProcessType), intent(inout) :: this
-   type(StateContainerType), intent(inout) :: container
-   integer, intent(out) :: rc
-
-   type(MetStateType), pointer :: met_state
-   type(ChemStateType), pointer :: chem_state
-   type(DiagnosticManagerType), pointer :: diag_mgr
-   real(fp), pointer :: temperature(:,:,:)
-   real(fp), pointer :: pm25_conc(:,:,:)
-   real(fp), allocatable :: settling_velocity(:,:,:)
-
-   ! Get state components
-   met_state => container%get_met_state_ptr()
-   chem_state => container%get_chem_state_ptr()
-   diag_mgr => container%get_diagnostic_manager()
-
-   ! Get required fields
-   temperature => met_state%get_field('temperature')
-   pm25_conc => chem_state%get_species_ptr('PM25')
-
-   ! Allocate work arrays
-   allocate(settling_velocity(size(temperature,1), &
-                             size(temperature,2), &
-                             size(temperature,3)))
-
-   ! Calculate settling
-   call calculate_settling_velocity(temperature, pm25_conc, settling_velocity)
-
-   ! Apply settling
-   call apply_settling(pm25_conc, settling_velocity, container%dt)
-
-   ! Update diagnostics
-   call diag_mgr%update_field('settling_velocity', settling_velocity)
-
-   deallocate(settling_velocity)
-   rc = CC_SUCCESS
-
-end subroutine settling_process_run
-```
+The `StateValidatorUtilsType` also provides a set of generic validation routines that can be used to check dimensions, bounds, and consistency of arrays.
 
 ## Best Practices
 
-### State Access Guidelines
-
-1. **Always validate**: Check container state before access
-2. **Use pointers efficiently**: Get pointers once, reuse them
-3. **Handle errors gracefully**: Check return codes and report errors
-4. **Clean up resources**: Deallocate temporary arrays
-5. **Thread-safe patterns**: Use appropriate synchronization for parallel code
-
-### Memory Management
-
-1. **RAII pattern**: Initialize in constructors, cleanup in destructors
-2. **Avoid leaks**: Always deallocate what you allocate
-3. **Pointer safety**: Check association before dereferencing
-4. **Automatic cleanup**: Use StateBuilder for automatic resource management
-
-### Performance Optimization
-
-1. **Minimize allocations**: Reuse work arrays where possible
-2. **Efficient access patterns**: Use contiguous memory access
-3. **Lazy initialization**: Only allocate what you need
-4. **Profile memory usage**: Monitor for excessive allocations
-
-### Error Handling
-
-1. **Comprehensive validation**: Validate all state components
-2. **Informative errors**: Provide context in error messages
-3. **Graceful degradation**: Handle partial failures appropriately
-4. **Error propagation**: Always check and propagate return codes
-
-The StateContainer system provides a robust foundation for CATChem's modular architecture while maintaining high performance and reliability.
+- **Use Pointers for Access**: Always use pointers to access large data arrays to avoid unnecessary memory copies.
+- **Check for Association**: Before dereferencing a pointer, always check if it is associated using the `associated()` intrinsic function.
+- **Validate State**: Use the `validate` procedures to ensure the consistency and correctness of the state data before using it in calculations.
+- **Lifecycle Management**: The lifecycle of state components (initialization, cleanup) is managed by a higher-level driver. When developing new processes, you can assume that the state is properly initialized.
+- **Error Handling**: All state management procedures return a return code (`rc`). Always check the return code and handle errors appropriately using the `ErrorManagerType`.

@@ -1,421 +1,108 @@
 # Performance Guide
 
-This guide covers performance optimization, profiling, and best practices for CATChem development.
+High performance is a critical design goal of CATChem. This guide provides an overview of the performance features of the model, as well as best practices and strategies for writing efficient code and optimizing performance.
 
-## Overview
+## Core Performance Features
 
-CATChem is designed for high-performance atmospheric chemistry modeling with several key optimization strategies:
+CATChem's architecture is designed from the ground up for high performance on modern HPC systems.
 
-- **Column Virtualization**: Efficient memory layout and cache utilization
-- **Process Modularity**: Minimal overhead between processes
-- **Memory Management**: Reduced allocations and optimized data structures
-- **Parallel Scalability**: Linear scaling to thousands of cores
+-   **[Column Virtualization](core/column-virtualization.md)**: This is the most important performance feature of CATChem. By treating the 3D model domain as a collection of independent 1D columns, we achieve excellent cache utilization and data locality, which is key to performance on modern CPUs.
 
-## Performance Architecture
+-   **Process Modularity**: The modular, process-based architecture minimizes overhead and allows for clean separation of concerns, which in turn makes it easier to optimize individual processes.
 
-### Column Virtualization
+-   **Efficient Memory Management**: CATChem is designed to minimize memory allocations at runtime. We use pre-allocated buffers and a "zero-copy" approach where possible (e.g., for meteorological data in virtual columns) to reduce memory bandwidth bottlenecks.
 
-CATChem's column virtualization provides significant performance benefits:
+## Profiling and Identifying Bottlenecks
 
-```fortran
-! Traditional approach - poor cache utilization
-do k = 1, nlevs
-  do j = 1, nlats
-    do i = 1, nlons
-      call process_point(state(i,j,k))
-    end do
-  end do
-end do
+**"The First Rule of Program Optimization: Don't do it. The Second Rule of Program Optimization (for experts only!): Don't do it yet." - Michael A. Jackson**
 
-! CATChem virtualized approach - optimized cache usage
-do col = 1, virtual_columns
-  call process_column(virtual_state(col))
-end do
-```
-
-**Benefits:**
-
-- Faster column processing
-- Better cache utilization
-- Vectorization opportunities
-- Reduced memory bandwidth
-
-### Memory Optimization
-
-**State Container Design:**
-
-- Contiguous memory layout
-- Minimal copying between processes
-- Efficient species indexing
-- Cache-friendly data structures
-
-**Allocation Strategy:**
-
-- Pre-allocated buffers
-- Pool-based memory management
-- Minimal runtime allocations
-- NUMA-aware placement
-
-## Profiling {#profiling}
+Before you attempt to optimize any code, you must first **profile** it to identify the actual bottlenecks. Time spent optimizing code that is not a bottleneck is time wasted.
 
 ### Built-in Profiling
 
-CATChem includes built-in timing and profiling capabilities:
+CATChem includes a simple, built-in profiler that can be enabled in the configuration file. This profiler provides basic timing information for the main processes.
 
 ```yaml
-# Configuration for profiling
+# In your CATChem_config.yml
 profiling:
   enabled: true
-  level: detailed  # basic, detailed, comprehensive
-  output: catchem_profile.json
-  processes:
-    - chemistry
-    - emissions
-    - transport
+  level: detailed
 ```
 
-**Profiling Output:**
-```json
-{
-  "total_time": 45.2,
-  "processes": {
-    "chemistry": {"time": 32.1, "calls": 1440},
-    "emissions": {"time": 8.7, "calls": 1440},
-    "transport": {"time": 4.4, "calls": 1440}
-  }
-}
-```
+This will produce a summary of the time spent in each major process, which can be a good starting point for identifying hotspots.
 
 ### External Profiling Tools
 
-**Intel VTune:**
-```bash
-# Compile with profiling support
-export FCFLAGS="-g -O2 -prof-gen=srcpos"
-make clean && make
+For more detailed analysis, you should use a dedicated profiling tool. Some recommended tools are:
 
-# Run with VTune
-vtune -collect hotspots -app-working-dir . ./catchem_driver
-```
+-   **Intel VTune Profiler**: An excellent, all-around profiler for identifying hotspots, memory bandwidth issues, and more.
+-   **NVIDIA Nsight Systems**: For profiling on NVIDIA GPUs.
+-   **GNU gprof**: A simple, widely available profiler.
 
-**NVIDIA Nsight:**
-```bash
-# For GPU profiling
-nsys profile --trace=cuda,openmp ./catchem_driver
-```
+**Example with gprof:**
 
-**GNU gprof:**
-```bash
-# Compile with gprof support
-export FCFLAGS="-pg -O2"
-make clean && make
+1.  Compile with profiling support:
+    ```bash
+    export FCFLAGS="-pg -O2"
+    make
+    ```
+2.  Run the model:
+    ```bash
+    ./catchem_driver
+    ```
+3.  Analyze the output:
+    ```bash
+    gprof catchem_driver gmon.out > profile.txt
+    ```
 
-# Run and analyze
-./catchem_driver
-gprof catchem_driver gmon.out > profile.txt
-```
+When analyzing profiling results, look for the functions or loops where the most time is being spent. These are the "hotspots" that are the best candidates for optimization.
 
 ## Optimization Strategies
 
 ### Compiler Optimization
 
-**Recommended Compiler Flags:**
+Using the right compiler flags is the easiest way to get a significant performance boost. The recommended flags provide a good balance of performance and numerical stability.
 
-**Intel Fortran:**
-```bash
-export FCFLAGS="-O3 -xHOST -ipo -no-prec-div -fp-model fast=2"
-```
+-   **Intel Fortran (`ifort`)**: `-O3 -xHOST -ipo -no-prec-div -fp-model fast=2`
+-   **GNU Fortran (`gfortran`)**: `-O3 -march=native -ffast-math -funroll-loops`
 
-**GNU Fortran:**
-```bash
-export FCFLAGS="-O3 -march=native -ffast-math -funroll-loops"
-```
+These flags enable aggressive optimization, vectorization, and inter-procedural optimization. Be aware that flags like `-ffast-math` can affect numerical precision, so it is important to validate your results after changing compiler flags.
 
-**NVIDIA HPC SDK:**
-```bash
-export FCFLAGS="-O3 -fast -Mipa=fast"
-```
+### Algorithmic and Code-Level Optimization
 
-### Process-Level Optimization
-
-**Chemistry Optimization:**
-```fortran
-! Use efficient solvers
-type(chemistry_config) :: chem_config
-chem_config%solver = 'rosenbrock'  ! vs 'euler'
-chem_config%adaptive_timestep = .true.
-chem_config%error_tolerance = 1.0e-3
-```
-
-**Transport Optimization:**
-```fortran
-! Minimize vertical levels processing
-type(transport_config) :: trans_config
-trans_config%skip_levels = [1, nlev]  ! Surface and top
-trans_config%vectorized = .true.
-```
-
-### Memory Optimization
-
-**Configuration Tuning:**
-```yaml
-# Optimize memory usage
-memory:
-  allocation_strategy: pool
-  buffer_size_mb: 512
-  numa_aware: true
-
-state_management:
-  cache_size: 1000  # Number of columns to cache
-  prefetch_enabled: true
-```
+-   **Follow the [Coding Standards](coding-standards.md)**: The coding standards, especially the guidelines on loop ordering and memory management, are designed to promote good performance.
+-   **Vectorization**: Write loops in a way that the compiler can easily vectorize them. This means avoiding complex control flow inside loops and ensuring that the inner-most loop has a sufficient number of iterations.
+-   **Data Structures**: Use data structures that are cache-friendly. For example, arrays of structures are often less efficient than structures of arrays.
 
 ## Parallel Performance
 
-### OpenMP Optimization
+### OpenMP
 
-**Thread Configuration:**
-```bash
-export OMP_NUM_THREADS=16
-export OMP_PLACES=cores
-export OMP_PROC_BIND=close
-export OMP_SCHEDULE=dynamic
-```
+CATChem uses OpenMP for on-node parallelism. The most common parallelization strategy is to parallelize the loop over columns.
 
-**Code Optimization:**
 ```fortran
-!$OMP PARALLEL DO PRIVATE(col_state) SCHEDULE(DYNAMIC)
-do col = 1, num_virtual_columns
-  col_state = extract_column(state, col)
-  call process_column(col_state)
-  call update_column(state, col, col_state)
+!$OMP PARALLEL DO SCHEDULE(DYNAMIC)
+do i = 1, num_columns
+  ! ... process column i ...
 end do
 !$OMP END PARALLEL DO
 ```
 
-### MPI Scaling
+-   **`SCHEDULE(DYNAMIC)`**: This is often a good choice for column-based processing, as the computational cost of each column can vary. Dynamic scheduling helps to balance the load across threads.
+-   **Thread Affinity**: For best performance, it is important to bind threads to specific cores. This can be done with environment variables:
+    ```bash
+    export OMP_PLACES=cores
+    export OMP_PROC_BIND=close
+    ```
 
-**Domain Decomposition:**
+### MPI
 
-- 2D horizontal decomposition
-- Load balancing based on computational cost
-- Minimal communication overhead
-
-**Recommended MPI Settings:**
-```bash
-mpirun -np 256 \
-  --map-by ppr:16:node \
-  --bind-to core \
-  --mca btl_openib_want_fork_support 1 \
-  ./catchem_driver
-```
-
-## Performance Monitoring
-
-### Runtime Monitoring
-
-**Configuration:**
-```yaml
-monitoring:
-  performance_metrics: true
-  memory_usage: true
-  load_balance: true
-  output_frequency: 100  # timesteps
-```
-
-**Key Metrics:**
-
-- Time per timestep
-- Memory high-water mark
-- Load balancing efficiency
-- Cache hit rates
-
-### Automated Performance Testing
-
-**Performance Regression Tests:**
-```bash
-# Run performance benchmarks
-cd tests/performance
-make benchmark
-
-# Compare against baseline
-python compare_performance.py --baseline v2.0 --current HEAD
-```
-
-## Common Performance Issues
-
-### Memory Bandwidth Limitation
-
-**Symptoms:**
-
-- Low CPU utilization
-- High memory access times
-- Poor scaling with threads
-
-**Solutions:**
-
-- Optimize data layout
-- Reduce memory allocations
-- Use compiler prefetch hints
-
-### Load Imbalance
-
-**Symptoms:**
-
-- Some processes finish much earlier
-- Poor parallel efficiency
-- Idle cores during execution
-
-**Solutions:**
-
-- Dynamic load balancing
-- Better domain decomposition
-- Work stealing algorithms
-
-### Cache Misses
-
-**Symptoms:**
-
-- High L3 cache miss rate
-- Memory stalls
-- Poor single-thread performance
-
-**Solutions:**
-
-- Column virtualization
-- Data structure optimization
-- Loop blocking/tiling
+MPI is used for distributed-memory parallelism across multiple nodes. CATChem uses a 2D horizontal domain decomposition. For good MPI scaling, it is important to minimize communication and balance the workload across MPI ranks.
 
 ## Performance Best Practices
 
-### Development Guidelines
-
-**Profile Early and Often**
-
-- Use built-in profiling
-- Test with realistic problem sizes
-- Focus on hot spots
-
-**Memory-First Design**
-
-- Design for cache efficiency
-- Minimize allocations
-- Use contiguous data structures
-
-**Parallel-Aware Algorithms**
-
-- Minimize synchronization
-- Design for NUMA systems
-- Consider false sharing
-
-### Configuration Guidelines
-
-**Right-Size Resources**
-
-- Match threads to cores
-- Consider memory bandwidth
-- Balance computation vs I/O
-
-**Optimize for Use Case**
-- Operational vs research
-- Real-time vs batch
-- Accuracy vs speed trade-offs
-
-## Platform-Specific Optimization
-
-### Intel Xeon Systems
-
-**Optimizations:**
-
-- Use Intel MKL for linear algebra
-- Enable AVX-512 instructions
-- NUMA-aware thread placement
-
-### AMD EPYC Systems
-
-**Optimizations:**
-
-- Consider CCX boundaries
-- Optimize for memory bandwidth
-- Use AMD BLIS/LIBFLAME
-
-### GPU Acceleration
-
-**NVIDIA GPU Support:**
-```fortran
-!$acc parallel loop collapse(2)
-do k = 1, nlevs
-  do col = 1, ncols
-    call chemistry_kernel(state(col, k))
-  end do
-end do
-!$acc end parallel loop
-```
-
-**Configuration:**
-```yaml
-gpu:
-  enabled: true
-  device_count: 4
-  memory_pool_mb: 8192
-  processes: [chemistry, emissions]
-```
-
-## Performance Validation
-
-### Benchmarking Suite
-
-**Standard Benchmarks:**
-
-- Single column chemistry
-- Regional domain (100x100)
-- Global domain (720x360)
-- Scaling tests (1-1000 cores)
-
-**Performance Targets:**
-
-- Single timestep: < 0.1s (regional)
-- Memory usage: < 2GB per process
-- Parallel efficiency: > 80% (to 256 cores)
-
-### Continuous Integration
-
-**Automated Performance Testing:**
-
-- Regression detection
-- Performance trend analysis
-- Comparison with baselines
-
-## Troubleshooting
-
-### Performance Debugging
-
-**Common Commands:**
-```bash
-# Check system resources
-top -p $(pgrep catchem)
-numastat -p $(pgrep catchem)
-
-# Profile memory usage
-valgrind --tool=massif ./catchem_driver
-
-# Check MPI communication
-mpiP ./catchem_driver
-```
-
-### Performance Metrics Analysis
-
-**Key Performance Indicators:**
-
-- Time per timestep
-- Memory bandwidth utilization
-- Cache hit rates
-- MPI communication overhead
-- Load balance efficiency
-
-## References
-
-- **[Column Virtualization Guide](core/column-virtualization.md)**
-- **[State Management](core/state-management.md)**
-- **[Build System Optimization](../user-guide/build-system.md)**
-- **[Testing Performance](testing.md#performance-testing)**
+-   **Profile First**: Don't guess where the bottlenecks are.
+-   **Optimize Hotspots**: Focus your optimization efforts on the parts of the code that are actually slow.
+-   **Validate Your Changes**: Always verify that your optimizations have not introduced bugs or changed the scientific results of the model.
+-   **Benchmark**: Measure the performance before and after your changes to quantify the improvement.
+-   **Consider the Whole System**: A change that improves performance on one system may degrade it on another. Test on multiple platforms if possible.

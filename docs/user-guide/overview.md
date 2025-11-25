@@ -124,18 +124,6 @@ CATChem supports multiple grid types:
 - Voronoi tessellation
 - Adaptive mesh refinement
 
-## Time Integration
-
-### Time Stepping
-- Operator splitting for different processes
-- Adaptive time stepping for numerical stability
-- Process-specific subcycling when needed
-
-### Numerical Methods
-- Implicit/explicit time integration options
-- Mass-conservative transport schemes
-- Positive-definite solution methods
-
 ## Configuration
 
 ### YAML-Based Configuration
@@ -192,9 +180,9 @@ processes:
 ## Integration Capabilities
 
 ### Host Model Integration
-- **CCPP Interface**: Standard physics package integration
+- **CCPP Interface**: Standard physics package integration (not implmented currently)
 - **NUOPC Component**: ESMF-based coupling framework
-- **FV3 Integration**: Direct coupling with FV3 dynamical core
+- **FV3 Integration**: Direct coupling with FV3 dynamical core (not implmented currently)
 - **Standalone Mode**: Independent execution capability
 
 ### Data Exchange
@@ -234,20 +222,6 @@ processes:
 - Template-based code generation
 - Clear API specifications
 - Comprehensive developer documentation
-
-## Operational Deployment
-
-### Production Features
-- 24/7 operational reliability
-- Comprehensive logging and monitoring
-- Performance profiling and optimization
-- Automated restart capabilities
-
-### Monitoring and Diagnostics
-- Real-time performance metrics
-- Comprehensive diagnostic output
-- Error detection and alerting
-- Resource usage tracking
 
 ---
 

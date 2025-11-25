@@ -1,521 +1,122 @@
 # Error Handling Developer Guide
 
-CATChem implements a comprehensive error handling system that provides robust error management, graceful degradation, and detailed error reporting. Everything you need to know about the error handling system to develop, modify, and extend CATChem is described in this guide.
+CATChem is equipped with a comprehensive error handling system, defined in `src/core/error_mod.F90`, that provides robust error management, graceful degradation, and detailed error reporting. This guide describes the error handling system and how to use it effectively when developing for CATChem.
 
 ## Overview
 
-The error handling system provides:
+The error handling system in `error_mod.F90` is a hybrid system that includes both a modern, object-oriented error management framework and a set of simpler, legacy error reporting functions.
 
-- **Structured Error Management** - Hierarchical error codes and messages
-- **Graceful Degradation** - Continue operation when possible
-- **Detailed Error Reporting** - Context-aware error messages with stack traces
-- **Recovery Mechanisms** - Automatic error recovery where feasible
-- **Integration with Logging** - Seamless integration with the logging system
+- **Modern System (`ErrorManagerType`)**: A powerful, structured system for handling errors with context tracking, severity levels, and error categories. This is the recommended approach for new code.
+- **Legacy System (`CC_Error`, `CC_Warning`)**: A set of simple subroutines for reporting errors and warnings. These are maintained for backward compatibility and are used by the modern system internally.
 
-## Error Manager Architecture
+## The Modern Error Handling System: `ErrorManagerType`
 
-### Core Error Manager
+The `ErrorManagerType` is the core of the modern error handling system. It provides a structured and powerful way to manage and report errors.
 
-```fortran
-module ErrorManager_Mod
-  use precision_mod
-  implicit none
-  private
+### Features
 
-  ! Error severity levels
-  integer, parameter, public :: ERROR_LEVEL_INFO    = 1
-  integer, parameter, public :: ERROR_LEVEL_WARNING = 2
-  integer, parameter, public :: ERROR_LEVEL_ERROR   = 3
-  integer, parameter, public :: ERROR_LEVEL_FATAL   = 4
+- **Error Context Stack**: The `ErrorManagerType` can maintain a stack of "contexts" (`ErrorContextType`). This allows for detailed error reports that show the call stack leading up to an error, which is invaluable for debugging.
+- **Structured Error Information**: Errors are represented by an `ErrorInfoType` object, which stores a code, message, severity, category, and location.
+- **Standardized Codes, Severities, and Categories**: The module provides a rich set of predefined error codes (e.g., `ERROR_INVALID_INPUT`, `ERROR_FILE_NOT_FOUND`), severity levels (e.g., `SEVERITY_WARNING`, `SEVERITY_ERROR`, `SEVERITY_FATAL`), and categories (e.g., `CATEGORY_INPUT`, `CATEGORY_COMPUTATION`).
+- **Centralized Reporting**: The `report_error` procedure is the central point for reporting all errors.
 
-  ! Error codes
-  integer, parameter, public :: ERROR_SUCCESS           = 0
-  integer, parameter, public :: ERROR_INVALID_INPUT     = 1001
-  integer, parameter, public :: ERROR_FILE_IO          = 1002
-  integer, parameter, public :: ERROR_MEMORY_ALLOC     = 1003
-  integer, parameter, public :: ERROR_CONVERGENCE      = 1004
-  integer, parameter, public :: ERROR_CONFIGURATION    = 1005
-  integer, parameter, public :: ERROR_PHYSICS_INVALID  = 1006
-  integer, parameter, public :: ERROR_MASS_CONSERVATION = 1007
+### Using the `ErrorManagerType`
 
-  type :: ErrorContextType
-    character(len=64) :: module_name
-    character(len=64) :: procedure_name
-    integer :: line_number
-    character(len=256) :: additional_info
-  end type ErrorContextType
-
-  type, public :: ErrorManagerType
-    private
-    character(len=1024) :: error_message
-    integer :: error_code = ERROR_SUCCESS
-    integer :: error_level = ERROR_LEVEL_INFO
-    type(ErrorContextType) :: context
-    logical :: has_error = .false.
-
-    ! Error history for debugging
-    character(len=256) :: error_stack(100)
-    integer :: stack_depth = 0
-
-  contains
-    procedure, public :: log_error => error_manager_log_error
-    procedure, public :: log_warning => error_manager_log_warning
-    procedure, public :: log_info => error_manager_log_info
-    procedure, public :: has_error => error_manager_has_error
-    procedure, public :: get_error_message => error_manager_get_message
-    procedure, public :: get_error_code => error_manager_get_code
-    procedure, public :: clear_error => error_manager_clear
-    procedure, public :: print_stack_trace => error_manager_print_stack
-
-    ! Error recovery methods
-    procedure, public :: attempt_recovery => error_manager_attempt_recovery
-    procedure, public :: set_recovery_action => error_manager_set_recovery
-  end type ErrorManagerType
-
-  ! Global error manager instance
-  type(ErrorManagerType), public :: global_error_manager
-
-contains
-
-  subroutine error_manager_log_error(this, message, error_code, context)
-    class(ErrorManagerType), intent(inout) :: this
-    character(len=*), intent(in) :: message
-    integer, intent(in), optional :: error_code
-    type(ErrorContextType), intent(in), optional :: context
-
-    this%has_error = .true.
-    this%error_level = ERROR_LEVEL_ERROR
-    this%error_message = message
-
-    if (present(error_code)) then
-      this%error_code = error_code
-    else
-      this%error_code = ERROR_INVALID_INPUT
-    end if
-
-    if (present(context)) then
-      this%context = context
-    end if
-
-    ! Add to error stack
-    call add_to_error_stack(this, message)
-
-    ! Log to system logger
-    call log_to_system('ERROR', message, this%error_code)
-  end subroutine error_manager_log_error
-
-end module ErrorManager_Mod
-```
-
-## Error Handling Patterns
-
-### Function-Level Error Handling
+Here is a typical workflow for using the `ErrorManagerType` in a subroutine:
 
 ```fortran
-subroutine safe_array_allocation(array, dimensions, rc)
-  real(fp), allocatable, intent(out) :: array(:,:,:)
-  integer, intent(in) :: dimensions(3)
-  integer, intent(out) :: rc
-
-  type(ErrorContextType) :: context
-  integer :: alloc_stat
-
-  rc = ERROR_SUCCESS
-
-  ! Set error context
-  context%module_name = 'UtilityModule'
-  context%procedure_name = 'safe_array_allocation'
-  context%line_number = __LINE__
-  write(context%additional_info, '(A,3I0)') 'Array dimensions: ', dimensions
-
-  ! Validate input
-  if (any(dimensions <= 0)) then
-    call global_error_manager%log_error( &
-      'Invalid array dimensions: all dimensions must be positive', &
-      ERROR_INVALID_INPUT, context)
-    rc = ERROR_INVALID_INPUT
-    return
-  end if
-
-  ! Check memory requirements
-  if (product(int(dimensions,8)) > max_array_size) then
-    call global_error_manager%log_error( &
-      'Requested array size exceeds memory limits', &
-      ERROR_MEMORY_ALLOC, context)
-    rc = ERROR_MEMORY_ALLOC
-    return
-  end if
-
-  ! Attempt allocation
-  allocate(array(dimensions(1), dimensions(2), dimensions(3)), &
-           stat=alloc_stat)
-
-  if (alloc_stat /= 0) then
-    write(context%additional_info, '(A,I0)') &
-      'Allocation failed with stat: ', alloc_stat
-    call global_error_manager%log_error( &
-      'Memory allocation failed', ERROR_MEMORY_ALLOC, context)
-    rc = ERROR_MEMORY_ALLOC
-    return
-  end if
-
-  ! Success
-  call global_error_manager%log_info('Array allocated successfully')
-end subroutine safe_array_allocation
-```
-
-### Process-Level Error Handling
-
-```fortran
-subroutine chemistry_process_run(this, container, rc)
-  class(ChemistryProcessType), intent(inout) :: this
-  type(StateContainerType), intent(inout) :: container
-  integer, intent(out) :: rc
-
-  type(ErrorContextType) :: context
-  real(fp) :: mass_before, mass_after, mass_error
-  integer :: solver_rc, validation_rc
-
-  rc = ERROR_SUCCESS
-  context%module_name = 'ChemistryProcess'
-  context%procedure_name = 'chemistry_process_run'
-
-  ! Pre-process validation
-  call validate_chemistry_inputs(container, validation_rc)
-  if (validation_rc /= ERROR_SUCCESS) then
-    call global_error_manager%log_error( &
-      'Chemistry input validation failed', validation_rc, context)
-    rc = validation_rc
-    return
-  end if
-
-  ! Store initial mass for conservation check
-  mass_before = calculate_total_mass(container)
-
-  ! Run chemistry solver
-  call run_chemistry_solver(this, container, solver_rc)
-
-  if (solver_rc /= ERROR_SUCCESS) then
-    select case (solver_rc)
-    case (ERROR_CONVERGENCE)
-      ! Attempt recovery with reduced timestep
-      call global_error_manager%log_warning( &
-        'Chemistry solver convergence failure, attempting recovery')
-      call attempt_chemistry_recovery(this, container, solver_rc)
-
-      if (solver_rc /= ERROR_SUCCESS) then
-        call global_error_manager%log_error( &
-          'Chemistry solver failed after recovery attempt', solver_rc, context)
-        rc = solver_rc
-        return
-      end if
-
-    case default
-      call global_error_manager%log_error( &
-        'Chemistry solver failed', solver_rc, context)
-      rc = solver_rc
-      return
-    end select
-  end if
-
-  ! Post-process validation
-  mass_after = calculate_total_mass(container)
-  mass_error = abs(mass_after - mass_before) / mass_before
-
-  if (mass_error > mass_conservation_tolerance) then
-    write(context%additional_info, '(A,E12.4)') &
-      'Mass conservation error: ', mass_error
-
-    if (mass_error > critical_mass_error_threshold) then
-      call global_error_manager%log_error( &
-        'Critical mass conservation violation', ERROR_MASS_CONSERVATION, context)
-      rc = ERROR_MASS_CONSERVATION
-      return
-    else
-      call global_error_manager%log_warning( &
-        'Mass conservation warning: ' // trim(context%additional_info))
-    end if
-  end if
-end subroutine chemistry_process_run
-```
-
-## Error Recovery Mechanisms
-
-### Automatic Recovery
-
-```fortran
-subroutine attempt_chemistry_recovery(this, container, rc)
-  class(ChemistryProcessType), intent(inout) :: this
-  type(StateContainerType), intent(inout) :: container
-  integer, intent(out) :: rc
-
-  real(fp) :: original_timestep, recovery_timestep
-  integer :: substeps, i, substep_rc
-
-  rc = ERROR_SUCCESS
-
-  ! Store original timestep
-  original_timestep = this%timestep
-
-  ! Try with reduced timestep
-  substeps = 4
-  recovery_timestep = original_timestep / real(substeps, fp)
-
-  call global_error_manager%log_info( &
-    'Attempting chemistry recovery with sub-stepping')
-
-  do i = 1, substeps
-    this%timestep = recovery_timestep
-    call run_chemistry_solver(this, container, substep_rc)
-
-    if (substep_rc /= ERROR_SUCCESS) then
-      ! Recovery failed
-      this%timestep = original_timestep
-      rc = substep_rc
-      call global_error_manager%log_error( &
-        'Chemistry recovery failed at substep ' // char(i + 48))
-      return
-    end if
-  end do
-
-  ! Restore original timestep
-  this%timestep = original_timestep
-
-  call global_error_manager%log_info( &
-    'Chemistry recovery successful with sub-stepping')
-end subroutine attempt_chemistry_recovery
-```
-
-### Fallback Algorithms
-
-```fortran
-subroutine settling_with_fallback(this, container, rc)
-  class(SettlingProcessType), intent(inout) :: this
-  type(StateContainerType), intent(inout) :: container
-  integer, intent(out) :: rc
-
-  character(len=32) :: primary_scheme, fallback_scheme
-  integer :: primary_rc, fallback_rc
-
-  rc = ERROR_SUCCESS
-  primary_scheme = this%selected_scheme
-
-  ! Try primary scheme
-  call run_settling_scheme(this, container, primary_scheme, primary_rc)
-
-  if (primary_rc == ERROR_SUCCESS) then
-    return  ! Success with primary scheme
-  end if
-
-  ! Primary scheme failed, try fallback
-  call global_error_manager%log_warning( &
-    'Primary settling scheme failed, trying fallback: ' // primary_scheme)
-
-  select case (trim(primary_scheme))
-  case ('intermediate_reynolds')
-    fallback_scheme = 'stokes'
-  case ('stokes')
-    fallback_scheme = 'constant_velocity'
-  case default
-    fallback_scheme = 'stokes'
-  end select
-
-  call run_settling_scheme(this, container, fallback_scheme, fallback_rc)
-
-  if (fallback_rc == ERROR_SUCCESS) then
-    call global_error_manager%log_info( &
-      'Fallback settling scheme successful: ' // fallback_scheme)
-    return
-  end if
-
-  ! Both schemes failed
-  call global_error_manager%log_error( &
-    'All settling schemes failed', primary_rc)
-  rc = primary_rc
-end subroutine settling_with_fallback
-```
-
-## Validation and Assertion Framework
-
-### Input Validation
-
-```fortran
-module ValidationUtils_Mod
-  use ErrorManager_Mod
+subroutine my_data_processing_subroutine(data, error_mgr, rc)
+  use error_mod
   implicit none
 
-contains
+  real, intent(in) :: data(:)
+  type(ErrorManagerType), intent(inout) :: error_mgr
+  integer, intent(out) :: rc
 
-  subroutine validate_positive(value, name, rc)
-    real(fp), intent(in) :: value
-    character(len=*), intent(in) :: name
-    integer, intent(out) :: rc
+  rc = CC_SUCCESS
 
-    type(ErrorContextType) :: context
+  ! 1. Push the current context onto the stack
+  call error_mgr%push_context("my_data_processing_subroutine", "Processing input data")
 
-    rc = ERROR_SUCCESS
-
-    if (value <= 0.0) then
-      context%module_name = 'ValidationUtils'
-      context%procedure_name = 'validate_positive'
-      write(context%additional_info, '(A,E12.4)') &
-        trim(name) // ' must be positive, got: ', value
-
-      call global_error_manager%log_error( &
-        'Validation failed: ' // trim(name) // ' must be positive', &
-        ERROR_INVALID_INPUT, context)
-      rc = ERROR_INVALID_INPUT
-    end if
-  end subroutine validate_positive
-
-  subroutine validate_range(value, min_val, max_val, name, rc)
-    real(fp), intent(in) :: value, min_val, max_val
-    character(len=*), intent(in) :: name
-    integer, intent(out) :: rc
-
-    type(ErrorContextType) :: context
-
-    rc = ERROR_SUCCESS
-
-    if (value < min_val .or. value > max_val) then
-      context%module_name = 'ValidationUtils'
-      context%procedure_name = 'validate_range'
-      write(context%additional_info, '(A,3E12.4)') &
-        trim(name) // ' out of range: ', value, min_val, max_val
-
-      call global_error_manager%log_error( &
-        'Validation failed: ' // trim(name) // ' out of valid range', &
-        ERROR_INVALID_INPUT, context)
-      rc = ERROR_INVALID_INPUT
-    end if
-  end subroutine validate_range
-
-  subroutine assert_mass_conservation(mass_before, mass_after, tolerance, rc)
-    real(fp), intent(in) :: mass_before, mass_after, tolerance
-    integer, intent(out) :: rc
-
-    real(fp) :: relative_error
-    type(ErrorContextType) :: context
-
-    rc = ERROR_SUCCESS
-    relative_error = abs(mass_after - mass_before) / mass_before
-
-    if (relative_error > tolerance) then
-      context%module_name = 'ValidationUtils'
-      context%procedure_name = 'assert_mass_conservation'
-      write(context%additional_info, '(A,E12.4,A,E12.4)') &
-        'Mass conservation error: ', relative_error, ' > ', tolerance
-
-      call global_error_manager%log_error( &
-        'Mass conservation assertion failed', &
-        ERROR_MASS_CONSERVATION, context)
-      rc = ERROR_MASS_CONSERVATION
-    end if
-  end subroutine assert_mass_conservation
-
-end module ValidationUtils_Mod
-```
-
-## Error Reporting and Debugging
-
-### Detailed Error Messages
-
-```fortran
-subroutine generate_detailed_error_report(error_mgr)
-  type(ErrorManagerType), intent(in) :: error_mgr
-
-  character(len=1024) :: report
-  integer :: unit
-
-  if (.not. error_mgr%has_error()) return
-
-  ! Generate comprehensive error report
-  write(report, '(A)') '=== CATChem Error Report ==='
-  write(report, '(A,A)') report, new_line('A') // 'Error Code: '
-  write(report, '(A,I0)') trim(report), error_mgr%get_error_code()
-  write(report, '(A,A,A)') trim(report), new_line('A') // 'Message: ', &
-    trim(error_mgr%get_error_message())
-  write(report, '(A,A,A)') trim(report), new_line('A') // 'Module: ', &
-    trim(error_mgr%context%module_name)
-  write(report, '(A,A,A)') trim(report), new_line('A') // 'Procedure: ', &
-    trim(error_mgr%context%procedure_name)
-  write(report, '(A,A,I0)') trim(report), new_line('A') // 'Line: ', &
-    error_mgr%context%line_number
-  write(report, '(A,A,A)') trim(report), new_line('A') // 'Additional Info: ', &
-    trim(error_mgr%context%additional_info)
-
-  ! Write to error log file
-  open(newunit=unit, file='catchem_error_report.log', position='append')
-  write(unit, '(A)') trim(report)
-  write(unit, '(A)') '=== Stack Trace ==='
-  call error_mgr%print_stack_trace(unit)
-  write(unit, '(A)') '==================='
-  write(unit, '(A)') ''
-  close(unit)
-
-  ! Also print to console in debug mode
-  if (debug_mode) then
-    print *, trim(report)
-    call error_mgr%print_stack_trace(output_unit)
+  ! 2. Perform operations and check for errors
+  if (any(data < 0.0)) then
+    ! 3. Report an error if one occurs
+    call error_mgr%report_error(ERROR_INVALID_INPUT, "Input data cannot be negative", rc)
+    call error_mgr%pop_context() ! Pop context before returning
+    return
   end if
-end subroutine generate_detailed_error_report
+
+  ! ... process data ...
+
+  ! 4. Pop the context from the stack before exiting
+  call error_mgr%pop_context()
+
+end subroutine my_data_processing_subroutine
 ```
 
-## Integration with Host Models
+#### 1. Pushing Context
 
-### Host Model Error Interface
+Before performing any operations that might fail, you should push the current context onto the error manager's stack using `push_context`. This provides valuable information if an error occurs within the subroutine or in any of the subroutines it calls.
+
+#### 2. Reporting Errors
+
+If an error is detected, you should report it using the `report_error` procedure. You provide an error code, a descriptive message, and the return code variable.
+
+#### 3. Popping Context
+
+It is crucial to pop the context from the stack using `pop_context` before the subroutine exits. This should be done for all exit paths, including error returns.
+
+### Error Codes, Severities, and Categories
+
+The `error_mod.F90` module defines a wide range of error codes, severities, and categories. When reporting an error, you should choose the most appropriate code. The `ErrorManagerType` will automatically determine the severity and category from the code.
+
+- **Error Codes**: e.g., `ERROR_INVALID_CONFIG`, `ERROR_MEMORY_ALLOCATION`, `ERROR_CONVERGENCE`.
+- **Severity Levels**: `SEVERITY_INFO`, `SEVERITY_WARNING`, `SEVERITY_ERROR`, `SEVERITY_CRITICAL`, `SEVERITY_FATAL`. The error manager can be configured to abort execution on critical or fatal errors.
+- **Error Categories**: `CATEGORY_INPUT`, `CATEGORY_COMPUTATION`, `CATEGORY_MEMORY`, `CATEGORY_IO`, etc. These are used for statistical tracking of errors.
+
+## The Legacy Error Handling System
+
+For simpler cases, or in code that has not yet been updated to use the `ErrorManagerType`, you can use the legacy `CC_Error` and `CC_Warning` subroutines.
+
+### `CC_Error`
+
+The `CC_Error` subroutine prints a formatted error message to standard output and sets the return code to `CC_FAILURE`.
 
 ```fortran
-! Interface for host model error handling
-subroutine catchem_get_error_status(error_code, error_message, message_len)
-  integer, intent(out) :: error_code
-  character(len=*), intent(out) :: error_message
-  integer, intent(in) :: message_len
+! Example of using CC_Error
+subroutine legacy_error_example(temperature, rc)
+  use error_mod, only: CC_Error, CC_SUCCESS, CC_FAILURE
+  implicit none
 
-  if (global_error_manager%has_error()) then
-    error_code = global_error_manager%get_error_code()
-    error_message = global_error_manager%get_error_message()
-  else
-    error_code = ERROR_SUCCESS
-    error_message = 'No error'
+  real, intent(in) :: temperature
+  integer, intent(out) :: rc
+
+  rc = CC_SUCCESS
+
+  if (temperature < 0.0) then
+    call CC_Error("Temperature cannot be negative", rc, "legacy_error_example")
+    return
   end if
-end subroutine catchem_get_error_status
 
-subroutine catchem_clear_error_status()
-  call global_error_manager%clear_error()
-end subroutine catchem_clear_error_status
+end subroutine legacy_error_example
 ```
 
-## Best Practices
+### `CC_Warning`
 
-### 1. Consistent Error Handling
+The `CC_Warning` subroutine is similar to `CC_Error`, but it is for non-critical issues. It prints a warning message but does not change the return code.
+
 ```fortran
-! Always check return codes
-call some_procedure(input_data, rc)
-if (rc /= ERROR_SUCCESS) then
-  ! Handle error appropriately
-  return
+! Example of using CC_Warning
+if (pressure > 110000.0) then
+  call CC_Warning("Pressure is unusually high", rc, "pressure_check")
 end if
 ```
 
-### 2. Meaningful Error Messages
-```fortran
-! Good: Specific, actionable error message
-call error_mgr%log_error( &
-  'Temperature out of range: ' // trim(temp_str) // ' K. ' // &
-  'Valid range is 200-350 K for this process.')
+## Best Practices for Error Handling
 
-! Avoid: Vague error message
-call error_mgr%log_error('Invalid temperature')
-```
-
-### 3. Error Context
-```fortran
-! Always provide context for debugging
-context%module_name = 'ChemistryProcess'
-context%procedure_name = 'run_chemistry'
-context%line_number = __LINE__
-call error_mgr%log_error('Solver convergence failed', ERROR_CONVERGENCE, context)
-```
-
-This error handling system provides robust error management capabilities that help maintain system stability and provide clear debugging information for developers.
+- **Use `ErrorManagerType` for New Code**: All new code should use the modern `ErrorManagerType` for structured and detailed error handling.
+- **Push and Pop Context**: Always push the context at the beginning of a subroutine and pop it before every exit point.
+- **Be Specific in Error Messages**: Provide clear, descriptive error messages that will help a user or developer diagnose the problem.
+- **Choose the Right Error Code**: Use the most specific error code available from the list in `error_mod.F90`.
+- **Check Return Codes**: Always check the return code of any subroutine that can fail.
+- **Handle Errors Gracefully**: Whenever possible, your code should handle errors gracefully, clean up any allocated resources, and return an informative error code.

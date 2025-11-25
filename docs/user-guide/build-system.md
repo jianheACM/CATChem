@@ -180,7 +180,7 @@ To add a new process to the build system:
    add_subdirectory(schemes)
    ```
 
-3. Update `src/process/CMakeLists.txt`:
+3. Add the new process to `src/process/CMakeLists.txt`:
    ```cmake
    # Add new process
    add_subdirectory(myprocess)

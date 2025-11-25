@@ -2,8 +2,8 @@
 
 CATChem and UFS-Chem will be a fully public community modeling system that is governed by the community through a working group. The community encompasses all users and developers of CATChem and UFS-Chem, which includes, but is not limited to Academia, research, industry, individuals, government labs, operational team, and NOAA Environmental Modeling Center (EMC). The following groups will be critical users and developers of UFS-Chem.
 
-  1. The NOAA OAR laboratories
-  2. NOAA operations
+  1. NOAA OAR laboratories
+  2. NOAA NWS
   3. Atmospheric chemistry and composition research communities (i.e., universities and other government agencies)
   4. State, local, and Federal government agencies
   5. Public and/or private sector
