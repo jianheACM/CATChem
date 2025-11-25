@@ -59,19 +59,13 @@ set_target_properties(
 # YAML-CPP standalone build (since we're not using MUSICA)
 #
 
-include(FetchContent)
-FetchContent_Declare(
-  yaml-cpp
-  GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
-  GIT_TAG yaml-cpp-0.7.0
-)
-
 # Configure yaml-cpp build options
 set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "Build yaml-cpp tests")
 set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "Build yaml-cpp tools")
 set(YAML_CPP_BUILD_CONTRIB OFF CACHE BOOL "Build yaml-cpp contrib")
 
-FetchContent_MakeAvailable(yaml-cpp)
+# Use the local submodule
+add_subdirectory(yaml-cpp)
 
 # Add our yaml interface (now that yaml-cpp is available independently)
 add_subdirectory(yaml_interface)
