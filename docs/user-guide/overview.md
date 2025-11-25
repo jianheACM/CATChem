@@ -180,9 +180,8 @@ processes:
 ## Integration Capabilities
 
 ### Host Model Integration
-- **CCPP Interface**: Standard physics package integration (not implmented currently)
-- **NUOPC Component**: ESMF-based coupling framework
-- **FV3 Integration**: Direct coupling with FV3 dynamical core (not implmented currently)
+- **CCPP Interface**: Standard physics package integration (not implemented currently)
+- **NUOPC Component**: ESMF-based coupling framework)
 - **Standalone Mode**: Independent execution capability
 
 ### Data Exchange
