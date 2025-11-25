@@ -4,8 +4,8 @@ site_author: CATChem Development Team
 site_url: https://catchem.readthedocs.io
 
 # Repository
-repo_name: CATChem/cc_restructure
-repo_url: https://github.com/CATChem/cc_restructure
+repo_name: UFS-Community/CATChem
+repo_url: https://github.com/UFS-Community/CATChem
 edit_uri: edit/main/docs/
 
 # Copyright
@@ -62,8 +62,7 @@ theme:
     - toc.integrate
 
   # Logo and favicon
-  logo: assets/images/catchem_logo.png
-  favicon: assets/images/favicon.ico
+  logo: ../data/CATChem_logo.png
 
   # Fonts
   font:
@@ -222,23 +221,21 @@ nav:
     - index.md
     - What's New: whats-new.md
     - License: license.md
-
   - User Guide:
     - user-guide/index.md
+    - Overview: user-guide/overview.md
     - Build System: user-guide/build-system.md
     - HPC Installation: user-guide/hpc-installation.md
-    - Overview: user-guide/overview.md
     - Configuration System: user-guide/configuration.md
     - Input Files: user-guide/input-files.md
-    - Processes:
-      - Process Overview: processes/index.md
-      - Settling: processes/settling_process.md
-      - Plume Rise: processes/plume_rise/plume_rise.md
-      - Biogenic Emissions: processes/biogenic_emission/biogenic_emission.md
-      - Dust Emissions: processes/dust/dust.md
-      - Sea Salt Emissions: processes/seasalt/index.md
-      - External Emissions: processes/external_emission_data/external_emission_data.md
-
+  - Processes:
+    - Process Overview: processes/index.md
+    - Dust Process: processes/dust_process.md
+    - External Emission Process: processes/externalemission_process.md
+    - Settling Process: processes/settling_process.md
+    - Settling Velocity Process: processes/settlingvelocity_process.md
+    - Test Process: processes/testprocess_process.md
+    - Vertical Diffusion Process: processes/vertical_diffusion_process.md
   - Developer Guide:
     - developer-guide/index.md
     - Contributing Guide: developer-guide/contributing.md
@@ -247,9 +244,7 @@ nav:
     - Process Development:
       - developer-guide/processes/index.md
       - Process Architecture: developer-guide/processes/architecture.md
-      - Generator System Overview: developer-guide/processes/generator-system-overview.md
-      - Process Generator Tutorial: developer-guide/processes/generator-tutorial.md
-      - Generator Demo: developer-guide/processes/generator-demo.md
+      - Process Generator: developer-guide/processes/process-generator.md
       - Creating Custom Processes: developer-guide/processes/creating.md
       - Templates and Patterns: developer-guide/processes/templates.md
       - Testing Processes: developer-guide/processes/testing.md
@@ -259,28 +254,22 @@ nav:
       - NUOPC Integration: developer-guide/integration/nuopc.md
     - Testing: developer-guide/testing.md
     - Documentation Guide: developer-guide/documentation.md
-    - Performance Guide: developer-guide/performance.md
-
   - Core Concepts:
     - core-concepts/index.md
-    - Process Infrastructure: core-concepts/process-infrastructure.md
-    - StateContainer: core-concepts/statecontainer.md
+    - State Management: core-concepts/state-management.md
     - Column Virtualization: core-concepts/column-virtualization.md
-    - Diagnostic System: core-concepts/diagnostic-system.md
-    - Configuration Management: core-concepts/configuration-management.md
-    - Integration Patterns: core-concepts/integration-patterns.md
-    - Performance Optimization: core-concepts/performance.md
-
-
+    - Diagnostic System: core-concepts/diagnostics.md
+    - Error Handling: core-concepts/error-handling.md
+    - Configuration System: core-concepts/configuration.md
   - API Reference:
     - api/index.md
-    - Auto-Generated API: CATChem/group__catchem.md
-
+    - Column Interface: api/column-interface.md
+    - Process Interface: api/process-interface.md
+    - State Management: api/state-management.md
+    - Configuration: api/configuration.md
   - UFS-Chem:
     - ufschem/index.md
-
   - Community Engagement:
     - community/index.md
-
   - Evaluation:
     - evaluation/index.md
