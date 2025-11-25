@@ -78,7 +78,11 @@ jobs:
             spack
             ~/.spack
           key: spack-${{ runner.os }}-${{ env.cache_key }}-${{ hashFiles('catchem/ci/spack.yaml') }}
-
+      - name: Ensure HTTPS and Git dependencies
+        id: ensure-https-and-git
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git ca-certificates libcurl4-openssl-dev
       - name: build
         run: |
           source spack/share/spack/setup-env.sh
