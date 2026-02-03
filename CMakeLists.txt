@@ -129,6 +129,7 @@ if(BUILD_NUOPC)
     cc_nuopc
     STATIC
     drivers/nuopc/aqmio.F90
+    drivers/nuopc/catchem_emis_mod.F90
     drivers/nuopc/catchem_nuopc_cap.F90
     drivers/nuopc/catchem_nuopc_interface.F90
   )
@@ -146,10 +147,18 @@ if(BUILD_NUOPC)
     PRIVATE
       $<TARGET_FILE:CATChem>
       $<TARGET_FILE:CATChem_process_seasalt>
+      $<TARGET_FILE:CATChem_process_drydep>
+      $<TARGET_FILE:CATChem_process_wetdep>
+      $<TARGET_FILE:CATChem_process_settling>
       $<TARGET_FILE:CATChem_core>
       $<TARGET_FILE:yaml_interface>
       $<TARGET_FILE:catchem_utilities>
   )
+
+  # Link GOCART2G library if available (needed for drydep process)
+  if(TARGET GOCART2G)
+    target_link_libraries(cc_nuopc PRIVATE $<TARGET_FILE:GOCART2G>)
+  endif()
 
   # Include directories for compilation
   target_include_directories(

@@ -35,7 +35,7 @@
 !! \date November 2024
 !! \ingroup catchem_nuopc_group
 
-module aqm
+module cc_nuopc
 ! Renamed from catchem_nuopc_cap to aqm for UFS Driver compatibility
 ! UFS expects: use aqm, only: AQM_SS => SetServices (after FRONT_AQM=aqm substitution)
 
@@ -393,7 +393,7 @@ contains
 
       ! Initialize CATChem using the interface (TODO: not provide nsoil, nsoiltype and nsurftype)
       call catchem_nuopc_init(model, config_file, lat, lon, numLevels, tracerInfo, grid, &
-         startTime=startTime, stopTime=stopTime, timeStep=timeStep, rc=rc)
+         startTime=startTime, stopTime=stopTime, timeStep=timeStep, clock=clock, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
          line=__LINE__, file=__FILE__)) return  ! bail out
 
@@ -484,7 +484,7 @@ contains
          line=__LINE__,  file=__FILE__))  return  ! bail out
 
       ! Import meteorological data from other components
-      call transform_nuopc_to_catchem(is%wrap, importState, rc)
+      call transform_nuopc_to_catchem(is%wrap, importState, currTime, rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
          line=__LINE__, file=__FILE__)) return
 
@@ -591,4 +591,4 @@ contains
       str = adjustl(str)
    end function real_to_string
 
-end module aqm
+end module cc_nuopc

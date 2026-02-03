@@ -7,7 +7,7 @@ author: "Barry Baker & Wei Li"
 # Explicit process behavior configuration with species filtering
 process_behavior:
   type: "source" #is not doing anything now
-  tendency_mode: "additive" #is not doing anything now
+  tendency_mode: "additive" ##additive or multiplicative or replacement;
   species_filter:
     #type: "all_species"
     type: "by_metadata"

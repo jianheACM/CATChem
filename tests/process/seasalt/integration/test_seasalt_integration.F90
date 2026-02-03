@@ -4,7 +4,7 @@
 !! This file contains comprehensive integration tests for the seasalt process implementation
 !! using the centralized CATChemCore framework. Tests complete workflow: core initialization,
 !! configuration loading, process registration, and all scheme validation.
-!! Generated on: 2025-11-14T23:01:21.917777
+!! Generated on: 2025-12-15T16:09:09.864661
 
 program test_seasalt_integration
    use precision_mod, only: fp
@@ -227,7 +227,6 @@ contains
 
 
 
-
       ! Set up DELP (pressure difference between levels) for emission unit conversion
       ! DELP is only used for unit conversion in emission processes
       do j = 1, ny
@@ -263,7 +262,7 @@ contains
 
       ! Get seasalt process interface
       seasalt_interface => null()
-      select type(process => process_mgr%processes(1))
+      select type(process => process_mgr%processes(1)%item)
        type is (ProcessSeaSaltInterface)
          seasalt_interface => process
       end select
@@ -273,7 +272,7 @@ contains
          return
       end if
 
-      ! Step 1: Set the timestep for emission calculations
+      ! Step 1: Set the timestep for process calculations
       call seasalt_interface%set_timestep(dt)
 
       ! Step 2: Set the scheme
