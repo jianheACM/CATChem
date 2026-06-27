@@ -4,6 +4,9 @@
 Here is a list of all namespaces with brief descriptions:
 
 
+* **namespace** [**carbchemcommon\_mod**](namespacecarbchemcommon__mod.md)     
+* **namespace** [**carbchemprocesscreator\_mod**](namespacecarbchemprocesscreator__mod.md)     
+* **namespace** [**carbchemscheme\_gocart\_mod**](namespacecarbchemscheme__gocart__mod.md)     
 * **namespace** [**catchem**](namespacecatchem.md)     
 * **namespace** [**catchem\_api**](namespacecatchem__api.md)     
 * **namespace** [**catchem\_highlevel\_api**](namespacecatchem__highlevel__api.md)     
@@ -34,6 +37,7 @@ Here is a list of all namespaces with brief descriptions:
 * **namespace** [**met\_utilities\_mod**](namespacemet__utilities__mod.md)     
 * **namespace** [**metstate\_mod**](namespacemetstate__mod.md)     
 * **namespace** [**precision\_mod**](namespaceprecision__mod.md)     
+* **namespace** [**processcarbcheminterface\_mod**](namespaceprocesscarbcheminterface__mod.md) _Process for computing chemical production and loss of carbon species._     
 * **namespace** [**processdrydepinterface\_mod**](namespaceprocessdrydepinterface__mod.md) _Process for computing dry deposition of gas and aerosol species._     
 * **namespace** [**processfactory\_mod**](namespaceprocessfactory__mod.md)     
 * **namespace** [**processinterface\_mod**](namespaceprocessinterface__mod.md)     
@@ -41,6 +45,7 @@ Here is a list of all namespaces with brief descriptions:
 * **namespace** [**processregistry\_mod**](namespaceprocessregistry__mod.md)     
 * **namespace** [**processseasaltinterface\_mod**](namespaceprocessseasaltinterface__mod.md) _Process for computing sea salt aerosol emissions over ocean surfaces._     
 * **namespace** [**processsettlinginterface\_mod**](namespaceprocesssettlinginterface__mod.md) _Process for computing gravitational settling of aerosol species._     
+* **namespace** [**processso4cheminterface\_mod**](namespaceprocessso4cheminterface__mod.md) _Process for computing chemical production of sulfate from SO2 oxidation._     
 * **namespace** [**processwetdepinterface\_mod**](namespaceprocesswetdepinterface__mod.md) _Process for computing wet deposition of gas and aerosol species._     
 * **namespace** [**run\_mod**](namespacerun__mod.md)     
 * **namespace** [**seasaltcommon\_mod**](namespaceseasaltcommon__mod.md)     
@@ -51,6 +56,9 @@ Here is a list of all namespaces with brief descriptions:
 * **namespace** [**settlingcommon\_mod**](namespacesettlingcommon__mod.md)     
 * **namespace** [**settlingprocesscreator\_mod**](namespacesettlingprocesscreator__mod.md)     
 * **namespace** [**settlingscheme\_gocart\_mod**](namespacesettlingscheme__gocart__mod.md)     
+* **namespace** [**so4chemcommon\_mod**](namespaceso4chemcommon__mod.md)     
+* **namespace** [**so4chemprocesscreator\_mod**](namespaceso4chemprocesscreator__mod.md)     
+* **namespace** [**so4chemscheme\_gocart\_mod**](namespaceso4chemscheme__gocart__mod.md)     
 * **namespace** [**species\_mod**](namespacespecies__mod.md)     
 * **namespace** [**state\_interface\_mod**](namespacestate__interface__mod.md)     
 * **namespace** [**state\_mod**](namespacestate__mod.md) 

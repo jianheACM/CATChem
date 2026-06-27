@@ -10,6 +10,7 @@
 ```Fortran
 
 module statemanager_mod
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan
    use precision_mod, only: fp
    use error_mod, only: cc_success, cc_failure, errormanagertype
    use configmanager_mod, only: configmanagertype
@@ -316,9 +317,9 @@ contains
       this%diag_mgr => diag_mgr_ptr
    end subroutine manager_set_diagnostic_manager
 
-   subroutine manager_create_virtual_column(this, i, j, virtual_col, rc)
+   subroutine manager_create_virtual_column(this, i, j, column_id, virtual_col, rc)
       class(StateManagerType), intent(inout), target :: this
-      integer, intent(in) :: i, j
+      integer, intent(in) :: i, j, column_id
       type(VirtualColumnType), intent(out) :: virtual_col
       integer, intent(out) :: rc
 
@@ -368,7 +369,7 @@ contains
       endif
 
       ! Initialize the virtual column data container
-      call virtual_col%init(nlev, nspec_chem, nspec_emis, i, j, lat, lon, area, rc)
+      call virtual_col%init(nlev, nspec_chem, nspec_emis, i, j, column_id, lat, lon, area, rc)
       if (rc /= cc_success) return
 
       ! Populate with data from 3D grid
@@ -383,7 +384,7 @@ contains
 
       integer :: grid_i, grid_j, k, ispec
       integer :: nlev, nspec_chem, nspec_emis
-      real(fp) :: met_value, chem_value
+      real(fp) :: chem_value
 
       rc = cc_success
 
@@ -587,7 +588,7 @@ contains
       rc = cc_success
 
       do i = 1, size(values)
-         if (values(i) /= values(i)) then  ! NaN check
+         if (ieee_is_nan(values(i))) then  ! NaN check
             rc = cc_failure
             return
          endif

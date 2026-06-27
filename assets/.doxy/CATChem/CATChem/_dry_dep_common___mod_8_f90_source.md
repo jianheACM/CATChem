@@ -375,7 +375,7 @@ contains
       type(ErrorManagerType), intent(inout) :: error_handler
 
       character(len=256) :: scheme_name
-      integer :: ierr, rc
+      integer :: rc
 
       ! Process reads directly from master YAML structure: processes.drydep
       ! ConfigManager provides generic YAML access, process handles its own configuration
@@ -569,7 +569,7 @@ contains
       type(ConfigManagerType), intent(inout) :: config_manager
       type(ErrorManagerType), intent(inout) :: error_handler
 
-      integer :: ierr, rc
+      integer :: rc
 
       ! Load scheme parameters directly from processes/drydep/wesely/ in master YAML
       call config_manager%get_real("processes/drydep/wesely/scale_factor", &
@@ -593,7 +593,7 @@ contains
       type(ConfigManagerType), intent(inout) :: config_manager
       type(ErrorManagerType), intent(inout) :: error_handler
 
-      integer :: ierr, rc
+      integer :: rc
 
       ! Load scheme parameters directly from processes/drydep/gocart/ in master YAML
       call config_manager%get_real("processes/drydep/gocart/scale_factor", &
@@ -611,7 +611,7 @@ contains
       type(ConfigManagerType), intent(inout) :: config_manager
       type(ErrorManagerType), intent(inout) :: error_handler
 
-      integer :: ierr, rc
+      integer :: rc
 
       ! Load scheme parameters directly from processes/drydep/zhang/ in master YAML
       call config_manager%get_real("processes/drydep/zhang/scale_factor", &
@@ -737,7 +737,7 @@ contains
                trim(this%drydep_config%diagnostic_species(i)), &
                "' not found in process species list"
             call error_handler%report_error(error_not_found, error_msg, rc)
-            return
+            !return !do not return and the diagnostics for this unspecified species will be zero in the output
          end if
       end do
 

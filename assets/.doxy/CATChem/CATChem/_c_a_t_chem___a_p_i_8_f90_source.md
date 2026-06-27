@@ -29,6 +29,8 @@ module catchem_api
    use drydepprocesscreator_mod, only: register_drydep_process
    use wetdepprocesscreator_mod, only: register_wetdep_process
    use settlingprocesscreator_mod, only: register_settling_process
+   use so4chemprocesscreator_mod, only: register_so4chem_process
+   use carbchemprocesscreator_mod, only: register_carbchem_process
 
    implicit none
    private
@@ -341,13 +343,27 @@ contains
             call this%error_manager%report_error(1014, 'Failed to register settling process', rc)
             call this%error_manager%pop_context()
          endif
+       case ('so4chem')
+         call register_so4chem_process(process_mgr, rc)
+         if (rc /= cc_success) then
+            call this%error_manager%push_context('model_register_process', 'registering so4chem process')
+            call this%error_manager%report_error(1014, 'Failed to register so4chem process', rc)
+            call this%error_manager%pop_context()
+         endif
+       case ('carbchem')
+         call register_carbchem_process(process_mgr, rc)
+         if (rc /= cc_success) then
+            call this%error_manager%push_context('model_register_process', 'registering carbchem process')
+            call this%error_manager%report_error(1014, 'Failed to register carbchem process', rc)
+            call this%error_manager%pop_context()
+         endif
          ! case ('chemistry')
          !    call register_chemistry_process(process_mgr, rc)
 
        case default
          call this%error_manager%push_context('model_register_process', 'validating process type')
          call this%error_manager%report_error(1016, 'Unknown process type: ' // trim(process_name) // &
-            '. Supported processes: seasalt', rc)
+            '. Supported processes: seasalt, drydep, wetdep, settling, so4chem, carbchem', rc)
          call this%error_manager%pop_context()
       end select
 
@@ -741,11 +757,8 @@ contains
       integer, intent(out) :: rc
 
       type(DiagnosticManagerType), pointer :: diag_mgr => null()
-      type(DiagnosticRegistryType), pointer :: registry => null()
-      character(len=64), allocatable :: process_list(:), field_names(:)
       character(len=64) :: process_name, field_name
-      integer :: num_processes, i, j, field_count, dot_pos, data_type
-      integer :: local_rc
+      integer :: local_rc, dot_pos, data_type
       real(fp) :: scalar_value
       real(fp), pointer :: array_1d_ptr(:) => null()
       real(fp), pointer :: array_2d_ptr(:,:) => null()
@@ -923,7 +936,6 @@ contains
       character(len=*), intent(in) :: var_name
       integer :: found_index
       integer :: i
-      type(ProcessManagerType), pointer :: process_mgr
 
       found_index = 0
       if (allocated(this%required_fields)) then
