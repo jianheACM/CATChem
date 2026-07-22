@@ -991,7 +991,7 @@ contains
               chem(i,kts:kte,j,p_no2) = chemic_interp(i,kts:kte,j,5)
               chem(i,kts:kte,j,p_hno3) = chemic_interp(i,kts:kte,j,6)
               chem(i,kts:kte,j,p_n2o5) = chemic_interp(i,kts:kte,j,7)
-              chem(i,kts:kte,j,p_ch4) = chemic_interp(i,kts:kte,j,8)+0.02  ! bias correction, + 20ppb
+              chem(i,kts:kte,j,p_ch4) = chemic_interp(i,kts:kte,j,8)+0.10  ! bias correction, + 20ppb
               chem(i,kts:kte,j,p_pan) = chemic_interp(i,kts:kte,j,9)
               chem(i,kts:kte,j,p_c2h6) = chemic_interp(i,kts:kte,j,10)
               chem(i,kts:kte,j,p_ch3coch3) = chemic_interp(i,kts:kte,j,11)
@@ -1081,7 +1081,7 @@ contains
           chem(i,k,j,p_sulf)=chem(i,k,j,p_sulf)+emis_ant(i,k,j,p_e_sulf)*factor
           chem(i,k,j,p_so2)=chem(i,k,j,p_so2)+emis_ant(i,k,j,p_e_so2)*factor2
           chem(i,k,j,p_no) =chem(i,k,j,p_no) +emis_ant(i,k,j,p_e_no )*factor2
-          chem(i,k,j,p_ch3cho) =chem(i,k,j,p_no2) +emis_ant(i,k,j,p_e_ch3cho)*factor2
+          chem(i,k,j,p_ch3cho) =chem(i,k,j,p_ch3cho) +emis_ant(i,k,j,p_e_ch3cho)*factor2
           chem(i,k,j,p_nh3) =chem(i,k,j,p_nh3) +emis_ant(i,k,j,p_e_nh3)*factor2
           chem(i,k,j,p_co) =chem(i,k,j,p_co) +emis_ant(i,k,j,p_e_co )*factor2
           chem(i,k,j,p_ch4) =chem(i,k,j,p_ch4) +emis_ant(i,k,j,p_e_ch4)*factor2

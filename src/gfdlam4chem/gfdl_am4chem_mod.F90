@@ -49,6 +49,9 @@ use atmos_regional_tracer_driver_mod,only : regional_tracer_driver, &
                                             regional_tracer_driver_init
 use atmos_age_tracer_mod,  only : atmos_age_tracer_init, atmos_age_tracer, &
                                   atmos_age_tracer_end
+use atmos_tropopause_mod,  only : atmos_tropopause_init, &
+                                  atmos_tropopause
+
 use cloud_chem, only: CLOUD_CHEM_PH_LEGACY, CLOUD_CHEM_PH_BISECTION, &
                       CLOUD_CHEM_PH_CUBIC, CLOUD_CHEM_F1P,&
                       CLOUD_CHEM_F1P_BUG, CLOUD_CHEM_F1P_BUG2, CLOUD_CHEM_LEGACY
@@ -413,7 +416,7 @@ subroutine gfdl_am4chem_driver(me,master,Time_init,Time,Time_next,dt_time,tracer
                             lon, lat, land, ocn_flx_fraction, &
                             r, chem_dt, phalf, pfull, t, is, ie, js, je, dt, & 
                             z_half, z_full, q, cldfrac, dfdage_interp, tsurf, albedo, &
-                            icoszen,solcon, area, w10m, rdiag, jvals_out, &
+                            icoszen,solcon, area, w10m, rdiag, ptp, jvals_out, &
                             prodox,lossox,prodlch4,lossch4,prodoh,lossoh,prodh2,lossh2)
 
 
@@ -443,6 +446,7 @@ subroutine gfdl_am4chem_driver(me,master,Time_init,Time,Time_next,dt_time,tracer
    real, intent(in),    dimension(:,:)            :: area    ! grid box area (m^2)
    real, intent(in),    dimension(:,:)            :: w10m    ! wind speed at 10m (m/s)
    real, intent(inout), dimension(:,:,:,:)        :: rdiag   ! diagnostic tracer concentrations
+   real, intent(inout), dimension(:,:)            :: ptp     ! tropopause pressure, Pa
    real, intent(inout), dimension(:,:,:,:)        :: jvals_out ! jn2o,j1d,jno2
    real, intent(inout), dimension(:,:,:)          :: prodox,lossox,prodlch4,lossch4,prodoh,lossoh,prodh2,lossh2
 !-----------------------------------------------------------------------
@@ -458,6 +462,7 @@ subroutine gfdl_am4chem_driver(me,master,Time_init,Time,Time_next,dt_time,tracer
    real, dimension(size(r,1),size(r,2),size(r,3),3) :: psc_vmr_save, dpsc_vmr
    real, dimension(size(r,1),size(r,2)) :: tsfcair, flux_sw_down_vis
    integer :: i,j,k,n,kb,id,jd,kd,ninv,nt,ntp, idx, index1, index2
+   integer, dimension(size(r,1),size(r,2))  :: tropopause_ind
 !  integer :: nno,nno2
    integer :: inv_index
    integer :: plonl, nnn
@@ -568,6 +573,16 @@ subroutine gfdl_am4chem_driver(me,master,Time_init,Time,Time_next,dt_time,tracer
          r_temp(:,:,:,n) = rdiag(:,:,:,indices(n)-ntp)
       end if
    end do
+
+!------------------------------------------------------------------------
+! Compute tropopause diagnostics
+!------------------------------------------------------------------------
+if (me==master) then
+   write(*,*)  'Compute tropopause diagnostics'
+ endif
+
+   call atmos_tropopause(is, ie, js, je, Time, Time_next, t, pfull, z_full,     &
+                         ptp, tropopause_ind)
 
 !------------------------------------------------------------------------
 ! Compute radon source-sink tendency
@@ -1781,6 +1796,10 @@ end if
       if (ncodirect > 0 .or. ne90 > 0) then
         call regional_tracer_driver_init (me, master, tracer_names)
       endif
+
+!tropopause diagnostics
+      if(me == master) write(*,*) 'Initialize atmos_tropopause'
+      call atmos_tropopause_init (me, master)
 
 
    module_is_initialized = .true.

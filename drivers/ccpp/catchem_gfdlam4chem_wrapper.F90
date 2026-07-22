@@ -155,7 +155,7 @@ contains
                    land, landfrac,oceanfrac, fice, lmk, cld_frac, rlat, rlon, &
                    tskin, julian, xcosz,solcon,&
                    pr3d,ph3d,phl3d,prl3d, tk3d, spechum,&
-                   u10m, v10m,idat, jdat, jval, emi2_in, bioem, &
+                   u10m, v10m,idat, jdat, ptrop, jval, emi2_in, bioem, &
                    ox_prod, ox_loss, lch4_prod, ch4_loss, &
                    oh_prod, oh_loss, &
                    h2_prod, h2_loss, &
@@ -196,6 +196,7 @@ contains
     real(kind_phys), dimension(im), intent(in) :: u10m, v10m, landfrac, oceanfrac, fice, &
                 garea, rlat,rlon, tskin, sfalb, xcosz
 
+    real(kind_phys), dimension(im), intent(inout) :: ptrop
     real(kind_phys), dimension(im,kte,3), intent(inout) :: jval  !jn2o,jo1d,jno2
     real(kind_phys), dimension(im,kte), intent(inout) :: ox_prod, ox_loss, lch4_prod, ch4_loss, &
                                                          oh_prod, oh_loss, h2_prod, h2_loss
@@ -221,7 +222,7 @@ contains
                                                    frocean,fraci,tsk, &
                                                    frac_open_sea,w10m, &
                                                    albedo,icoszen, &
-                                                   rlat_in,rlon_in
+                                                   rlat_in,rlon_in, ptp
 
 !>- chemistry variables
     real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:num_moist)  :: moist 
@@ -307,6 +308,7 @@ if (do_am4chem) then
        write (*, *) "catchem_gfdlam4chem_wrapper_run-Time_next: ",iyear, imon, iday, ihour, imin, isec
    endif
 
+   ptp   = 0._kind_phys
    jvals_out = 0._kind_phys
    prodox = 0._kind_phys
    lossox = 0._kind_phys
@@ -437,7 +439,7 @@ if (do_am4chem) then
              dtstep, z8w_am4, z_am4, sphum_am4, &
              cldfrac_am4,dfdage_am4, &
              tsk,albedo,icoszen,solcon, &
-             dxy, w10m, chem_diag, jvals_out, &
+             dxy, w10m, chem_diag, ptp, jvals_out, &
              prodox,lossox,prodlch4,lossch4,prodoh,lossoh,prodh2,lossh2)
 
 
@@ -445,6 +447,10 @@ if (do_am4chem) then
           trac_prog(its:ite,jts:jte,kts:kte,nt) = trac_prog(its:ite,jts:jte,kts:kte,nt) + &
                                    trac_dt(its:ite,jts:jte,kts:kte,nt)*dtstep 
         enddo                 
+
+        do i=its,ite
+          ptrop(i) = ptp(i,1)
+        enddo
 
         do j = jts, jte
           do i = its, ite
