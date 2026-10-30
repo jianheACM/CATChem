@@ -398,9 +398,12 @@ if (do_am4chem) then
                   .or. (nt==ntbc1) .or. (nt==ntbc2) .or. (nt==ntsoa) &
                   .or. (nt==ntpp25) .or. (nt==ntpp10)) then 
                   trac_prog(i,j,kp,nt) = gq0_prog(i,k,j,nt)*1.e-9  ! ug/kg to kg/kg
+                else if (nt == ntsulf) then
+                  !gq0_prog still uses gq0 units. So for sulf(so4), we need to 
+                  !convert ug/kg to mol/mol for AM4
+                  trac_prog(i,j,kp,nt) = gq0_prog(i,k,j,nt) * &
+                      1.e-9_kind_phys * mwdry / mw_so4_aer
                 else
-                  !note sulf(so4) is already converted from ug/kg to ppm in _prep
-                  !we need sulf(so4) in mol/mol for AM4
                   trac_prog(i,j,kp,nt) = gq0_prog(i,k,j,nt)*1.e-6  ! ppm to mol/mol
                 endif
               end do
