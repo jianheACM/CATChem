@@ -162,7 +162,7 @@ contains
                    dfdage_in, sfalb, &
                    ntso2, ntsulf, ntDMS, ntmsa, ntpp25,                     &
                    ntdust1,ntdust2,ntdust3,ntdust4,ntdust5, &
-                   ntss1,ntss2,ntss3,ntss4,ntss5, ntsoa, ntso4, &
+                   ntss1,ntss2,ntss3,ntss4,ntss5, ntsoa, &
                    ntbc1, ntbc2, ntoc1, ntoc2, ntpp10, ntage, ntaoanh, &
                    ntextinct,ntoz,aerosol_ext_1um, &
                    gaschem_opt, do_am4chem, tracer_names,   &               
@@ -182,7 +182,7 @@ contains
     integer,        intent(in) :: ntsulf,ntbc2,ntoc2,ntDMS,ntmsa
     integer,        intent(in) :: ntdust1,ntdust2,ntdust3,ntdust4,ntdust5
     integer,        intent(in) :: ntss1,ntss2,ntss3,ntss4,ntss5
-    integer,        intent(in) :: ntoz, ntage, ntsoa, ntaoanh, ntextinct,ntso4
+    integer,        intent(in) :: ntoz, ntage, ntsoa, ntaoanh, ntextinct
     character(len=32), dimension(ntrac), intent(in) :: tracer_names
     logical,        intent(in)  :: do_am4chem
 
@@ -396,8 +396,10 @@ if (do_am4chem) then
                   .or. (nt==ntss2) .or. (nt==ntss3) .or. (nt==ntss4) &
                   .or. (nt==ntss5) .or. (nt==ntoc1) .or. (nt==ntoc2) &
                   .or. (nt==ntbc1) .or. (nt==ntbc2) .or. (nt==ntsoa) &
-                  .or. (nt==ntpp25) .or. (nt==ntpp10) .or. (nt==ntsulf)) then 
+                  .or. (nt==ntpp25) .or. (nt==ntpp10)) then 
                   trac_prog(i,j,kp,nt) = gq0_prog(i,k,j,nt)*1.e-9  ! ug/kg to kg/kg
+                else if (nt==ntsulf) then
+                  trac_prog(i,j,kp,nt) = gq0_prog(i,k,j,nt)*1.e-9/mw_so4_aer ! ug/kg to mol/mol    
                 else
                   trac_prog(i,j,kp,nt) = gq0_prog(i,k,j,nt)*1.e-6  ! ppm to mol/mol
                 endif
@@ -468,9 +470,11 @@ if (do_am4chem) then
                   .or. (nt==ntss2) .or. (nt==ntss3) .or. (nt==ntss4) &
                   .or. (nt==ntss5) .or. (nt==ntoc1) .or. (nt==ntoc2) &
                   .or. (nt==ntbc1) .or. (nt==ntbc2) .or. (nt==ntsoa) &
-                  .or. (nt==ntpp25) .or. (nt==ntpp10) .or. (nt==ntsulf)) then
+                  .or. (nt==ntpp25) .or. (nt==ntpp10)) then
                   gq0(i,k,nt) = trac_prog(i,j,kp,nt)*1.e9  ! reverse, kg/kg to ug/kg
                   gq0(i,k,nt) =  max(epsilc,gq0(i,k,nt))
+                else if (nt==ntsulf) then
+                  gq0(i,k,nt) = trac_prog(i,j,kp,nt)*mw_so4_aer*1.e9  ! reverse, mol/mol to ug/kg
                 else
                   gq0(i,k,nt) = trac_prog(i,j,kp,nt)*1.e6  ! reverse, vmr to ppm
                   gq0(i,k,nt) =  max(epsilc,gq0(i,k,nt))

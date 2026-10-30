@@ -700,13 +700,6 @@
   dimensions = ()
   type = integer
   intent = in
-[ntso4]
-  standard_name = index_for_so4
-  long_name = index for so4
-  units = index
-  dimensions = ()
-  type = integer
-  intent = in
 [ntqv]
   standard_name = index_of_specific_humidity_in_tracer_concentration_array
   long_name = tracer index for water vapor (specific humidity)

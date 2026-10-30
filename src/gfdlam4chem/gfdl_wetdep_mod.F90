@@ -203,6 +203,7 @@ contains
           .or. (name=='rainwat') .or. (name=='snowwat')  .or. (name=='graupel') &
           .or. (name=='ice_nc') .or. (name=='rain_nc') .or. (name=='o3mr') &
           .or. (name=='rainwat') .or. (name=='soa') .or. (name=='sulf') &
+          .or. (name=='so4') &
           .or. (name=='pp25') .or. (name=='bc1') .or. (name=='bc2') &
           .or. (name=='oc1') .or. (name=='oc2') .or. (name=='dust1') &
           .or. (name=='dust2') .or. (name=='dust3') .or. (name=='dust4') &
@@ -303,8 +304,8 @@ contains
       Wetdep(n)%frac_in_cloud = 0.4*scale_aerosol_wetdep
       Wetdep(n)%frac_in_cloud_snow=Wetdep(n)%frac_in_cloud
       Wetdep(n)%frac_in_cloud_snow_homogeneous = Wetdep(n)%frac_in_cloud
-      Wetdep(n)%alpha_r = 0.002*scale_aerosol_wetdep
-      Wetdep(n)%alpha_s = 0.002*scale_aerosol_wetdep_snow
+      Wetdep(n)%alpha_r = 0.001*scale_aerosol_wetdep
+      Wetdep(n)%alpha_s = 0.001*scale_aerosol_wetdep_snow
       Wetdep(n)%Laerosol = .true.
       Wetdep(n)%Lwetdep = .true.
     end if
@@ -312,44 +313,44 @@ contains
     if ((name=='dust1') .or. (name=='dust2') .or. (name=='dust3') &
        .or. (name=='dust4') .or. (name=='dust5')) then
       Wetdep(n)%scheme = "aerosol_below"
-      Wetdep(n)%frac_in_cloud = 0.5*scale_aerosol_wetdep
+      Wetdep(n)%frac_in_cloud = 0.3*scale_aerosol_wetdep
       Wetdep(n)%frac_in_cloud_snow=Wetdep(n)%frac_in_cloud
       Wetdep(n)%frac_in_cloud_snow_homogeneous = Wetdep(n)%frac_in_cloud
-      Wetdep(n)%alpha_r = 0.002*scale_aerosol_wetdep
-      Wetdep(n)%alpha_s = 0.002*scale_aerosol_wetdep_snow
+      Wetdep(n)%alpha_r = 0.001*scale_aerosol_wetdep
+      Wetdep(n)%alpha_s = 0.001*scale_aerosol_wetdep_snow
       Wetdep(n)%Laerosol = .true.
       Wetdep(n)%Lwetdep = .true.
     end if
 
     if (name=='seas1') then
       Wetdep(n)%scheme = "aerosol_below"
-      Wetdep(n)%frac_in_cloud = 0.7*scale_aerosol_wetdep
+      Wetdep(n)%frac_in_cloud = 0.4*scale_aerosol_wetdep
       Wetdep(n)%frac_in_cloud_snow=Wetdep(n)%frac_in_cloud
       Wetdep(n)%frac_in_cloud_snow_homogeneous = Wetdep(n)%frac_in_cloud
-      Wetdep(n)%alpha_r = 0.002*scale_aerosol_wetdep
-      Wetdep(n)%alpha_s = 0.002*scale_aerosol_wetdep_snow
+      Wetdep(n)%alpha_r = 0.001*scale_aerosol_wetdep
+      Wetdep(n)%alpha_s = 0.001*scale_aerosol_wetdep_snow
       Wetdep(n)%Laerosol = .true.
       Wetdep(n)%Lwetdep = .true.
     end if
 
     if (name=='seas2') then
       Wetdep(n)%scheme = "aerosol_below"
-      Wetdep(n)%frac_in_cloud = 0.7*scale_aerosol_wetdep
+      Wetdep(n)%frac_in_cloud = 0.4*scale_aerosol_wetdep
       Wetdep(n)%frac_in_cloud_snow=Wetdep(n)%frac_in_cloud
       Wetdep(n)%frac_in_cloud_snow_homogeneous = Wetdep(n)%frac_in_cloud
-      Wetdep(n)%alpha_r = 0.002*scale_aerosol_wetdep
-      Wetdep(n)%alpha_s = 0.002*scale_aerosol_wetdep_snow
+      Wetdep(n)%alpha_r = 0.001*scale_aerosol_wetdep
+      Wetdep(n)%alpha_s = 0.001*scale_aerosol_wetdep_snow
       Wetdep(n)%Laerosol = .true.
       Wetdep(n)%Lwetdep = .true.
     end if
 
     if ((name=='seas3') .or. (name=='seas4') .or. (name=='seas5')) then
       Wetdep(n)%scheme = "aerosol_below"
-      Wetdep(n)%frac_in_cloud = 0.7*scale_aerosol_wetdep
+      Wetdep(n)%frac_in_cloud = 0.8*scale_aerosol_wetdep
       Wetdep(n)%frac_in_cloud_snow=Wetdep(n)%frac_in_cloud
       Wetdep(n)%frac_in_cloud_snow_homogeneous = Wetdep(n)%frac_in_cloud
-      Wetdep(n)%alpha_r = 0.002*scale_aerosol_wetdep
-      Wetdep(n)%alpha_s = 0.002*scale_aerosol_wetdep_snow
+      Wetdep(n)%alpha_r = 0.001*scale_aerosol_wetdep
+      Wetdep(n)%alpha_s = 0.001*scale_aerosol_wetdep_snow
       Wetdep(n)%Laerosol = .true.
       Wetdep(n)%Lwetdep = .true.
     end if
@@ -359,19 +360,19 @@ contains
       Wetdep(n)%frac_in_cloud = 0.1*scale_aerosol_wetdep
       Wetdep(n)%frac_in_cloud_snow=Wetdep(n)%frac_in_cloud
       Wetdep(n)%frac_in_cloud_snow_homogeneous = Wetdep(n)%frac_in_cloud
-      Wetdep(n)%alpha_r = 0.002*scale_aerosol_wetdep
-      Wetdep(n)%alpha_s = 0.002*scale_aerosol_wetdep_snow
+      Wetdep(n)%alpha_r = 0.001*scale_aerosol_wetdep
+      Wetdep(n)%alpha_s = 0.001*scale_aerosol_wetdep_snow
       Wetdep(n)%Laerosol = .true.
       Wetdep(n)%Lwetdep = .true.
     end if
 
     if (name=='bc2') then  ! bcphil
       Wetdep(n)%scheme = "aerosol_below"
-      Wetdep(n)%frac_in_cloud = 0.4*scale_aerosol_wetdep
+      Wetdep(n)%frac_in_cloud = 0.3*scale_aerosol_wetdep
       Wetdep(n)%frac_in_cloud_snow=Wetdep(n)%frac_in_cloud
       Wetdep(n)%frac_in_cloud_snow_homogeneous = Wetdep(n)%frac_in_cloud
-      Wetdep(n)%alpha_r = 0.002*scale_aerosol_wetdep
-      Wetdep(n)%alpha_s = 0.002*scale_aerosol_wetdep_snow
+      Wetdep(n)%alpha_r = 0.001*scale_aerosol_wetdep
+      Wetdep(n)%alpha_s = 0.001*scale_aerosol_wetdep_snow
       Wetdep(n)%Laerosol = .true.
       Wetdep(n)%Lwetdep = .true.
     end if
@@ -381,8 +382,8 @@ contains
       Wetdep(n)%frac_in_cloud = 0.4*scale_aerosol_wetdep
       Wetdep(n)%frac_in_cloud_snow=Wetdep(n)%frac_in_cloud
       Wetdep(n)%frac_in_cloud_snow_homogeneous = Wetdep(n)%frac_in_cloud
-      Wetdep(n)%alpha_r = 0.002*scale_aerosol_wetdep
-      Wetdep(n)%alpha_s = 0.002*scale_aerosol_wetdep_snow
+      Wetdep(n)%alpha_r = 0.001*scale_aerosol_wetdep
+      Wetdep(n)%alpha_s = 0.001*scale_aerosol_wetdep_snow
       Wetdep(n)%Laerosol = .true.
       Wetdep(n)%Lwetdep = .true.
     end if
@@ -392,8 +393,8 @@ contains
       Wetdep(n)%frac_in_cloud = 0.4*scale_aerosol_wetdep
       Wetdep(n)%frac_in_cloud_snow=Wetdep(n)%frac_in_cloud
       Wetdep(n)%frac_in_cloud_snow_homogeneous = Wetdep(n)%frac_in_cloud
-      Wetdep(n)%alpha_r = 0.002*scale_aerosol_wetdep
-      Wetdep(n)%alpha_s = 0.002*scale_aerosol_wetdep_snow
+      Wetdep(n)%alpha_r = 0.001*scale_aerosol_wetdep
+      Wetdep(n)%alpha_s = 0.001*scale_aerosol_wetdep_snow
       Wetdep(n)%Laerosol = .true.
       Wetdep(n)%Lwetdep = .true.
     end if
@@ -403,8 +404,8 @@ contains
       Wetdep(n)%frac_in_cloud = 0.4*scale_aerosol_wetdep
       Wetdep(n)%frac_in_cloud_snow=Wetdep(n)%frac_in_cloud
       Wetdep(n)%frac_in_cloud_snow_homogeneous = Wetdep(n)%frac_in_cloud
-      Wetdep(n)%alpha_r = 0.002*scale_aerosol_wetdep
-      Wetdep(n)%alpha_s = 0.002*scale_aerosol_wetdep_snow
+      Wetdep(n)%alpha_r = 0.001*scale_aerosol_wetdep
+      Wetdep(n)%alpha_s = 0.001*scale_aerosol_wetdep_snow
       Wetdep(n)%Laerosol = .true.
       Wetdep(n)%Lwetdep = .true.
     end if

@@ -506,7 +506,7 @@ contains
             var_rmv(i,j,1:num_chem) = abs(ls_wetdep(i,j,1:num_chem)) + abs(cv_wetdep(i,j,1:num_chem))
             wdep(i,1) = var_rmv(i,j,p_so2)*1.e-3*64. ! kg/m2/s
             wdep(i,2) = var_rmv(i,j,p_nh3)*1.e-3*17. ! kg/m2/s
-            wdep(i,3) = var_rmv(i,j,p_so4)*1.e-3*96. ! kg/m2/s
+            wdep(i,3) = var_rmv(i,j,p_sulf)
           enddo
         enddo
 #endif

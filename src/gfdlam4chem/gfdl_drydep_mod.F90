@@ -223,6 +223,7 @@ contains
           .or. (name=='rainwat') .or. (name=='snowwat')  .or. (name=='graupel') &
           .or. (name=='ice_nc') .or. (name=='rain_nc') .or. (name=='o3mr') & 
           .or. (name=='rainwat') .or. (name=='soa') .or. (name=='sulf') &
+          .or. (name=='so4') & 
           .or. (name=='pp25') .or. (name=='bc1') .or. (name=='bc2') &
           .or. (name=='oc1') .or. (name=='oc2') .or. (name=='dust1') &
           .or. (name=='dust2') .or. (name=='dust3') .or. (name=='dust4') &
