@@ -588,7 +588,6 @@
   dimensions = (horizontal_loop_extent,3)
   type = real
   kind = kind_phys
-  active = (flag_for_am4_chemistry)
   intent = inout
   optional = True
 [chem_conv_tr_in]
