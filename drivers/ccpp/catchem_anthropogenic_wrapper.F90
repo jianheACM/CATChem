@@ -327,6 +327,7 @@ contains
                            ntnh3,ntch2o,ntch4,ntc4h10,ntc10h16,ntch3oh,ntc2h5oh,&
                            ntch3coch3,ntch3cho,nth2,nte90
     real(kind_phys), dimension(ims:ime), intent(in) :: garea, rlat, rlon
+    integer, intent(in) :: nvar_emi
     real(kind_phys), dimension(ims:ime, nvar_emi),   intent(in) :: emi_in
     real(kind_phys), dimension(ims:ime, kms:kme), intent(in) :: pr3d,ph3d
     real(kind_phys), dimension(ims:ime, kts:kte), intent(in) :: phl3d,tk3d,prl3d,spechum

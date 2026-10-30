@@ -167,7 +167,7 @@
   standard_name = downward_mass_flux_of_convective_precipitation
   long_name = downward total convective precipitation mass flux at interfaces
   units = kg m-2 s-1
-  dimensions = (horizontal_dimension,vertical_interface_dimension)
+  dimensions = (horizontal_loop_extent,vertical_interface_dimension)
   type = real
   kind = kind_phys
   intent = in

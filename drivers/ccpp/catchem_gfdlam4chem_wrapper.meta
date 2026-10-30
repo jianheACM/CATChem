@@ -142,7 +142,35 @@
 [ccpp-arg-table]
   name = catchem_gfdlam4chem_wrapper_finalize
   type = scheme
-
+[me]
+  standard_name = mpi_rank
+  long_name = current MPI-rank
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[master]
+  standard_name = mpi_root
+  long_name = master MPI-rank
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+[errmsg]
+  standard_name = ccpp_error_message
+  long_name = error message for error handling in CCPP
+  units = none
+  dimensions = ()
+  type = character
+  kind = len=*
+  intent = out
+[errflg]
+  standard_name = ccpp_error_code
+  long_name = error code for error handling in CCPP
+  units = 1
+  dimensions = ()
+  type = integer
+  intent = out
 ########################################################################
 [ccpp-arg-table]
   name = catchem_gfdlam4chem_wrapper_run
@@ -480,7 +508,7 @@
   dimensions = (horizontal_loop_extent,4)
   type = real
   kind = kind_phys
-  intent = inout
+  intent = in
 [emi2_in]
   standard_name = anthropogenic_background_3d_input
   long_name = anthropogenic background 3d input

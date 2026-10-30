@@ -209,7 +209,10 @@ if (lnox_opt > 0) then
                     its,jts )
    
       bioem(:,4)=prod_no_col(:,1)/AVOGNO*1.e10*3600.  !molec cm^-2 s^-1 to mol/km2/hr
-      flash_freq(:) = flash_freq_out(:,1)
+
+      if (present(flash_freq)) then
+           flash_freq(:) = flash_freq_out(:,1)
+      endif
 
       do j=jts,jte
         do i=its,ite
