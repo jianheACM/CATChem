@@ -171,6 +171,7 @@
   type = real
   kind = kind_phys
   intent = in
+  optional = True
 [rlat]
   standard_name = latitude
   long_name = latitude
@@ -554,6 +555,7 @@
   kind = kind_phys
   active = (flag_for_am4_chemistry)
   intent = inout
+  optional = True
 [wetdep_ls_opt_in]
   standard_name = catchem_wetdep_ls_opt
   long_name = catchem large scale wet deposition option

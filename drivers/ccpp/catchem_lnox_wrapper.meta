@@ -258,6 +258,7 @@
   type = real
   kind = kind_phys
   intent = inout
+  optional = True
 [flash_freq]
   standard_name = flash_frequency
   long_name = flash frequency
@@ -266,6 +267,7 @@
   type = real
   kind = kind_phys
   intent = inout
+  optional = True
 [lnox_opt]
   standard_name = catchem_lnox_emis_opt
   long_name = catchem lightning nox emission option
