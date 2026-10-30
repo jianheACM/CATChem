@@ -91,7 +91,7 @@ module catchem_config
 #ifdef AM4_CHEM
   integer, parameter :: num_ebu            = 24 !JH, we set for now
   integer, parameter :: num_ebu_in         = 24 !JH, may need more in the input
-  integer, parameter :: num_moist=3, num_chem=128, num_emis_seas=5, num_emis_dust=5  !JH
+  integer, parameter :: num_moist=3, num_chem=127, num_emis_seas=5, num_emis_dust=5  !JH
   integer, parameter :: num_emis_ant = 25, num_emis_vol =4    !JH
   integer, parameter :: num_emis_bio = 2   !JH, only for isop,terp for now
   integer :: numgas = 111

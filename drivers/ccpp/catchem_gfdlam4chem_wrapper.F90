@@ -399,7 +399,8 @@ if (do_am4chem) then
                   .or. (nt==ntpp25) .or. (nt==ntpp10)) then 
                   trac_prog(i,j,kp,nt) = gq0_prog(i,k,j,nt)*1.e-9  ! ug/kg to kg/kg
                 else if (nt==ntsulf) then
-                  trac_prog(i,j,kp,nt) = gq0_prog(i,k,j,nt)*1.e-9/mw_so4_aer ! ug/kg to mol/mol    
+                  trac_prog(i,j,kp,nt) = gq0_prog(i,k,j,nt) * &
+                       1.e-9_kind_phys * mwdry / mw_so4_aer ! ug/kg to mol/mol 
                 else
                   trac_prog(i,j,kp,nt) = gq0_prog(i,k,j,nt)*1.e-6  ! ppm to mol/mol
                 endif
@@ -474,7 +475,8 @@ if (do_am4chem) then
                   gq0(i,k,nt) = trac_prog(i,j,kp,nt)*1.e9  ! reverse, kg/kg to ug/kg
                   gq0(i,k,nt) =  max(epsilc,gq0(i,k,nt))
                 else if (nt==ntsulf) then
-                  gq0(i,k,nt) = trac_prog(i,j,kp,nt)*mw_so4_aer*1.e9  ! reverse, mol/mol to ug/kg
+                  gq0(i,k,nt) = trac_prog(i,j,kp,nt) * &
+                               1.e9_kind_phys * mw_so4_aer / mwdry  ! reverse, mol/mol to ug/kg
                 else
                   gq0(i,k,nt) = trac_prog(i,j,kp,nt)*1.e6  ! reverse, vmr to ppm
                   gq0(i,k,nt) =  max(epsilc,gq0(i,k,nt))

@@ -5,7 +5,7 @@ module gocart_aerosols_mod
   use catchem_config, only : p_bc1,p_bc2,p_oc1,p_oc2,      &
                              p_dust_1,p_dust_2,p_dust_3,p_dust_4,p_dust_5,&
                              p_seas_1,p_seas_2,p_seas_3,p_seas_4,p_seas_5,&
-                             p_so4,p_soa,p_nh4no3,p_nh4, &
+                             p_soa,p_nh4no3,p_nh4, &
                              p_sulf,p_p25,p_so2,airmw!,p_vash_1
 #else
   use catchem_config, only : p_bc1,p_bc2,p_oc1,p_oc2,      &
@@ -142,7 +142,7 @@ end subroutine gocart_aerosols_driver
                                           +chem(i,k,j,p_bc2)*0.995  &
                                           +chem(i,k,j,p_oc1)*0.96   &
                                           +chem(i,k,j,p_oc2)*0.96   &
-                                          +chem(i,k,j,p_so4)*mwso4/mwdry*1.e3*0.97 &
+                                          +chem(i,k,j,p_sulf)*0.97 &
                                           +chem(i,k,j,p_soa)*0.96    &
                                           +chem(i,k,j,p_nh4)*18./mwdry*1.e3*0.973 &
                                           +chem(i,k,j,p_nh4no3)*62./mwdry*1.e3*0.954 &
@@ -188,7 +188,7 @@ end subroutine gocart_aerosols_driver
                             +chem(i,k,j,p_dust_2) &
                             +chem(i,k,j,p_dust_3) &
                             +chem(i,k,j,p_dust_4)*0.667 &
-                            +chem(i,k,j,p_so4)*mwso4/mwdry*1.e3 &
+                            +chem(i,k,j,p_sulf) &
                             +chem(i,k,j,p_seas_1) &
                             +chem(i,k,j,p_seas_2) &
                             +chem(i,k,j,p_seas_3) &

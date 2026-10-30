@@ -316,7 +316,8 @@ contains
       !note so4 is in now ug/kg in the tracer array, others are in ppm
       ddep(:,1) = dry_fall(:,1,p_o3)*1.e-6*48./WTMAIR ! kg/m2/s
       ddep(:,2) = dry_fall(:,1,p_nh3)*1.e-6*17./WTMAIR ! kg/m2/s
-      ddep(:,3) = dry_fall(:,1,p_sulf)*1.e-9 ! kg/m2/s
+      ddep(:,3) = dry_fall(:,1,p_sulf)* &
+              ppm2ugkg(p_sulf) * 1.e-9_kind_phys ! kg/m2/s
 
 #else
       do j = jts,jte
