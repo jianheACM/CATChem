@@ -398,10 +398,9 @@ if (do_am4chem) then
                   .or. (nt==ntbc1) .or. (nt==ntbc2) .or. (nt==ntsoa) &
                   .or. (nt==ntpp25) .or. (nt==ntpp10)) then 
                   trac_prog(i,j,kp,nt) = gq0_prog(i,k,j,nt)*1.e-9  ! ug/kg to kg/kg
-                else if (nt==ntsulf) then
-                  trac_prog(i,j,kp,nt) = gq0_prog(i,k,j,nt) * &
-                       1.e-9_kind_phys * mwdry / mw_so4_aer ! ug/kg to mol/mol 
                 else
+                  !note sulf(so4) is already converted from ug/kg to ppm in _prep
+                  !we need sulf(so4) in mol/mol for AM4
                   trac_prog(i,j,kp,nt) = gq0_prog(i,k,j,nt)*1.e-6  ! ppm to mol/mol
                 endif
               end do
@@ -811,6 +810,7 @@ end if  ! do_am4chem
            ! in chem array consistent with field table
            ! chem array stores all chem tracers (prog+diag)
            ! num_chem shoud be ntchm + ndchm
+           !sulf(so4) will be converted from ug/kg to ppm here
            chem(i,k,jts,nt) = max(epsilc,gq0(i,k,ntchs+nt-1)/ppm2ugkg(nt))
          end do
          do nt = 1,ntchs-1  ! prognostic metvar

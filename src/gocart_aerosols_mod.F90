@@ -130,7 +130,7 @@ end subroutine gocart_aerosols_driver
       do j=jts,jte                    
         do k=kts,kte
          do i=its,ite
-           sulfate=chem(i,k,j,p_sulf)*mwso4/mwdry*1.e3
+           sulfate=chem(i,k,j,p_sulf)*mwso4/mwdry*1.e3   !ug/kg?
            !JianHe: for GFDL-AM4
 #ifdef AM4_CHEM
              pm2_5_dry(i,k,j) = pm2_5_dry(i,k,j)+chem(i,k,j,p_dust_1) &
@@ -142,11 +142,10 @@ end subroutine gocart_aerosols_driver
                                           +chem(i,k,j,p_bc2)*0.995  &
                                           +chem(i,k,j,p_oc1)*0.96   &
                                           +chem(i,k,j,p_oc2)*0.96   &
-                                          +chem(i,k,j,p_sulf)*0.97 &
                                           +chem(i,k,j,p_soa)*0.96    &
                                           +chem(i,k,j,p_nh4)*18./mwdry*1.e3*0.973 &
                                           +chem(i,k,j,p_nh4no3)*62./mwdry*1.e3*0.954 &
-                                          +sulfate
+                                          +sulfate*0.97
 #else
             do n=p_p25,p_dust_1
                pm2_5_dry(i,k,j) = pm2_5_dry(i,k,j)+chem(i,k,j,n)        
@@ -188,7 +187,6 @@ end subroutine gocart_aerosols_driver
                             +chem(i,k,j,p_dust_2) &
                             +chem(i,k,j,p_dust_3) &
                             +chem(i,k,j,p_dust_4)*0.667 &
-                            +chem(i,k,j,p_sulf) &
                             +chem(i,k,j,p_seas_1) &
                             +chem(i,k,j,p_seas_2) &
                             +chem(i,k,j,p_seas_3) &
