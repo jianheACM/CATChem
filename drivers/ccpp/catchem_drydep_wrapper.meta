@@ -227,7 +227,6 @@
   dimensions = (horizontal_loop_extent,22)
   type = real
   kind = kind_phys
-  active = (flag_for_am4_chemistry)
   intent = in
   optional = True
 [hf2d]

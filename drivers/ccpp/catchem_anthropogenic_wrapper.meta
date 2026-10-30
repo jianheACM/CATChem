@@ -161,7 +161,6 @@
   dimensions = (horizontal_loop_extent,7,16)
   type = real
   kind = kind_phys
-  active = (flag_for_am4_chemistry)
   intent = in
 [emiairc_in]
   standard_name = aircraft_emission_input_cplchp
@@ -170,7 +169,6 @@
   dimensions = (horizontal_loop_extent,25,6)
   type = real
   kind = kind_phys
-  active = (flag_for_am4_chemistry)
   intent = in
 [emivol_in]
   standard_name = volcanic_emission_input_cplchp
@@ -179,7 +177,6 @@
   dimensions = (horizontal_loop_extent,12,1)
   type = real
   kind = kind_phys
-  active = (flag_for_am4_chemistry)
   intent = in
 [ntchs]
   standard_name = index_of_first_chemical_tracer_in_tracer_concentration_array
@@ -422,7 +419,6 @@
   dimensions = (horizontal_loop_extent,4)
   type = real
   kind = kind_phys
-  active = (flag_for_am4_chemistry)
   intent = inout
 [antem]
   standard_name = instantaneous_anthropogenic_emissions
@@ -431,7 +427,6 @@
   dimensions = (horizontal_loop_extent,6)
   type = real
   kind = kind_phys
-  active = (flag_for_am4_chemistry)
   intent = inout
 [chem_opt_in]
   standard_name = catchem_option

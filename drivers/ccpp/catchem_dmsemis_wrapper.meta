@@ -222,7 +222,6 @@
   dimensions = (horizontal_loop_extent,4)
   type = real
   kind = kind_phys
-  active = (flag_for_am4_chemistry)
   intent = inout
 [dmsemis_opt_in]
   standard_name = catchem_dms_emis_opt
