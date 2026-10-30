@@ -10,6 +10,7 @@
    use physcons,        only : g => con_g, pi => con_pi
    use machine ,        only : kind_phys
    use catchem_config
+   use catchem_constants, only: epsilc
    !use seas_mod,        only : gocart_seasalt_driver
    use gocart_seas_simple_mod,    only : gocart_seas_simple
    use gocart_seas_default_mod,  only : gocart_seas_default

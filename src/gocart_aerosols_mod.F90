@@ -1,10 +1,18 @@
 module gocart_aerosols_mod
 
   use catchem_constants ,        only : kind_chem
+#ifdef AM4_CHEM
+  use catchem_config, only : p_bc1,p_bc2,p_oc1,p_oc2,      &
+                             p_dust_1,p_dust_2,p_dust_3,p_dust_4,p_dust_5,&
+                             p_seas_1,p_seas_2,p_seas_3,p_seas_4,p_seas_5,&
+                             p_so4,p_soa,p_nh4no3,p_nh4, &
+                             p_sulf,p_p25,p_so2,airmw!,p_vash_1
+#else
   use catchem_config, only : p_bc1,p_bc2,p_oc1,p_oc2,      &
                              p_dust_1,p_dust_2,p_dust_3,p_dust_4,p_dust_5,&
                              p_seas_1,p_seas_2,p_seas_3,p_seas_4,p_seas_5,&
                              p_sulf,p_p25,p_so2,airmw!,p_vash_1
+#endif
 
  !use chem_const_mod, only : airmw
 
@@ -120,9 +128,26 @@ end subroutine gocart_aerosols_driver
       pm2_5_dry_ec(its:ite, kts:kte, jts:jte) = 0.
 
       do j=jts,jte                    
-         do k=kts,kte
+        do k=kts,kte
          do i=its,ite
-            sulfate=chem(i,k,j,p_sulf)*mwso4/mwdry*1.e3
+           sulfate=chem(i,k,j,p_sulf)*mwso4/mwdry*1.e3
+           !JianHe: for GFDL-AM4
+#ifdef AM4_CHEM
+             pm2_5_dry(i,k,j) = pm2_5_dry(i,k,j)+chem(i,k,j,p_dust_1) &
+                                          +chem(i,k,j,p_dust_2)*0.25  &
+                                          +chem(i,k,j,p_seas_1)           &
+                                          +chem(i,k,j,p_seas_2)           &
+                                          +chem(i,k,j,p_seas_3)*0.167     &
+                                          +chem(i,k,j,p_bc1)*0.995  &
+                                          +chem(i,k,j,p_bc2)*0.995  &
+                                          +chem(i,k,j,p_oc1)*0.96   &
+                                          +chem(i,k,j,p_oc2)*0.96   &
+                                          +chem(i,k,j,p_so4)*mwso4/mwdry*1.e3*0.97 &
+                                          +chem(i,k,j,p_soa)*0.96    &
+                                          +chem(i,k,j,p_nh4)*18./mwdry*1.e3*0.973 &
+                                          +chem(i,k,j,p_nh4no3)*62./mwdry*1.e3*0.954 &
+                                          +sulfate
+#else
             do n=p_p25,p_dust_1
                pm2_5_dry(i,k,j) = pm2_5_dry(i,k,j)+chem(i,k,j,n)        
             enddo
@@ -143,9 +168,9 @@ end subroutine gocart_aerosols_driver
                pm2_5_dry(i,k,j) = pm2_5_dry(i,k,j)+chem(i,k,j,p_seas_1)           &        
                                             +sulfate
             endif
-   
-            !Convert the units from mixing ratio to concentration (ug m^-3)
-            pm2_5_dry(i,k,j)    = pm2_5_dry(i,k,j) / alt(i,k,j)
+#endif
+           !Convert the units from mixing ratio to concentration (ug m^-3)
+           pm2_5_dry(i,k,j)    = pm2_5_dry(i,k,j) / alt(i,k,j)
       enddo
       enddo
       enddo
@@ -153,9 +178,29 @@ end subroutine gocart_aerosols_driver
       maxp=max(p_dust_2,p_dust_4)
       maxs=p_seas_4
       do j=jts,jte
-         do k=kts,kte
-            do i=its,ite
-               sulfate=chem(i,k,j,p_sulf)*mwso4/mwdry*1.e3
+        do k=kts,kte
+          do i=its,ite
+            sulfate=chem(i,k,j,p_sulf)*mwso4/mwdry*1.e3
+            !JianHe: For GFDL-AM4
+#ifdef AM4_CHEM
+              pm10(i,k,j) = pm10(i,k,j)+chem(i,k,j,p_soa) &
+                            +chem(i,k,j,p_dust_1) &
+                            +chem(i,k,j,p_dust_2) &
+                            +chem(i,k,j,p_dust_3) &
+                            +chem(i,k,j,p_dust_4)*0.667 &
+                            +chem(i,k,j,p_so4)*mwso4/mwdry*1.e3 &
+                            +chem(i,k,j,p_seas_1) &
+                            +chem(i,k,j,p_seas_2) &
+                            +chem(i,k,j,p_seas_3) &
+                            +chem(i,k,j,p_seas_4) &
+                            +chem(i,k,j,p_bc1) &
+                            +chem(i,k,j,p_bc2) &
+                            +chem(i,k,j,p_oc1) &
+                            +chem(i,k,j,p_oc2) &
+                            +chem(i,k,j,p_nh4no3)*62./mwdry*1.e3 &
+                            +chem(i,k,j,p_nh4)*18./mwdry*1.e3 &
+                            + sulfate
+#else
                do n=p_p25,maxd
                   pm10(i,k,j) = pm10(i,k,j)+chem(i,k,j,n)        
                enddo
@@ -164,9 +209,11 @@ end subroutine gocart_aerosols_driver
                enddo
                pm10(i,k,j) = pm10(i,k,j) + sulfate                 &
                             +chem(i,k,j,maxp)*d_10
-               pm10(i,k,j) = pm10(i,k,j)/ alt(i,k,j)
-            enddo
-         enddo
+#endif
+
+            pm10(i,k,j) = pm10(i,k,j)/ alt(i,k,j)
+          enddo
+        enddo
       enddo
 
 end subroutine sum_pm_gocart

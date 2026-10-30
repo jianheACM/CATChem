@@ -10,6 +10,7 @@
    use physcons,        only : g => con_g, pi => con_pi
    use machine ,        only : kind_phys
    use catchem_config
+   use catchem_constants, only: epsilc
    use gocart_aerosols_mod
    use gocart_chem_mod
    use dust_data_mod

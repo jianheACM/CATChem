@@ -10,6 +10,7 @@
    use physcons, g => con_g, pi => con_pi
    use machine ,        only : kind_phys
    use catchem_config
+   use catchem_constants, only: epsilc
    use gocart_settling_mod
    use vash_settling_mod
    use gocart_diag_mod

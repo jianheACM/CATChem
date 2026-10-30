@@ -10,6 +10,7 @@
    use physcons,        only : g => con_g, pi => con_pi
    use machine ,        only : kind_phys
    use catchem_config
+   use catchem_constants, only: epsilc
    use gocart_dust_simple_mod, only : gocart_dust_simple
    use gocart_dust_default_mod, only : gocart_dust_default
    use dust_afwa_mod,   only : gocart_dust_afwa_driver
@@ -51,7 +52,7 @@ contains
                    u10m, v10m, ustar, rlat, rlon, tskin, hf2d, pb2d,            &
                    pr3d, ph3d,phl3d, prl3d, tk3d, us3d, vs3d, spechum,          &
                    nsoil, smc, vegtype, soiltyp, sigmaf, dswsfc, zorl,snow_cplchm, &
-                   dust_in,emi_in, nseasalt,ntrac,                              &
+                   dust_in,emi_in,nvar_emi, nseasalt,ntrac,                     &
                    ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,ndust,               &
                    gq0,qgrs,duem,                                               &
                    chem_opt_in,dust_opt_in,dust_calcdrag_in,                    &
@@ -65,6 +66,7 @@ contains
     integer,        intent(in) :: nseasalt,ntrac,jdate(8)
     integer,        intent(in) :: ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,ndust
     real(kind_phys),intent(in) :: dt, emis_amp_dust, pert_scale_dust
+    integer,        intent(in) :: nvar_emi
 
     logical,        intent(in) :: do_sppt_emis
     real(kind_phys), optional, intent(in) :: sppt_wts(:,:)
@@ -76,7 +78,7 @@ contains
     integer, dimension(im), intent(in) :: land, vegtype, soiltyp        
     real(kind_phys), dimension(im,nsoil), intent(in) :: smc
     real(kind_phys), dimension(im, 12, 5), intent(in) :: dust_in
-    real(kind_phys), dimension(im,   10), intent(in) :: emi_in
+    real(kind_phys), dimension(im, nvar_emi), intent(in) :: emi_in
     real(kind_phys), dimension(im), intent(in) :: u10m, v10m, ustar,              &
                 lakefrac, sncovr, garea, rlat,rlon, tskin,                      &
                 hf2d, pb2d, sigmaf, dswsfc, zorl, snow_cplchm 
@@ -168,7 +170,7 @@ contains
         u10m,v10m,ustar,land,lakefrac,sncovr,garea,rlat,rlon,tskin,      &
         pr3d,ph3d,phl3d,tk3d,prl3d,us3d,vs3d,spechum,                    &
         nsoil,smc,vegtype,soiltyp,sigmaf,dswsfc,zorl,                    &
-        snow_cplchm,dust_in,emi_in,                                      &
+        snow_cplchm,dust_in,emi_in,nvar_emi,                             &
         hf2d,pb2d,u10,v10,ust,tsk,xland,xlat,xlong,flake,fsnow,dxy,      &
         rri,t_phy,u_phy,v_phy,p_phy,rho_phy,dz8w,p8w,t8w,z_at_w,         &
         ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,                         &
@@ -298,7 +300,7 @@ contains
         u10m,v10m,ustar,land,lakefrac,sncovr,garea,rlat,rlon,ts2d,     &
         pr3d,ph3d,phl3d,tk3d,prl3d,us3d,vs3d,spechum,                  &
         nsoil,smc,vegtype,soiltyp,sigmaf,dswsfc,zorl,                  &
-        snow_cplchm,dust_in,emi_in,hf2d,pb2d,                          &
+        snow_cplchm,dust_in,emi_in,nvar_emi,hf2d,pb2d,                 &
         u10,v10,ust,tsk,xland,xlat,xlong,flake,fsnow,dxy,              &
         rri,t_phy,u_phy,v_phy,p_phy,rho_phy,dz8w,p8w,t8w,              &
         z_at_w, ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,ntrac,gq0,     &
@@ -318,12 +320,14 @@ contains
     integer, dimension(ims:ime), intent(in) :: land, vegtype, soiltyp
     integer, intent(in) :: ntrac
     integer, intent(in) :: ntdust1,ntdust2,ntdust3,ntdust4,ntdust5
+    integer, intent(in) :: nvar_emi
+
     real(kind=kind_phys), dimension(ims:ime), intent(in) ::                 & 
          u10m, v10m, ustar, lakefrac,sncovr,garea, rlat, rlon, ts2d, sigmaf, dswsfc,       &
          zorl, snow_cplchm, hf2d, pb2d
     real(kind=kind_phys), dimension(ims:ime, nsoil),   intent(in) :: smc 
     real(kind=kind_phys), dimension(ims:ime, 12,  5),   intent(in) :: dust_in
-    real(kind=kind_phys), dimension(ims:ime,    10),   intent(in) :: emi_in
+    real(kind=kind_phys), dimension(ims:ime, nvar_emi),   intent(in) :: emi_in
     real(kind=kind_phys), dimension(ims:ime, kms:kme), intent(in) ::     &
          pr3d,ph3d
     real(kind=kind_phys), dimension(ims:ime, kts:kte), intent(in) ::       &
@@ -337,7 +341,7 @@ contains
                            ims,ime, jms,jme, kms,kme,                      &
                            its,ite, jts,jte, kts,kte
 
-    real(kind_phys), dimension(num_chem), intent(in) :: ppm2ugkg
+    real(kind_phys), dimension(1:num_chem), intent(in) :: ppm2ugkg
 
     
     integer,dimension(ims:ime, jms:jme), intent(out) :: isltyp, ivgtyp

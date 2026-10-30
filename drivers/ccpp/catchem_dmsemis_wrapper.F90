@@ -10,6 +10,7 @@
    use physcons,        only : g => con_g, pi => con_pi
    use machine ,        only : kind_phys
    use catchem_config
+   use catchem_constants, only: epsilc
    use gocart_dmsemis_mod, only : gocart_dmsemis
    use plume_rise_mod
 
@@ -46,9 +47,9 @@ contains
     subroutine catchem_dmsemis_wrapper_run(im, kte, kme, dt, garea,       &
                    land, u10m, v10m, tskin,                                &
                    pr3d, ph3d,phl3d, prl3d, tk3d, us3d, vs3d, spechum,     &
-                   vegtype, soiltyp,                                       & 
+                   vegtype, soiltyp, bioem, nvar_emi,                      &
                    emi_in, ntrac, ntdms, gq0, qgrs, dmsemis_opt_in,        &
-                   errmsg,errflg)
+                   do_am4chem,errmsg,errflg)
 
     implicit none
 
@@ -57,13 +58,16 @@ contains
     integer,        intent(in) :: ntrac
     integer,        intent(in) :: ntdms
     real(kind_phys),intent(in) :: dt
+    logical,        intent(in) :: do_am4chem
 
     integer, parameter :: ids=1,jds=1,jde=1, kds=1
     integer, parameter :: ims=1,jms=1,jme=1, kms=1
     integer, parameter :: its=1,jts=1,jte=1, kts=1
 
-    integer, dimension(im), intent(in) :: land, vegtype, soiltyp        
-    real(kind_phys), dimension(im,10), intent(in) :: emi_in
+    integer, dimension(im), intent(in) :: land, vegtype, soiltyp
+    integer,        intent(in) :: nvar_emi
+    real(kind_phys), dimension(im,nvar_emi), intent(in) :: emi_in
+    real(kind_phys), optional, intent(inout) :: bioem(:,:)
     real(kind_phys), dimension(im),    intent(in) :: u10m, v10m, garea, tskin
     real(kind_phys), dimension(im,kme),intent(in) :: ph3d, pr3d
     real(kind_phys), dimension(im,kte),intent(in) :: phl3d, prl3d, tk3d, us3d, vs3d, spechum
@@ -79,6 +83,7 @@ contains
 
     real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:num_chem )  :: chem
     real(kind_phys), dimension(ims:im, jms:jme) :: dms_0
+    real(kind_phys), dimension(ims:im, jms:jme, 1) :: dms_em
     integer,         dimension(ims:im, jms:jme) :: isltyp, ivgtyp
     integer :: ide, ime, ite, kde
 
@@ -104,12 +109,13 @@ contains
    !ppm2ugkg(p_so2 ) = 1.e+03_kind_phys * mw_so2_aer / mwdry
     ppm2ugkg(p_sulf) = 1.e+03_kind_phys * mw_so4_aer / mwdry
 
+    dms_em = 0._kind_phys  ! kg/m2/s
 
 !>- get ready for chemistry run
     call catchem_dmsemis_prep(                                         &
         u10m,v10m,land,garea,tskin,                                     &
         pr3d,ph3d,phl3d,tk3d,prl3d,us3d,vs3d,spechum,                   &
-        vegtype,soiltyp,emi_in,u10,v10,tsk,xland,dxy,                   &
+        vegtype,soiltyp,emi_in,nvar_emi,u10,v10,tsk,xland,dxy,          &
         rri,t_phy,u_phy,v_phy,rho_phy,dz8w,p8w,                         &
         ntdms,ntrac,gq0,num_chem,ppm2ugkg,                              &
         chem,ivgtyp,isltyp,dms_0,                                       &
@@ -130,12 +136,15 @@ contains
             ! -- GOCART dms scheme 
             call gocart_dmsemis(dt,u_phy(i,kts,j),v_phy(i,kts,j),          &
                 chem(i,kts,j,:),dz8w(i,kts,j),u10(i,j),v10(i,j),    &
-                delp,dms_0(i,j),tsk(i,j),dxy(i,j))
+                delp,dms_0(i,j),tsk(i,j),dxy(i,j),dms_em(i,j,1))
           endif
         enddo
       end do   
     endif
 
+#ifdef AM4_CHEM
+    bioem(:,1) = dms_em(:,1,1)*1.e3/62.*1.e6*3600.  ! convert kg/m2/s to mol/km2/hr
+#endif
 
     ! -- put chem stuff back into tracer array
     do k=kts,kte
@@ -156,7 +165,7 @@ contains
   subroutine catchem_dmsemis_prep(                                    &
         u10m,v10m,land,garea,ts2d,                                     &
         pr3d,ph3d,phl3d,tk3d,prl3d,us3d,vs3d,spechum,                  &
-        vegtype,soiltyp,emi_in,u10,v10,tsk,xland,dxy,                  &
+        vegtype,soiltyp,emi_in,nvar_emi,u10,v10,tsk,xland,dxy,         &
         rri,t_phy,u_phy,v_phy,rho_phy,dz8w,p8w,                        &
         ntdms,ntrac,gq0,num_chem,ppm2ugkg,                             &
         chem,ivgtyp,isltyp,dms_0,                                      &
@@ -171,7 +180,8 @@ contains
     integer,        intent(in) :: ntdms
     real(kind=kind_phys), dimension(ims:ime), intent(in) ::                & 
          u10m, v10m, garea, ts2d
-    real(kind=kind_phys), dimension(ims:ime,    10),   intent(in) :: emi_in
+    integer, intent(in) :: nvar_emi
+    real(kind=kind_phys), dimension(ims:ime, nvar_emi), intent(in) :: emi_in
     real(kind=kind_phys), dimension(ims:ime, kms:kme), intent(in) ::     &
          pr3d,ph3d
     real(kind=kind_phys), dimension(ims:ime, kts:kte), intent(in) ::       &
