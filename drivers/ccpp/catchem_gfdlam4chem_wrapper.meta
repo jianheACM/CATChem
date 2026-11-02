@@ -437,6 +437,22 @@
   type = real
   kind = kind_phys
   intent = inout
+[pm25_dry]
+  standard_name = dry_pm25_mass_concentration
+  long_name = dry PM2.5 mass concentration at ambient air volume
+  units = ug m-3
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = out
+[pm10_dry]
+  standard_name = dry_pm10_mass_concentration
+  long_name = dry PM10 mass concentration at ambient air volume
+  units = ug m-3
+  dimensions = (horizontal_loop_extent,vertical_layer_dimension)
+  type = real
+  kind = kind_phys
+  intent = out
 [ox_prod]
   standard_name = o3_chemical_production
   long_name = o3 chemical production

@@ -414,11 +414,11 @@ module catchem_config
  
 
   ! constants
-  real(kind=kind_chem), PARAMETER :: airmw      = 28.97
+  real(kind=kind_chem), PARAMETER :: airmw      = 28.966
   real(kind=kind_chem), PARAMETER :: mw_so2_aer = 64.066
   real(kind=kind_chem), PARAMETER :: mw_so4_aer = 96.066
   real(kind=kind_chem), parameter :: smw        = 32.00
-  real(kind=kind_chem), parameter :: mwdry      = 28.
+  real(kind=kind_chem), parameter :: mwdry      = 28.966
 !  <mw>d is the molecular weight of dry air (28.966), <mw>w/<mw>d = 0.62197, and
 !  (<mw>d - <mw>w)/<mw>d = 0.37803
 !  http://atmos.nmsu.edu/education_and_outreach/encyclopedia/humidity.htm

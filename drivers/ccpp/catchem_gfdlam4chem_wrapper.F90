@@ -156,6 +156,7 @@ contains
                    tskin, julian, xcosz,solcon,&
                    pr3d,ph3d,phl3d,prl3d, tk3d, spechum,&
                    u10m, v10m,idat, jdat, ptrop, jval, emi2_in, bioem, &
+                   pm25_dry, pm10_dry, &
                    ox_prod, ox_loss, lch4_prod, ch4_loss, &
                    oh_prod, oh_loss, &
                    h2_prod, h2_loss, &
@@ -257,7 +258,7 @@ contains
     real(kind_phys), dimension(1:num_chem) :: ppm2ugkg
 
     ! -- output tracers
-    real(kind_phys), dimension(ims:im, jms:jme, 1:kme) :: p10, pm25!, ebu_oc
+    real(kind_phys), dimension(im,kte), intent(out) :: pm25_dry, pm10_dry
 
 
 !>-- local variables
@@ -270,6 +271,8 @@ contains
 
     errmsg = ''
     errflg = 0
+    pm25_dry = 0._kind_phys
+    pm10_dry = 0._kind_phys
 
 if (do_am4chem) then
 
@@ -530,8 +533,8 @@ if (do_am4chem) then
     do j = jts, jte
       do k = kts, kte
         do i = its, ite
-          pm25  (i,j,k) = pm2_5_dry(i,k,j)
-          p10   (i,j,k) = pm10     (i,k,j)
+          pm25_dry(i,k) = pm2_5_dry(i,k,j)
+          pm10_dry(i,k) = pm10(i,k,j)
         end do
       end do
     end do
