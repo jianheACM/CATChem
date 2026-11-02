@@ -439,14 +439,14 @@ contains
                            zzfull,zz,ddvel(i,j,nv),kts,kte)
 
 !           endif
-
+#ifdef AM4_CHEM
            CASE (CHEM_OPT_GFDL_AM4) 
             !Turn off for now
               if ((nv.ne.p_age) .and. (nv.ne.p_aoanh)) then 
                call vertmx(dt,pblst,ekmfull,dryrho_1d, &
                            zzfull,zz,ddvel(i,j,nv),kts,kte)
               endif
-
+#endif
            CASE DEFAULT
                call vertmx(dt,pblst,ekmfull,dryrho_1d, &
                            zzfull,zz,ddvel(i,j,nv),kts,kte)

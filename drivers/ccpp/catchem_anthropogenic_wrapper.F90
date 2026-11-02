@@ -918,11 +918,6 @@ contains
      enddo
     enddo
 
-          do i=its,ite
-            do j=jts,jte
-              chem(i,kts:kte,j,ntchs:ntche) = max(epsilc, chem(i,kts:kte,j,ntchs:ntche))
-            enddo
-          enddo
 
     !
     ! -- gocart background fields only if gocart is called

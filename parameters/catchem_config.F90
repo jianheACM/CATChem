@@ -230,6 +230,7 @@ module catchem_config
   !mapping
   integer, parameter :: p_hcho=13
   integer, parameter :: p_ho=92
+  integer, parameter :: p_so4=70
 
   !3d emissions
   integer, parameter :: p_ebb_ch3coch3=1
