@@ -106,6 +106,14 @@
   type = real
   kind = kind_phys
   intent = in
+[oro]
+  standard_name = height_above_mean_sea_level
+  long_name = model surface height above mean sea level
+  units = m
+  dimensions = (horizontal_loop_extent)
+  type = real
+  kind = kind_phys
+  intent = in
 [ph3d]
   standard_name = geopotential_at_interface
   long_name = geopotential at model layer interfaces

@@ -58,7 +58,7 @@ contains
 !> @{
     subroutine catchem_anthropogenic_wrapper_run(me, master, &
                    im, kte, kme, ktau, dt,               &
-                   jdate, garea, rlat, rlon,  &
+                   jdate, garea, rlat, rlon, oro,  &
                    pr3d, ph3d,phl3d, prl3d, tk3d, spechum,emi_in,                       &
                    ntrac,ntso2,ntsulf,ntpp25,ntbc1,ntoc1,ntpp10,                        &
                    ntextinct, &
@@ -93,7 +93,7 @@ contains
 
     !JianHe, we may need more tracers in the emissions input
     real(kind_phys), dimension(im, nvar_emi), intent(in) :: emi_in
-    real(kind_phys), dimension(im), intent(in) :: garea, rlat,rlon
+    real(kind_phys), dimension(im), intent(in) :: garea, rlat,rlon, oro
     real(kind_phys), dimension(im,kme), intent(in) :: ph3d, pr3d
     real(kind_phys), dimension(im,kte), intent(in) :: phl3d, prl3d, tk3d, spechum
     real(kind_phys), dimension(im,kte,ntrac), intent(inout) :: gq0, qgrs
@@ -178,7 +178,7 @@ contains
     call catchem_prep_anthropogenic(                                   &
         me, master, &
         ktau,dtstep,                                                    &
-        jdate,garea,rlat,rlon, &
+        jdate,garea,rlat,rlon, oro, &
         xlat,xlong,dxy,  &
         pr3d,ph3d,phl3d,tk3d,prl3d,spechum,emi_in,                      &
         rri,t_phy,p_phy,rho_phy,dz8w,p8w,z_at_w,                        &
@@ -290,7 +290,7 @@ contains
    subroutine catchem_prep_anthropogenic(                               &
         me, master, &
         ktau,dtstep,                                                     &
-        jdate,garea,rlat,rlon, &
+        jdate,garea,rlat,rlon, oro, &
         xlat,xlong,dxy,  &
         pr3d,ph3d,phl3d,tk3d,prl3d,spechum,emi_in,                       &
         rri,t_phy,p_phy,rho_phy,dz8w,p8w,z_at_w,                         &
@@ -326,7 +326,7 @@ contains
     integer, intent(in) :: ntisop,ntno,ntno2,ntco,ntc2h4,ntc2h6,ntc3h6,ntc3h8,  &
                            ntnh3,ntch2o,ntch4,ntc4h10,ntc10h16,ntch3oh,ntc2h5oh,&
                            ntch3coch3,ntch3cho,nth2,nte90
-    real(kind_phys), dimension(ims:ime), intent(in) :: garea, rlat, rlon
+    real(kind_phys), dimension(ims:ime), intent(in) :: garea, rlat, rlon, oro
     integer, intent(in) :: nvar_emi
     real(kind_phys), dimension(ims:ime, nvar_emi),   intent(in) :: emi_in
     real(kind_phys), dimension(ims:ime, kms:kme), intent(in) :: pr3d,ph3d
@@ -399,17 +399,16 @@ contains
     !--3d-emis array
     real(kind_phys), dimension(ims:ime, jms:jme, 1:nvl_emi3d, 1:nvar_emi3d) :: emi3d, &
             emi3d_input
-    real(kind_phys), dimension(ims:ime, jms:jme, 1:nvl_emiairc, 1:nvar_emiairc) :: emiairc, &
-            emiairc_input
     real(kind_phys), dimension(ims:ime, jms:jme, 1:nvl_emivol, nvar_emivol) :: emivol, &
             emivol_input
     real(kind_phys), dimension(ims:ime, kms:kte, jms:jme, 1:nvar_emi3d) :: emi3d_output
-    real(kind_phys), dimension(ims:ime, kms:kte, jms:jme, 1:nvar_emiairc) :: emiairc_output
     real(kind_phys), dimension(ims:ime, kms:kte, jms:jme, nvar_emivol) :: emivol_output
 
     real(kind_phys), dimension(1:nvl_emi3d+1) :: p_emi3d,pi_emi3d   ! interface
-    real(kind_phys), dimension(1:nvl_emiairc+1) :: p_emiairc,pi_emiairc
     real(kind_phys), dimension(1:nvl_emivol+1) :: p_emivol,pi_emivol
+
+    real(kind_phys), parameter :: airc_dz = 610._kind_phys
+    real(kind_phys) :: z_bot_airc, z_top_airc, src_bot_airc, src_top_airc, overlap_airc
 
     real(kind_phys), dimension(ims:ime, kms:kme, jms:jme) :: p_mb, p8w_r
     real(kind_phys), dimension(ims:ime, jms:jme) :: ps_mb, ps_phy
@@ -420,22 +419,6 @@ contains
     !sigma_full
     !(/0.9928559, 0.9581419, 0.8982682, 0.8079293, 0.6996379, &
     !0.5355391, 0.2108483 /)
-    !sigma_half
-    p_emiairc = (/1.,0.916839301,0.839785209,0.769206988,0.704560386,0.64534689, &
-            0.591109884,0.541431129,0.495927534,0.454248206,0.416071742,0.381103749, &
-            0.349074578,0.31973724,0.292865505,0.268252156,0.245707391,0.225057361, &
-            0.206142824,0.188817925,0.172949066,0.158413876,0.14510027,0.132905582, &
-            0.121735774,0. /)
-    !sigma_full
-    !p_emiairc = (/0.957056329906393, 0.876622271175349, 0.802948146631859, &
-    !0.73546582990084, 0.6736549417552, 0.617038837293621, 0.565180930368681,& 
-    !0.517681326921738, 0.474173741263055, 0.434322671517555, &
-    !0.397820812455107, 0.364386685754774, 0.333762469429204, &
-    !0.305712009671091, 0.280018999790392, 0.256485312199452, &
-    !0.234929470583402, 0.215185250474219, 0.197100397436999, &
-    !0.180535452983928, 0.165362679162177, 0.151465073522858, &
-    !0.138735466875116, 0.127075696867845, 0.116395851026215 /)
-
     !pfull
     !p_emivol = (/1006.011, 991.6373, 963.702, 910.1702, 818.6343, 708.9081, 613.8892, &
     !531.6061, 460.3519, 398.6483, 345.2152, 160.2089/)
@@ -463,15 +446,13 @@ contains
     emi3d          = 0._kind_phys
     emi3d_input    = 0._kind_phys
     emi3d_interp   = 0._kind_phys
-    emiairc        = 0._kind_phys
-    emiairc_input  = 0._kind_phys
     emiairc_interp = 0._kind_phys
     emivol         = 0._kind_phys
     emivol_input   = 0._kind_phys
     emivol_interp  = 0._kind_phys
 
     emiss_ash_dtt  = 0._kind_phys
-    num_emis_voll  =0._kind_phys
+    num_emis_voll  = 0._kind_phys
     so2_mass       = 0._kind_phys
     vert_mass_dist = 0._kind_phys
     frac_so2_ant   = 1._kind_phys
@@ -741,57 +722,29 @@ contains
                 dtstep, pi, rlat_in, rlon_in, its,ite,jts,jte)
     endif
 
-    !----if read aircaft emissions-----------
-    if (read_emiairc) then 
-      do i=its,ite
-        do k=1,nvl_emiairc
-           emiairc(i,1,k,p_airc_co)=emiairc_in(i,k,1)
-           emiairc(i,1,k,p_airc_no)=emiairc_in(i,k,2)
-           emiairc(i,1,k,p_airc_so2)=emiairc_in(i,k,3)
-           emiairc(i,1,k,p_airc_nh3)=emiairc_in(i,k,4)
-           emiairc(i,1,k,p_airc_bc)=emiairc_in(i,k,5)
-           emiairc(i,1,k,p_airc_oc)=emiairc_in(i,k,6)
-        enddo
-      enddo
-
-      if (me == master) then
-         write(*,*),"diag input emiairc", maxval(emiairc_in(:,:,1)), maxval(emiairc_in(:,:,2))
-      endif
-
-
-      do i=its,ite
-        do j=jts,jte
-          !reverse
-          do l=1,nvl_emiairc
-            kp=nvl_emiairc-l+1
-            emiairc_input(i,j,kp,1:nvar_emiairc) = emiairc(i,j,l,1:nvar_emiairc)/ &
-                    (abs(p_emiairc(l)-p_emiairc(l+1))*ps_phy(i,j))
-          enddo
-          do l=1,nvl_emiairc+1
-            kp=nvl_emiairc+1-l+1
-            pi_emiairc(kp) = p_emiairc(l)*ps_phy(i,j)    !Pa
-          enddo
-
-          if (maxval(pi_emiairc) < maxval(p8w_r(i,:,j))) then
-             pi_emiairc( maxloc(pi_emiairc) ) = maxval(p8w_r(i,:,j))
-          endif
-          if (minval(pi_emiairc) > minval(p8w_r(i,:,j))) then
-             pi_emiairc( minloc(pi_emiairc) ) = minval(p8w_r(i,:,j))
-          endif
-          ! need input data with vertical index increaseing downward (start at lev=top)
-          call interp_weighted_scalar_2D(pi_emiairc, p8w_r(i,:,j), emiairc_input(i,j,:,1:nvar_emiairc), &
-                  emiairc_output(i,:,j,1:nvar_emiairc))
-
+    ! CEDS aircraft layer centers are 305, 915, ..., 14945 m.
+    ! Remap each 610 m layer's integrated flux by vertical overlap.
+    if (read_emiairc) then
+      do j=jts,jte
+        do i=its,ite
           do k=kts,kte
-            kp = kte-k+1
-            emiairc_interp(i,kp,j,1:nvar_emiairc)=emiairc_output(i,k,j,1:nvar_emiairc)* &
-                    abs(p8w_r(i,k+1,j)-p8w_r(i,k,j))
+            z_bot_airc = oro(i) + z_at_w(i,k,j) - z_at_w(i,kts,j)
+            z_top_airc = oro(i) + z_at_w(i,k+1,j) - z_at_w(i,kts,j)
+            ! Retain inventory flux below model terrain in the lowest layer.
+            if (k == kts) z_bot_airc = min(z_bot_airc, 0._kind_phys)
+            do l=1,nvl_emiairc
+              src_bot_airc = (l-1)*airc_dz
+              src_top_airc = l*airc_dz
+              overlap_airc = max(0._kind_phys, min(z_top_airc,src_top_airc) - &
+                                            max(z_bot_airc,src_bot_airc))
+              if (overlap_airc <= 0._kind_phys) cycle
+              emiairc_interp(i,k,j,:) = emiairc_interp(i,k,j,:) + &
+                  emiairc_in(i,l,:)*(overlap_airc/airc_dz)
+            enddo
           enddo
-
         enddo
       enddo
-
-    end if
+    endif
 
     if (read_emis3d) then
       !for 3d bb emission 
@@ -984,10 +937,10 @@ contains
         do j=jts,jte
           do i=its,ite
             do k=kts,kte
-              !convert ug/m2/s to ug/kg
-              factor=dtstep*rri(i,k,j)/dz8w(i,k,j)
-              !convert mol/km2/hr to ppm
-              factor2=4.828e-4*dtstep*rri(i,k,j)/(60.*dz8w(i,k,j))
+              ! Divide the remapped flux by model layer air mass (kg/m2).
+              factor = dtstep*g/abs(p8w(i,k+1,j)-p8w(i,k,j))
+              ! mol/km2/hr to ppm, using the existing fixed air MW convention.
+              factor2 = factor*(1.e-3_kind_phys*airmw)/3600._kind_phys
 
               chem(i,k,j,p_bc1)=chem(i,k,j,p_bc1) + &
                       emiairc_interp(i,k,j,p_airc_bc)*factor
