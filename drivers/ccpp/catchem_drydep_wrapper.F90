@@ -444,7 +444,7 @@ contains
             !Turn off for now
               if ((nv.ne.p_age) .and. (nv.ne.p_aoanh)) then 
                call vertmx(dt,pblst,ekmfull,dryrho_1d, &
-                           zzfull,zz,ddvel(i,j,nv),kts,kte)
+                           zzfull,zz,0.,kts,kte)  ! drydep already calculated earlier. Here just for vertical mixing....
               endif
 #endif
            CASE DEFAULT
