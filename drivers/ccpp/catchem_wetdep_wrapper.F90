@@ -17,7 +17,9 @@
    use gocart_aerosols_mod
    use dust_data_mod
    use gocart_diag_mod
-   use gfdl_wetdep_mod
+   #ifdef AM4_CHEM
+      use gfdl_wetdep_mod
+   #endif
 
    implicit none
 
@@ -60,7 +62,9 @@ contains
             print *, 'Start GFDL AM4 wet depostion for both gas and aerosols'
           endif
 
-          call gfdl_wetdep_init(me, master, tracer_names)
+          #ifdef AM4_CHEM
+             call gfdl_wetdep_init(me, master, tracer_names)
+          #endif
 
           is_initialized = .true.
        end if

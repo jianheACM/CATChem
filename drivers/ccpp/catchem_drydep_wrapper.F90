@@ -25,7 +25,9 @@
                                   time_type_to_real, &
                                   operator(+), operator(-), &
                                   time_interp
-   use gfdl_drydep_mod
+   #ifdef AM4_CHEM
+      use gfdl_drydep_mod
+   #endif
 
    implicit none
 
@@ -76,7 +78,9 @@ contains
             print *, 'Start GFDL AM4 dry depostion for both gas and aerosols'
           endif
 
-          call gfdl_drydep_init(me, master, tracer_names)
+          #ifdef AM4_CHEM
+             call gfdl_drydep_init(me, master, tracer_names)
+          #endif
 
        end if
 
