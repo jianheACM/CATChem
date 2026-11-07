@@ -22,7 +22,9 @@
                                   time_type_to_real, &
                                   operator(+), operator(-), &
                                   time_interp
-   use mo_chem_utls_mod, only : read_2D_emis_diurnal
+   #ifdef AM4_CHEM
+      use mo_chem_utls_mod, only : read_2D_emis_diurnal
+   #endif
 
    implicit none
 
