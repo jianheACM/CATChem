@@ -802,11 +802,13 @@ integer :: nband, iounit
 allocate ( solflxbandref  (nbands) )
 allocate ( solflxband (nbands) )
 
-iounit = 66
+!iounit = 66
 
       if (present(ref)) then  ! no time-varying solar
          if (ref) then
-            open(iounit, file='INPUT/esf_sw_input_data', form='formatted', status='OLD')
+            !open(iounit, file='INPUT/esf_sw_input_data', form='formatted', status='OLD')
+            open(newunit=iounit, file='INPUT/esf_sw_input_data', &
+                  form='formatted', status='old', action='read')
             read(iounit,'(12f10.4)') ( solflxbandref(nband), nband=1,nbands )
             solarflux = solflxbandref
             close(iounit)

@@ -406,6 +406,7 @@ logical                       :: module_is_initialized = .false.
                      esfact, solar_phase, plonl )
          else    
             call fphoto( me, master, &
+                         lat, lon, &
                          reaction_rates(:,:,:phtcnt), &
                          pmid, pdel, &
                          tfld, zmid, &

@@ -514,7 +514,8 @@ module MO_FASTJX_MOD
       integer, parameter                ::      AN_     =25             ! no of separate aerosols per layer (needs NDX for each)
 !     integer, parameter                ::      NJX_    =100
       integer, parameter                ::      NJX_    =69             ! ++j2l modified to match AM3 
-      integer, parameter                ::      N_      =601            !no. of levels in Mie scattering arrays
+      integer, parameter                ::      N_      =1201           !JianHe: we are switching to L128
+                                                                        !601            !no. of levels in Mie scattering arrays
                                                                         !     = 2*NC+1 = 4*(L_+1) + 1`+ 2*sum(JADDLV)
       integer, parameter                ::      M_      =4              !no. of Gauss points used, must = 4 in fast_JX (no option)
       integer, parameter                ::      M2_     =2*M_           !2*M_ = 8, replaces MFIT
@@ -692,6 +693,7 @@ module MO_FASTJX_MOD
  
                   
     subroutine fastjx_photo (me, master,                                &
+           column_lat, column_lon, &
            U0, SOLF, phalf1, zhalf1, pfull1, tfull, XO3, pwt,           &
            lwc, cloudsf, REFLB, aerop, aeron,o3_column_top, ZPJ, Time,  & 
            time_varying_solarflux)
@@ -765,6 +767,7 @@ module MO_FASTJX_MOD
 !---calling sequence variables
       integer, intent (in) :: me
       integer, intent (in) :: master
+      real, intent(in) :: column_lat, column_lon
 
       real*8,  intent(in)                   :: U0,REFLB,SOLF
       real*8,  intent(in),dimension(:)      :: phalf1,&               !Pressure at boundaries (Pa) 49 layer
@@ -802,6 +805,10 @@ module MO_FASTJX_MOD
       real*8, dimension(W_,size(phalf1))    ::  FFX
       real*8, dimension(W_,8)               ::  FFXNET
       logical  :: LPRTJ                   ! set to false
+      integer :: k_no3, l_no3
+      integer :: kmie18
+      real*8 :: tau_liq18(size(phalf1)), tau_ice18(size(phalf1))
+      real*8 :: tau_aer18(size(phalf1))
 
 !------------array dimensions-------------------------------------------
       integer            :: L_, L1_, JXL_, JXL1_, JTAUMX
@@ -831,6 +838,8 @@ module MO_FASTJX_MOD
       integer :: yr, mo, day, hr, minute, sec
       real*8                 :: solar_constant
       real*8, dimension(18)  :: solflxband_now
+      integer :: diag_layer
+
       if(time_varying_solarflux) then
          call get_date(Time,yr,mo,day,hr,minute,sec)  !model GMT
          call get_solar_data(yr, mo, solar_constant, solflxband_now)
@@ -859,6 +868,17 @@ module MO_FASTJX_MOD
 !                        or         99.0                 80 km
       SZA = acos(U0)*180./ 3.141592653589793d0
 !      write(*,*) 'SZA ',SZA
+      if (abs(column_lat + 0.324051804916483d0) < 2.d-3 .and. &
+          abs(atan2(sin(column_lon - 5.35765421754260d0), &
+                    cos(column_lon - 5.35765421754260d0))) < 2.d-3) then
+         call get_date(Time, yr, mo, day, hr, minute, sec)
+         if (hr == 9 .and. minute >= 20 .and. minute <= 40) then
+            write(*,*) 'FASTJX_CANDIDATE utc=', yr, mo, day, hr, minute, sec, &
+               ' lat_rad=', column_lat, ' lon_rad=', column_lon, &
+               ' U0=', U0, ' SZA=', SZA
+         endif
+      endif
+
       if (SZA .gt. 98.d0) then
           ZPJ(:,:) = 0.0
 !          if (me==master) then
@@ -870,6 +890,21 @@ module MO_FASTJX_MOD
 !-----load the amtospheric column data ( convert Pa to hPa)     
       phalf=phalf1/100.               
       pfull=pfull1/100.
+
+      k_no3 = minloc(abs(pfull - 185.d0), dim=1)
+      l_no3 = LU + 1 - k_no3
+      diag_layer = 0
+
+      if (abs(column_lat - (-0.324051804916483d0)) < 1.d-6 .and. &
+          abs(column_lon -    5.35765421754260d0)  < 1.d-6) then
+         call get_date(Time, yr, mo, day, hr, minute, sec)
+         if (all([yr, mo, day, hr, minute, sec] == [2022, 12, 31, 9, 30, 0])) then
+            diag_layer = l_no3
+         endif
+      endif
+
+      kmie18 = 1 + count(WL(18) > [255.d0, 355.d0, 500.d0, 800.d0])
+
 !
 !****NOTE!!! In fastjx, L=1 surface; In AM3 L=1 TOA
 !
@@ -1005,6 +1040,8 @@ module MO_FASTJX_MOD
 !         'Liq Cld',L,PPJ(L),PPJ(L+1),LWP(L),REFFL(L),ODL,NDXL
          endif
 
+         if (diag_layer > 0) tau_liq18(L) = OD(kmie18,L)
+
 !         write(*,*)'Called OPTICL for Liquid Water Cloud'
 !---Ice Water Cloud
          if (IWP(L) .gt. 1.d-5 .and. REFFI(L) .gt. 0.1d0) then
@@ -1034,6 +1071,7 @@ module MO_FASTJX_MOD
 !         'Ice Cld',L,PPJ(L),PPJ(L+1),IWP(L),REFFI(L),ODI,NDXI
          endif
 !         write(*,*)'Called OPTICL for Ice Water Cloud'
+         if (diag_layer > 0) tau_ice18(L) = OD(kmie18,L) - tau_liq18(L)
 
 !---aerosols in layer: check aerosol index
 !---this uses data from climatology OR from current CTM (STT of aerosols)
@@ -1069,6 +1107,9 @@ module MO_FASTJX_MOD
             endif
          enddo  ! M
 !         write(*,*)'Called OPTICAM3'
+         if (diag_layer > 0) then
+            tau_aer18(L) = OD(kmie18,L) - tau_liq18(L) - tau_ice18(L)
+         endif
 
          do K=1,5
             if (OD(K,L) .gt. 0.d0) then
@@ -1144,7 +1185,7 @@ module MO_FASTJX_MOD
 !-----------------------------------------------------------------------
 
       call OPMIE (DTAUX,POMEGAX,U0,RFL,AMF2,JXTRA, &
-              AVGF,FJTOP,FJBOT,FSBOT,FJFLX,FLXD,FLXD0, LU)
+              AVGF,FJTOP,FJBOT,FSBOT,FJFLX,FLXD,FLXD0, LU,diag_layer)
 
 !       write(*,*)'Called OPMIE'
 !-----------------------------------------------------------------------
@@ -1232,6 +1273,30 @@ module MO_FASTJX_MOD
 !      write(logunit,*) 'Check NJX ', NJX, ' NJX_ ', NJX_
 !      write(*,*) 'Check NJX ', NJX, ' NJX_ ', NJX_
       call JRATET(pfull,tfull,FFF, VALJXX, LU,NJX_)
+
+      k_no3 = minloc(abs(pfull - 185.d0), dim=1)
+      l_no3 = LU + 1 - k_no3
+
+      !if (VALJXX(l_no3,10) > 2.5d0) then
+      if (diag_layer > 0) then
+         call get_date(Time, yr, mo, day, hr, minute, sec)
+         write(*,*) 'FASTJX_MATCH utc=', yr, mo, day, hr, minute, sec, &
+            ' lat_rad=', column_lat, ' lon_rad=', column_lon, &
+            ' pressure_hPa=', pfull(k_no3), ' temperature_K=', tfull(k_no3), &
+            ' U0=', U0, ' FL18=', FL(18), ' SOLF=', SOLF, &
+            ' AVGF18=', AVGF(l_no3,18), ' FFF18=', FFF(18,l_no3), &
+            ' raw_rate_s-1=', VALJXX(l_no3,10)
+
+        write(*,*) 'FASTJX_OPTICS tau18_above=', &
+            sum(DTAUX(l_no3+1:L1_,18)) + 0.5d0*DTAUX(l_no3,18), &
+            ' tau18_total=', sum(DTAUX(1:L1_,18)), &
+            ' albedo18=', RFL(18), ' extra_layers=', sum(JXTRA)
+
+        write(*,*) 'FASTJX_TAU18 liquid=', sum(tau_liq18), &
+            ' ice=', sum(tau_ice18), ' aerosol=', sum(tau_aer18), &
+            ' gas_rayleigh=', sum(DTAUX(1:L1_,18)) - &
+               sum(tau_liq18) - sum(tau_ice18) - sum(tau_aer18)
+      endif
 !-----------------------------------------------------------------------
 
 !      write(*,*)'Called JRATET'
@@ -2171,7 +2236,7 @@ module MO_FASTJX_MOD
 !<<<<<<<<<<<<<<<<<<<<<<<begin core scattering subroutines<<<<<<<<<<<<<<<
 !-----------------------------------------------------------------------
       subroutine OPMIE (DTAUX,POMEGAX,U0,RFL,AMF2,JXTRA, &
-              FJACT,FJTOP,FJBOT,FSBOT,FJFLX,FLXD,FLXD0, LU)
+              FJACT,FJTOP,FJBOT,FSBOT,FJFLX,FLXD,FLXD0, LU,diag_layer)
 !-----------------------------------------------------------------------
       implicit none
 
@@ -2179,6 +2244,7 @@ module MO_FASTJX_MOD
       real*8, intent(in) ::   AMF2(:,:)
       real*8, intent(in) ::   U0,RFL(:)
       integer, intent(in) ::  JXTRA(:), LU
+      integer, intent(in) :: diag_layer
       real*8, intent(out) ::FJACT(:,:),FJTOP(:),FJBOT(:),FSBOT(:)
       real*8, intent(out) ::  FJFLX(:,:),FLXD(:,:),FLXD0(:)
 
@@ -2575,6 +2641,17 @@ module MO_FASTJX_MOD
          SUMT =SUMT + ZTAU(LZ+2,K)-ZTAU(LZ-2,K)
         enddo
         FJACT(L,K) = SUMJ/SUMT
+        if (K == 18 .and. L == diag_layer) then
+           write(*,*) 'FASTJX_OPMIE_GRID ND=', ND, ' capacity=', N_, &
+              ' layer_extra=', sum(JADDLV(2*L-1:2*L)), &
+              ' LZ0=', LZ0, ' LZ1=', LZ1
+           write(*,*) 'FASTJX_OPMIE_AVG tau_layer=', DTAUX(L,K), &
+              ' sum_tau_weight=', SUMT, ' sum_weighted_light=', SUMJ, &
+              ' avgf=', FJACT(L,K)
+           write(*,*) 'FASTJX_OPMIE_LIGHT direct_max=', maxval(FZ(LZ0:LZ1:2,K)), &
+              ' diffuse_min=', 4.d0*minval(FJ(LZ0:LZ1:2,K)), &
+              ' diffuse_max=', 4.d0*maxval(FJ(LZ0:LZ1:2,K))
+        endif
        enddo
 
 !---mean diffuse flux:  4<I*mu> (not solar) at top of layer L
@@ -3363,6 +3440,8 @@ module MO_FASTJX_MOD
       integer J,K,L, IV
 !------------array dimensions-------------------------------------------
       integer            :: L1_
+      integer, save :: n_high_j_printed = 0
+
       if (NJXU .lt. NJX) then
         write(*,*) ' JRATET:  CTM has not enough J-values dimensioned'
         stop
@@ -3425,13 +3504,32 @@ module MO_FASTJX_MOD
           endif
             VALJ(J) = VALJ(J) + QQQT*FFF(K,L)
 !            write(logunit,*) 'LI==> ', J, K, 'VALJ(J) ', VALJ(J)
-            if(VALJ(J) .gt. 1.0d0) then
-!              write(*,*) 'Problems ', J, K, 'VALJ(J) ', VALJ(J), QQQT, FFF(K,L)
-               write(*,'(a,f10.4,a,2i4,1p2e10.3)') 'WARNING from MO_FASTJX_MOD: JVALJ', &
-                  VALJ(J),'>1 at J, K, QQQT, FFFF=', J, K, QQQT, FFF(K,L)
+          if (VALJ(J) > 1.d0) then
+!$omp critical (fastjx_high_j_log)
+            if (n_high_j_printed < 5) then
+               n_high_j_printed = n_high_j_printed + 1
+               write(*,'(a,a,a,i0,a,es12.4,a,es12.4)') &
+                  'FASTJX_HIGH_J reaction=', trim(TITLEJX(J)), &
+                  ' level=', L1_-L, ' pressure_hPa=', PP, &
+                  ' raw_rate_s-1=', VALJ(J)
             endif
-         enddo
-        enddo
+!$omp end critical (fastjx_high_j_log)
+          endif
+
+         enddo  ! K: wavelength bins
+
+         !   if(VALJ(J) .gt. 1.0d0) then
+!        !      write(*,*) 'Problems ', J, K, 'VALJ(J) ', VALJ(J), QQQT, FFF(K,L)
+         !      !write(*,'(a,f10.4,a,2i4,1p2e10.3)') 'WARNING from MO_FASTJX_MOD: JVALJ', &
+         !      !   VALJ(J),'>1 at J, K, QQQT, FFFF=', J, K, QQQT, FFF(K,L)
+         !       write(*,'(a,a,a,i0,a,i0,a,es12.4,a,f8.2,a,es12.4)') &
+         !      'WARNING from MO_FASTJX_MOD: reaction=', trim(TITLEJX(J)), &
+         !      ' J=', J, ' input_level=', L1_-L, &
+         !      ' pressure_hPa=', PP, ' temperature_K=', TT, &
+         !      ' rate_s-1=', VALJ(J)
+         !   endif
+         !enddo
+        enddo  ! J: photolysis reactions
 
         do J=1,NJX
           VALJL(L,J) = VALJ(J)
@@ -3585,7 +3683,7 @@ module MO_FASTJX_MOD
       real*8, intent(in)  ::   U0,RAD,ZHL(L1U+1),ZZHT
       real*8, intent(out) ::   AMF2(2*LJX1U+1,2*LJX1U+1)
 
-      integer, parameter  ::  LSPH_ = 100
+!      integer, parameter  ::  LSPH_ = 100   ! Since we switch to L127, this will be an issue
 
 !     RZ      Distance from centre of Earth to each point (cm)
 !     RQ      Square of radius ratios
@@ -3593,16 +3691,20 @@ module MO_FASTJX_MOD
 !     XL      Slant path between points
 
       integer  I, J, K, II, L2
-      real*8   XMU1,XMU2,XL,DIFF,SHADHT,RZ(LSPH_+1)
-      real*8   RZ2(2*LSPH_+1),RQ2(2*LSPH_+1)
+      !real*8   XMU1,XMU2,XL,DIFF,SHADHT,RZ(LSPH_+1)
+      !real*8   RZ2(2*LSPH_+1),RQ2(2*LSPH_+1)
+      ! Replace the temporary-array declarations with sizes based on the input (L1U=128 for L127)
+      real*8 XMU1, XMU2, XL, DIFF, SHADHT
+      real*8 RZ(L1U+1)
+      real*8 RZ2(2*L1U+1), RQ2(2*L1U+1)
 
 !--- must have top-of-atmos (NOT top-of-CTM) defined
 !      ZHL(L1U+1) = ZHL(L1U) + ZZHT
 
-      if (L1U .gt. LSPH_) then
-        write(*,*)' SPHERE2: temp arrays not large enough', L1U, LSPH_
-        stop
-      endif
+      !if (L1U .gt. LSPH_) then
+      !  write(*,*)' SPHERE2: temp arrays not large enough', L1U, LSPH_
+      !  stop
+      !endif
 
         RZ(1) = RAD + ZHL(1)
       do II = 2,L1U+1

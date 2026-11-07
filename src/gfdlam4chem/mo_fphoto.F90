@@ -439,6 +439,7 @@
 !     Size of longitude dimension
 !   </IN>
       subroutine FPHOTO( me, master, &
+                         lat, lon, &
                          photos, &
                          pmid, &         ! pfull
                          pdel, &
@@ -473,6 +474,7 @@
       integer, intent (in) :: me
       integer, intent (in) :: master
 
+      real, intent(in) :: lat(:), lon(:)
       type(time_type), intent(in) :: Time              ! time
       integer, intent(in) :: plonl, j_ndx              ! lat index
       logical, intent(in) :: use_lsc_in_fastjx         ! are lsc clouds
@@ -663,6 +665,7 @@
       do i = 1,plonl
 !         print*,'STEP ONE',i
          call fastjx_photo(   me, master, &
+                              lat(i), lon(i), &
                               coszen(i), &
                               esfact, &
                               phalf(i,:),&

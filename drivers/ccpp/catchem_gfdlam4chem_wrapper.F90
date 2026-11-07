@@ -420,11 +420,13 @@ if (do_am4chem) then
                   ! Keep the old diagnostic slot consistent when it exists.
                   ! Chemistry itself receives extinction explicitly below.
                   chem_diag(i,j,kp,nt) = max(0._kind_phys,aerosol_ext_1um(i,k))
+                  !chem_diag(i,j,kp,nt) = chem(i,k,j,ntchm+nt)
                 else
                   chem_diag(i,j,kp,nt) = chem(i,k,j,ntchm+nt)*1.e-6  ! ppm to mol/mol
                 endif
               end do
       
+              !extinct_am4(i,j,kp) = gq0(i,k,ntextinct)
               extinct_am4(i,j,kp) = max(0._kind_phys,aerosol_ext_1um(i,k))
               t_am4(i,j,kp) = t_phy(i,k,j)  !K
               p_am4(i,j,kp) = p_phy(i,k,j)  !Pa
