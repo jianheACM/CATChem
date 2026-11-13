@@ -658,6 +658,7 @@ contains
     do j=jts,jte
      do i=its,ite
           !JH: need update later, in emi_in, more tracers
+          emiss_ab(i,j,p_e_so2)  =emi_in(i,5)*random_factor(i,j)
           emiss_ab(i,j,p_e_no) =emi_in(i,11)*random_factor(i,j)
           emiss_ab(i,j,p_e_ch3cho) =emi_in(i,12)*random_factor(i,j)
           emiss_ab(i,j,p_e_nh3) =emi_in(i,13)*random_factor(i,j)
@@ -685,6 +686,7 @@ contains
     k=kts
     do j=jts,jte
       do i=its,ite
+            emis_ant(i,k,j,p_e_so2)=emiss_ab(i,j,p_e_so2)
             emis_ant(i,k,j,p_e_no) =emiss_ab(i,j,p_e_no)
             emis_ant(i,k,j,p_e_ch3cho) =emiss_ab(i,j,p_e_ch3cho)
             emis_ant(i,k,j,p_e_nh3) =emiss_ab(i,j,p_e_nh3)
@@ -910,7 +912,7 @@ contains
           chem(i,k,j,p_oc1)=chem(i,k,j,p_oc1)+emis_ant(i,k,j,p_e_oc)*factor
           chem(i,k,j,p_p25)=chem(i,k,j,p_p25)+emis_ant(i,k,j,p_e_pm_25)*factor
           chem(i,k,j,p_p10)=chem(i,k,j,p_p10)+emis_ant(i,k,j,p_e_pm_10)*factor
-          chem(i,k,j,p_sulf)=chem(i,k,j,p_sulf)+emis_ant(i,k,j,p_e_sulf)*factor
+          !chem(i,k,j,p_sulf)=chem(i,k,j,p_sulf)+emis_ant(i,k,j,p_e_sulf)*factor
           chem(i,k,j,p_so2)=chem(i,k,j,p_so2)+emis_ant(i,k,j,p_e_so2)*factor2
           chem(i,k,j,p_no) =chem(i,k,j,p_no) +emis_ant(i,k,j,p_e_no )*factor2
           chem(i,k,j,p_ch3cho) =chem(i,k,j,p_ch3cho) +emis_ant(i,k,j,p_e_ch3cho)*factor2
