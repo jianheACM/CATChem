@@ -906,7 +906,9 @@ contains
       do j=jts,jte
         do i=its,ite
           factor=dtstep*rri(i,k,j)/dz8w(i,k,j)
-          factor2=4.828e-4*dtstep*rri(i,k,j)/(60.*dz8w(i,k,j))
+          !factor2=4.828e-4*dtstep*rri(i,k,j)/(60.*dz8w(i,k,j))
+          factor2 = dtstep*rri(i,k,j)/dz8w(i,k,j) &
+            * (1.e-3_kind_phys*airmw)/3600._kind_phys
 
           chem(i,k,j,p_bc1)=chem(i,k,j,p_bc1)+emis_ant(i,k,j,p_e_bc)*factor    !ug/kg
           chem(i,k,j,p_oc1)=chem(i,k,j,p_oc1)+emis_ant(i,k,j,p_e_oc)*factor

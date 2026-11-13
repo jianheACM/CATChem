@@ -157,6 +157,7 @@ contains
 
     !JianHe: AM4 var
     real(kind_phys), dimension(ims:im, jms:jme, kts:kte) :: so2_so4_evap, so2_so4
+    integer :: i_so2_wet, i_so4_wet
     real(kind_phys), dimension(ims:im, jms:jme, kts:kte) :: wetdeptnd
     real(kind_phys), dimension(ims:im, jms:jme, 1:num_chem ) :: ls_wetdep, cv_wetdep
     real(kind_phys), dimension(ims:im,jms:jme,kts:kte,1:num_chem ) :: trac_am4
@@ -410,9 +411,30 @@ contains
         enddo
 
 !-----------------------------------------------------------------------
-!    correct so2 and so4 tendency. so2 is converted to so4.
+! Redirect re-evaporated sulfur from SO2 to sulfate.
+!
+! so2_so4_evap: SO2 mole-fraction tendency, mol/mol/s.
+! trac_am4 SO2: mol/mol.
+! trac_am4 SO4: kg/kg.
+! Apply after all large-scale tracer removals, before convection.
 !-----------------------------------------------------------------------
-        !JianHe: this is already handled in wet_deposition sub?
+        i_so2_wet = ntso2 - ntchs + 1
+        i_so4_wet = ntsulf - ntchs + 1
+
+        if (i_so2_wet < 1 .or. i_so2_wet > ntchm .or. &
+            i_so4_wet < 1 .or. i_so4_wet > ntchm) then
+          errmsg = 'AM4 wet deposition: invalid SO2/SO4 chemical indices'
+          errflg = 1
+          return
+        endif
+
+        trac_am4(:,:,:,i_so2_wet) = trac_am4(:,:,:,i_so2_wet) &
+                                   - dt*so2_so4_evap
+
+        trac_am4(:,:,:,i_so4_wet) = trac_am4(:,:,:,i_so4_wet) &
+                                   + dt*so2_so4_evap &
+                                   * (mw_so4_aer/mwdry)
+
 
       if(do_cv_wetdep) then
         ! Convective removal from the SAMF interface precipitation profile.
